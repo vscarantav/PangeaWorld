@@ -1,0 +1,1017 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>PangeaWorld Implementation Plan</title>
+<style>
+body { font-family: -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, Helvetica, Arial, sans-serif; line-height: 1.6; color: #333; max-width: 1000px; margin: 0 auto; padding: 2rem; }
+code { background: #f4f4f4; padding: 2px 5px; border-radius: 3px; }
+pre { background: #f4f4f4; padding: 15px; border-radius: 5px; overflow-x: auto; }
+h1, h2, h3 { color: #1e3a8a; }
+blockquote { border-left: 4px solid #1e3a8a; padding-left: 15px; margin-left: 0; color: #555; }
+</style>
+</head>
+<body>
+<h1>PangeaWorld — Educational Simulation Game Development Plan</h1>
+<h2>Vision &amp; Overview</h2>
+<p><strong>PangeaWorld</strong> is a round-based, multiplayer educational simulation that blends the territorial strategy of RISK, the resource economy of CATAN, and the business simulation depth of CAPSIM. Set in a fictitious world of <strong>8 nations</strong> (7 player-controlled + 1 AI-controlled), students assume roles as either <strong>National Presidents</strong> or <strong>Company Executives</strong>, making decisions that ripple across military, economic, and diplomatic systems. The 8th nation, <strong>Drakmoor</strong>, is fully AI-controlled — a marginalized, sanctioned, militarily powerful state that will provoke conflict in the early game, forcing students to deal with the reality that war can happen even when no one wants it. Each user is assisted by an <strong>AI advisor</strong> (Gemini), teaching them to critically evaluate AI-assisted decision-making.</p>
+<blockquote>
+<p>[!IMPORTANT]
+This is a large-scale project. The plan is structured in <strong>4 major phases</strong> to deliver a working MVP first, then layer in complexity. Each phase is self-contained and playable.</p>
+</blockquote>
+<hr />
+<h2>User Review Required</h2>
+<h3>Naming &amp; Theming</h3>
+<ul>
+<li><strong>"PangeaWorld"</strong> is a working title — do you have a preferred name?</li>
+<li>Should the visual theme lean toward a <strong>stylized/illustrated map</strong> aesthetic (Risk-like), a <strong>clean data-dashboard</strong> feel (Bloomberg terminal), or a <strong>hybrid</strong> with both?</li>
+</ul>
+<h3>Deployment &amp; Infrastructure</h3>
+<ul>
+<li>Where will this be hosted? University servers, cloud (GCP/AWS/Azure), or a simpler platform like Vercel/Railway?</li>
+<li>How many concurrent students do you anticipate? (This impacts architecture decisions — 50 students vs. 500 is very different)</li>
+<li>Will instructors need a <strong>Game Master (GM) panel</strong> to inject events, pause rounds, and override decisions?</li>
+</ul>
+<h3>AI Integration ✅</h3>
+<ul>
+<li><strong>Guardrails</strong>: The Gemini AI advisor will act dynamically based on the game's context. Its advice and analysis will be strictly grounded in the <strong>Pangea Assembly (UN forum) discussions</strong> and the <strong>Pangea Times newsletters</strong>, ensuring it doesn't "hallucinate" external optimal strategies but instead helps students navigate the actual evolving narrative of their specific game.</li>
+<li><strong>Grading &amp; Logging</strong>: AI usage will be logged and graded as a core learning outcome. Instructors will have visibility into the quantity and quality of student prompts to assess how well they are learning to leverage AI for decision-making.</li>
+</ul>
+<h3>Authentication &amp; Access</h3>
+<ul>
+<li>Will students log in with university SSO (e.g., Google Workspace, Microsoft Entra), or is a simple email/password system acceptable?</li>
+<li>Should teams be able to self-organize, or does the instructor assign roles?</li>
+</ul>
+<hr />
+<h2>Confirmed Design Decisions</h2>
+<h3>1. Round Duration &amp; Pacing ✅</h3>
+<ul>
+<li><strong>In-Game Timeframe:</strong> Each round represents <strong>1 full year</strong> in Pangea.</li>
+<li><strong>Staggered 2-Day Rounds (Real Time)</strong> — The 48-hour real-time round is split into two distinct phases to simulate macroeconomic cause and effect. This creates a narrative <strong>6-month delay</strong> between macro policy changes and micro market reactions:</li>
+<li><strong>Day 1 (Presidential Phase / First 6 Months):</strong> Presidents analyze data, receive lobbying requests from their companies, and submit their macro decisions (infrastructure, tariffs, military, diplomacy).</li>
+<li><strong>Day 2 (Company Phase / Second 6 Months):</strong> Companies react to the new policies set by their president and the global market, locking in their micro decisions (pricing, sourcing, production).</li>
+<li><strong>Lobbying Mechanic:</strong> During Day 1, companies can submit formal requests to their president for specific resources (e.g., "we need cheaper steel") or infrastructure (e.g., "build a port"). The president's dashboard will aggregate these requests, prioritizing the needs of larger companies that impact GDP the most.</li>
+<li><strong>7 total rounds</strong> per game (14 calendar days for a full game, representing 7 years in Pangea)</li>
+<li><strong>Asynchronous</strong> — decisions are submitted like homework, not live in class. The engine processes once the Day 2 deadline passes</li>
+<li>Class time can be used for debriefing, strategy discussion, and connecting game events to real-world examples</li>
+</ul>
+<h3>2. Player Scale ✅</h3>
+<ul>
+<li><strong>2-4 students per company team</strong></li>
+<li>10-15 companies × 7 player nations = 70-105 company teams + 7 presidents</li>
+<li>Unfilled slots backfilled by AI bots (see Phase 2)</li>
+</ul>
+<h3>3. Win Conditions &amp; Scoring ✅</h3>
+<p><strong>No elimination</strong> — all nations and companies play all 7 rounds regardless of performance.</p>
+<blockquote>
+<p>[!TIP]</p>
+<h3>Balanced Evaluation (Proportional + Absolute)</h3>
+<p>Because nations start with asymmetric resources and geographic advantages (e.g., Lunara's high baseline costs vs. Valdoria's resource wealth), scoring evaluates a <strong>balance of both proportional growth AND absolute raw values</strong>. 
+- <strong>Proportional Growth</strong> measures who managed their resources best relative to their starting position.
+- <strong>Absolute Values</strong> represent the sheer scale and dominance achieved in the global market.
+Winning requires a combination of smart incremental management and achieving massive scale.</p>
+</blockquote>
+<p><strong>Company Scorecard</strong> (CAPSIM-style round report):</p>
+<table>
+<thead>
+<tr>
+<th style="text-align: left;">KPI</th>
+<th style="text-align: left;">Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: left;"><strong>Net Profit (Absolute &amp; Relative)</strong></td>
+<td style="text-align: left;">Raw profit value + evaluated against baseline expectations</td>
+</tr>
+<tr>
+<td style="text-align: left;"><strong>Market Share (Absolute &amp; Growth)</strong></td>
+<td style="text-align: left;">Total % of market owned + round-over-round % change</td>
+</tr>
+<tr>
+<td style="text-align: left;"><strong>Revenue (Absolute &amp; Growth)</strong></td>
+<td style="text-align: left;">Total revenue generated + round-over-round % increase</td>
+</tr>
+<tr>
+<td style="text-align: left;"><strong>Gross Margin</strong></td>
+<td style="text-align: left;">(Revenue - COGS) / Revenue — measures pure operational efficiency</td>
+</tr>
+<tr>
+<td style="text-align: left;"><strong>Return on Assets (ROA)</strong></td>
+<td style="text-align: left;">Net income / total assets — measures how well they use what they have</td>
+</tr>
+<tr>
+<td style="text-align: left;"><strong>Cash Position</strong></td>
+<td style="text-align: left;">Available cash after obligations (absolute)</td>
+</tr>
+<tr>
+<td style="text-align: left;"><strong>Supply Chain Efficiency</strong></td>
+<td style="text-align: left;">Landed cost vs. competitors sourcing the same resources</td>
+</tr>
+<tr>
+<td style="text-align: left;"><strong>Customer Satisfaction</strong></td>
+<td style="text-align: left;">Composite of price competitiveness, product quality, and availability</td>
+</tr>
+</tbody>
+</table>
+<p><strong>President Scorecard:</strong></p>
+<table>
+<thead>
+<tr>
+<th style="text-align: left;">KPI</th>
+<th style="text-align: left;">Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: left;"><strong>GDP (Absolute &amp; Growth)</strong></td>
+<td style="text-align: left;">Total national GDP + round-over-round % change</td>
+</tr>
+<tr>
+<td style="text-align: left;"><strong>Inflation (CPI Stability)</strong></td>
+<td style="text-align: left;">How well the president managed inflation/deflation relative to their nation's baseline</td>
+</tr>
+<tr>
+<td style="text-align: left;"><strong>Unemployment (Absolute &amp; Change)</strong></td>
+<td style="text-align: left;">Current unemployment % + the % reduction or increase</td>
+</tr>
+<tr>
+<td style="text-align: left;"><strong>Trade Balance</strong></td>
+<td style="text-align: left;">Total value of exports vs. imports</td>
+</tr>
+<tr>
+<td style="text-align: left;"><strong>Infrastructure Index</strong></td>
+<td style="text-align: left;">Quality and coverage of roads, ports, and routes</td>
+</tr>
+<tr>
+<td style="text-align: left;"><strong>Debt-to-GDP Ratio</strong></td>
+<td style="text-align: left;">FMI debt relative to GDP — lower is healthier</td>
+</tr>
+<tr>
+<td style="text-align: left;"><strong>Diplomatic Standing</strong></td>
+<td style="text-align: left;">Number of active trade agreements, alliances, and sanctions (for/against)</td>
+</tr>
+<tr>
+<td style="text-align: left;"><strong>Military Readiness</strong></td>
+<td style="text-align: left;">Total defensive capability + capability relative to active threats</td>
+</tr>
+<tr>
+<td style="text-align: left;"><strong>National Approval Rating</strong></td>
+<td style="text-align: left;">Composite score simulating citizen satisfaction with the president's leadership</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Drakmoor Targeting the Leader:</strong>
+- Drakmoor's AI factors in <strong>who is currently winning</strong> when making decisions
+- The leading nation/company may attract Drakmoor's attention — trade disruptions, hostile diplomacy, or even military targeting
+- This adds a "rubber-band" mechanic that prevents runaway leaders and keeps the game competitive
+- However, Drakmoor is careful about attacking militarily strong nations — it prefers economically dominant but militarily weak targets</p>
+<p><strong>Auto-Decision Penalty:</strong>
+- If a team <strong>does not submit decisions</strong> by the 48-hour deadline, the engine applies <strong>auto-decisions</strong>
+- Auto-decisions are intentionally <strong>suboptimal</strong> — conservative pricing, no R&amp;D investment, no supply chain adjustments, no diplomatic actions
+- This serves as a <strong>penalty for inactivity</strong> — your company/nation falls behind if you don't engage
+- The Pangea Times may report: <em>"[Company X] appears to be on autopilot this quarter..."</em>
+- Presidents who skip a round default to status-quo policies with no military actions and abstain on sanctions votes</p>
+<h3>4. Resource Types ✅</h3>
+<p>Six resource categories confirmed:
+- <strong>Energy</strong> (oil, natural gas, renewables)
+- <strong>Minerals</strong> (metals, rare earths)
+- <strong>Agriculture</strong> (food, livestock)
+- <strong>Technology</strong> (R&amp;D output, patents)
+- <strong>Labor</strong> (population, education level)
+- <strong>Capital</strong> (financial markets, banking)
+- Resources <strong>deplete gradually</strong> over time, teaching sustainability and forcing nations to adapt</p>
+<h3>5. Military Mechanics Depth ✅ — Medium</h3>
+<ul>
+<li>Students choose <strong>unit types</strong> (infantry, navy, air force) and deploy them on the map</li>
+<li><strong>Supply lines matter</strong> — troops far from borders cost more to maintain</li>
+<li><strong>Intelligence operations</strong> — spend budget to spy on other nations. This can randomly uncover secret information, such as intercepted lobbying requests from foreign companies to their presidents, helping players deduce rival nations' long-term economic or military plans. <strong>Note: Nations are fully protected from all espionage and sabotage during Rounds 1 and 2</strong>, giving them a grace period to build their economies. However, presidents can begin investing in their intelligence capabilities starting in Round 1 to prepare for Round 3.</li>
+<li><strong>Covert Sabotage</strong> — When resources are scarce, rival nations building infrastructure (e.g., roads) to shared resource nodes will drive up your costs. Presidents and companies can fund covert sabotage to destroy this competing infrastructure. Success is randomized (resolved with Attack Index / Defense Index) and depends on both the attacker's and defender's intelligence capabilities, which can be upgraded through investments. If caught, the FMI automatically sanctions the aggressor for 1-2 rounds.</li>
+<li><strong>False Flag Attacks (Round 5+)</strong> — Companies with high intelligence/military investments can orchestrate false flag attacks starting in Round 5. Success is randomized and odds scale with their investment level. If successful, the framed nation takes the blame and faces immediate international sanctions. If discovered (failed roll), the executing company and their home nation face severe FMI sanctions and diplomatic isolation.</li>
+</ul>
+<p><strong>Combat Resolution — Attack Index vs. Defense Index:</strong></p>
+<p>Each nation has two military indices that grow with investment:</p>
+<table>
+<thead>
+<tr>
+<th style="text-align: left;">Index</th>
+<th style="text-align: left;">Components</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: left;"><strong>Attack Index (ATK)</strong></td>
+<td style="text-align: left;">Offensive units (infantry, navy, air) + technology level + supply line proximity + intelligence intel</td>
+</tr>
+<tr>
+<td style="text-align: left;"><strong>Defense Index (DEF)</strong></td>
+<td style="text-align: left;">Defensive units + fortifications + terrain bonus + infrastructure quality</td>
+</tr>
+</tbody>
+</table>
+<p>The index determines <strong>how many dice</strong> each side rolls:</p>
+<table>
+<thead>
+<tr>
+<th style="text-align: left;">Index Level</th>
+<th style="text-align: left;">Dice Rolled</th>
+<th style="text-align: left;">Example Investment Level</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: left;">1–2</td>
+<td style="text-align: left;">1 die</td>
+<td style="text-align: left;">Minimal military, no tech investment</td>
+</tr>
+<tr>
+<td style="text-align: left;">3–4</td>
+<td style="text-align: left;">2 dice</td>
+<td style="text-align: left;">Moderate standing army</td>
+</tr>
+<tr>
+<td style="text-align: left;">5–6</td>
+<td style="text-align: left;">3 dice</td>
+<td style="text-align: left;">Well-funded military with tech</td>
+</tr>
+<tr>
+<td style="text-align: left;">7–8</td>
+<td style="text-align: left;">4 dice</td>
+<td style="text-align: left;">Major military power</td>
+</tr>
+<tr>
+<td style="text-align: left;">9–10</td>
+<td style="text-align: left;">5 dice</td>
+<td style="text-align: left;">Superpower-level force projection</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Tie-breaking rule:</strong> When the highest dice are compared, <strong>ties go to whichever side has the higher index</strong> (ATK or DEF). This means a nation with ATK 7 that ties with a nation at DEF 5 wins the tie. Investing in your index gives a subtle but powerful edge.</p>
+<p><strong>Quarterly Campaign Cycle &amp; Conditional Orders:</strong>
+- Wars are not resolved in a single instant. An attack order initiates a <strong>year-long campaign</strong> (1 round = 1 year) that resolves in <strong>quarterly phases (every 3 months)</strong>.
+- <strong>Conditional Orders (If/Then):</strong> Presidents can issue logical conditionals for their campaigns (e.g., "If we haven't secured the territory by the 6-month mark, halt the attack and retreat" or "If our casualties exceed 30%, stop"). This adds strategic depth to military planning.
+- <strong>Campaign End Conditions:</strong> Troops will continue to attack each quarter until either the territory/objective is fully conquered, the attacking force is depleted/lost for the year, or a conditional order halts the offensive.
+- <strong>Mid-Year War Report:</strong> Since Presidents lock in their attack policies on Day 1 (Month 1), the first two quarters of the campaign are resolved by the engine <em>before</em> companies make their Day 2 (Month 7) decisions.
+- This gives companies crucial intelligence on how the war is progressing (e.g., "Our forces are stalled" or "The enemy port has been captured") so they can adjust their supply chains and pricing accordingly for the second half of the year.</p>
+<p><strong>Key implications:</strong>
+- <strong>War is Unpopular:</strong> Starting an offensive war significantly lowers a president's Approval Rating. The game remains fundamentally an educational business simulation, not a war game. Military is a calculated geopolitical tool, not a default strategy.
+- A nation with ATK 2 (1 die) attacking a nation with DEF 6 (3 dice) is near-suicidal — the defender compares 3 dice to 1
+- A nation with ATK 8 (4 dice) vs. DEF 4 (2 dice) has overwhelming advantage + wins all ties
+- Even at equal dice, the higher-index nation has the tie-breaking edge
+- Indices grow through <strong>sustained investment over multiple rounds</strong> — you can't build a superpower military overnight
+- This teaches that military capability is a long-term strategic investment, not a last-minute panic buy</p>
+<ul>
+<li>War is costly — military spending directly reduces economic investment capacity</li>
+<li>Ties into supply chain, budgeting, and opportunity cost lessons</li>
+</ul>
+<h3>6. Trade &amp; Diplomacy ✅ — Full Feature Set</h3>
+<ul>
+<li><strong>Alliances</strong>: Presidents can formally ally (shared military defense, preferential trade rates, joint sanctions voting)</li>
+<li><strong>Trade defaults allowed</strong>: Nations can break deals — the game engine does NOT enforce contracts. This teaches contract risk, trust, and the importance of enforceable international agreements</li>
+<li><strong>UN-style forum ("Pangea Assembly")</strong>: A public chat space where all 8 presidents (including Drakmoor) can make speeches, propose resolutions, negotiate deals, and posture. All messages are logged and visible to the instructor</li>
+</ul>
+<hr />
+<h2>Suggested Additional Course Connections</h2>
+<p>Based on your framework, here are courses that naturally map to PangeaWorld mechanics:</p>
+<table>
+<thead>
+<tr>
+<th style="text-align: left;">Course</th>
+<th style="text-align: left;">Game Mechanic</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: left;"><strong>International Affairs</strong></td>
+<td style="text-align: left;">Diplomacy, alliances, sanctions, war declarations, UN-style forum</td>
+</tr>
+<tr>
+<td style="text-align: left;"><strong>International Business</strong></td>
+<td style="text-align: left;">Cross-border trade, tariffs, currency exchange, FDI decisions</td>
+</tr>
+<tr>
+<td style="text-align: left;"><strong>Supply Chain Management</strong></td>
+<td style="text-align: left;">Resource sourcing, logistics routes, disruption events (port closures, weather)</td>
+</tr>
+<tr>
+<td style="text-align: left;"><strong>Macroeconomics</strong></td>
+<td style="text-align: left;">CPI, GDP, inflation, monetary policy, interest rates, unemployment</td>
+</tr>
+<tr>
+<td style="text-align: left;"><strong>Finance</strong></td>
+<td style="text-align: left;">Company valuation, stock prices, debt/equity decisions, ROI</td>
+</tr>
+<tr>
+<td style="text-align: left;"><strong>Marketing</strong></td>
+<td style="text-align: left;">Product positioning, pricing strategy, market share competition</td>
+</tr>
+<tr>
+<td style="text-align: left;"><strong>Data Analytics</strong></td>
+<td style="text-align: left;">Dashboard interpretation, KPI analysis, forecasting</td>
+</tr>
+<tr>
+<td style="text-align: left;"><strong>Ethics &amp; Corporate Responsibility</strong></td>
+<td style="text-align: left;">Environmental impact, labor conditions, corruption mechanics</td>
+</tr>
+<tr>
+<td style="text-align: left;"><strong>Negotiation</strong></td>
+<td style="text-align: left;">Trade deals, alliance formation, conflict resolution</td>
+</tr>
+<tr>
+<td style="text-align: left;"><strong>Political Science</strong></td>
+<td style="text-align: left;">Government types, policy decisions, public approval ratings</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2>Proposed Changes</h2>
+<h3>Phase 1 — Foundation &amp; World Building (MVP)</h3>
+<blockquote>
+<p>Goal: Playable single-nation prototype with core economy loop</p>
+</blockquote>
+<hr />
+<h4>Game Engine &amp; Data Model</h4>
+<h5>[NEW] Core simulation engine</h5>
+<ul>
+<li><strong>Round Manager</strong>: Controls game state transitions (submission → processing → results)</li>
+<li><strong>Economy Engine</strong>: Calculates GDP, CPI, inflation, trade balances per nation</li>
+<li><strong>Resource Engine</strong>: Manages production, consumption, trade flows, and scarcity</li>
+<li><strong>Event Engine</strong>: Injects world events (weather, political crises, market shocks)</li>
+</ul>
+<h5>[NEW] Data schema design</h5>
+<pre><code>World
+├── Map
+│   ├── Nations (8 territories with borders &amp; geography)
+│   ├── Infrastructure
+│   │   ├── Roads (inter-city, inter-nation — cost per unit distance)
+│   │   ├── Rivers (navigable waterways — moderate shipping cost)
+│   │   ├── Ports (coastal access points for sea shipping)
+│   │   ├── Sea Lanes (cheapest long-distance routes between ports)
+│   │   ├── Airports (emergency/premium freight only)
+│   │   └── Chokepoints (straits, canals — can be blockaded)
+│   └── Routes (precomputed paths between resource nodes)
+├── Nations (8 — 7 player + 1 AI)
+│   ├── President (user or AI agent for Drakmoor)
+│   ├── Confidential Intel Vault (isolated database/table)
+│   │   ├── Secret military deployments &amp; covert operations
+│   │   ├── Private company lobbying requests
+│   │   └── ONLY accessible to the President; leaks ONLY via enemy spy activity
+│   ├── Resources (production rates, stockpiles, geographic location on map)
+│   ├── Military (budget, units, deployments on map)
+│   ├── Economy (GDP, CPI basket, inflation, unemployment)
+│   ├── Infrastructure (roads, ports, bridges — investable &amp; destructible)
+│   ├── Policies (tax rates, tariffs, subsidies)
+│   └── Companies (10-15 per nation)
+│       ├── Team (users)
+│       ├── Financials (revenue, costs incl. shipping, profit, cash)
+│       ├── Supply Chain (sourcing routes on map, shipping mode, costs)
+│       ├── Products (price incl. logistics markup, quality, market share)
+│       └── Decisions (per-round submissions)
+├── Global Market
+│   ├── Commodity Prices
+│   ├── Exchange Rates
+│   ├── Trade Agreements
+│   └── Shipping Rate Index (fluctuates with fuel prices &amp; disruptions)
+├── Rounds
+│   ├── Round Number
+│   ├── Status (planning / submitted / processing / complete)
+│   ├── Events (injected scenarios)
+│   └── Results (per-nation, per-company snapshots)
+├── Global Ledger (AI Knowledge Base)
+│   ├── Every public user decision (pricing, sourcing, public military, R&amp;D)
+│   ├── Every diplomatic action (proposals, FMI votes, rejected treaties)
+│   ├── Every event &amp; disaster (major and minor)
+│   ├── Every news article and Pangea Assembly chat message
+│   └── Note: AI is strictly partitioned from the Confidential Intel Vaults and cannot leak secrets unless a spy operation officially succeeds.
+└── News Feed
+    ├── System-generated articles
+    ├── Event announcements
+    └── Market reports
+</code></pre>
+<hr />
+<h4>Frontend — Company Dashboard</h4>
+<h5>[NEW] Company executive dashboard</h5>
+<ul>
+<li><strong>Financial Overview</strong>: Revenue, COGS (incl. shipping costs breakdown), gross margin, net profit, cash position (charts + tables)</li>
+<li><strong>Sourcing Module</strong>: Executives select a required resource and view a live marketplace of suppliers (both user-run and bot companies). The interface displays the base price + available shipping modes + transit times = <strong>Total Landed Cost</strong>.</li>
+<li><strong>Supply Chain Map</strong>: Interactive map showing chosen sourcing routes. Routes highlighted in green (active), yellow (at risk), red (disrupted)</li>
+<li><strong>Virtual Consumer Market (Sales)</strong>: Companies set their final product prices in a competitive virtual market. They compete for market share against other user teams AND automated bot companies.</li>
+<li><strong>Market Position</strong>: Market share vs. competitors, product pricing comparison, and consumer demand curves.</li>
+<li><strong>Decision Panel</strong>: Per-round input forms for pricing, production volume, R&amp;D investment, and <strong>sourcing route/supplier selection</strong>.</li>
+<li><strong>News Feed</strong>: "Pangea Times" — AI-generated news articles reflecting world events</li>
+<li><strong>AI Advisor Panel</strong>: Embedded Gemini chatbot with company-specific context</li>
+</ul>
+<h5>[NEW] President dashboard</h5>
+<ul>
+<li><strong>National Overview</strong>: GDP, CPI breakdown (product-by-product), unemployment rate, trade balance, <strong>FMI debt status</strong></li>
+<li><strong>Intelligence Panel</strong>: Reports on other nations' public data + purchased intel</li>
+<li><strong>Military Command</strong>: Troop deployment map, budget allocation, operation planning</li>
+<li><strong>Diplomacy Center</strong>: Active treaties, trade agreements, pending proposals, <strong>sanctions voting panel</strong></li>
+<li><strong>FMI Portal</strong>: Apply for loans, view repayment schedule, monitor credit rating, and <strong>allocate budget to FMI contributions</strong> (which increases borrowing capacity)</li>
+<li><strong>Policy Controls</strong>: Tax rates, tariffs, subsidies</li>
+<li><strong>AI Advisor Panel</strong>: Embedded Gemini chatbot with nation-specific context</li>
+</ul>
+<hr />
+<h4>The Pangea World Map &amp; Logistics System</h4>
+<h5>[NEW] Interactive world map</h5>
+<p>The map is the <strong>centerpiece</strong> of PangeaWorld — a fictional continent where all 8 nations are positioned with realistic geography:</p>
+<pre><code>                    ┌─────────────┐
+              ╔═════╡   NORDVIK   ╞══════╗
+              ║     │  (arctic)   │      ║
+              ║     └──────┬──────┘      ║
+         ┌────╨───┐   river│        ┌────╨────┐
+         │VALDORIA│◄───────┤        │DRAKMOOR │
+         │(desert/│  road  │        │(mountain│
+         │ oil)   ├────────┤        │ fortress│
+         └───┬────┘   ┌────┴────┐   └────┬────┘
+        port │        │KORVATH  │        │ road
+     ~~~~~~~~│~~~~~~~~│(industr)│~~~~~~~~│~~~~~~~~~
+     ~ SEA ~ │  port  └────┬────┘  port  │ ~ SEA ~
+     ~~~~~~~~│~~~~~~~~~~~~~│~~~~~~~~~~~~~│~~~~~~~~~
+         ┌───┴────┐   road │        ┌────┴────┐
+         │SOLHAVEN│◄───────┤        │ZEPHYRIA │
+         │(finan- │        │        │(trade   │
+         │ cial)  │   ┌────┴────┐   │ hub)    │
+         └────────┘   │TERRANOVA│   └─────────┘
+                      │(agricul)│
+              ~~~~~~~~┴─────────┴~~~~~~~~
+              ~    LUNARA (island)      ~
+              ~~~~~~~~~~~~~~~~~~~~~~~~~~~
+</code></pre>
+<blockquote>
+<p>[!NOTE]
+This is a simplified layout — the actual game map will be a beautifully rendered interactive visualization. The key point is that <strong>geography determines logistics costs and trade routes</strong>.</p>
+</blockquote>
+<h5>[NEW] Infrastructure types</h5>
+<table>
+<thead>
+<tr>
+<th style="text-align: left;">Infrastructure</th>
+<th style="text-align: left;">Description</th>
+<th style="text-align: left;">Shipping Cost</th>
+<th style="text-align: left;">Speed</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: left;"><strong>Sea Lanes</strong> 🚢</td>
+<td style="text-align: left;">Ocean routes between ports</td>
+<td style="text-align: left;"><strong>~$2/unit</strong> (cheapest)</td>
+<td style="text-align: left;">Slow (2-3 days/round)</td>
+</tr>
+<tr>
+<td style="text-align: left;"><strong>Rivers</strong> 🛥️</td>
+<td style="text-align: left;">Navigable waterways within/between nations</td>
+<td style="text-align: left;"><strong>~$5/unit</strong></td>
+<td style="text-align: left;">Moderate</td>
+</tr>
+<tr>
+<td style="text-align: left;"><strong>Roads</strong> 🚛</td>
+<td style="text-align: left;">Overland freight routes</td>
+<td style="text-align: left;"><strong>~$12/unit</strong> (most expensive)</td>
+<td style="text-align: left;">Fast (1 day/round)</td>
+</tr>
+<tr>
+<td style="text-align: left;"><strong>Air Freight</strong> ✈️</td>
+<td style="text-align: left;">Emergency/premium cargo only</td>
+<td style="text-align: left;"><strong>~$30/unit</strong></td>
+<td style="text-align: left;">Instant</td>
+</tr>
+</tbody>
+</table>
+<ul>
+<li>Costs scale with <strong>distance</strong> (number of map segments traversed)</li>
+<li>Sea shipping requires both origin and destination to have <strong>port access</strong></li>
+<li>Landlocked nations (like Drakmoor) pay premium road costs unless they negotiate port access through neighbors</li>
+<li>Rivers are only available along specific geographic features — not every nation pair has a river connection</li>
+</ul>
+<h5>[NEW] Logistics cost model</h5>
+<p>Shipping cost is factored into every trade and sourcing decision:</p>
+<pre><code>Landed Cost = Base Commodity Price
+            + (Shipping Rate × Distance × Mode Multiplier)
+            + Tariffs (if crossing borders)
+            + Insurance (higher in conflict zones)
+            + Port/Transit Fees
+</code></pre>
+<p><strong>Example scenario:</strong></p>
+<blockquote>
+<p>A company in Solhaven needs steel. Options:
+- <strong>Korvath</strong> (nearby, has port): $50/unit steel + $4 sea shipping = <strong>$54 landed</strong>
+- <strong>Nordvik</strong> (far, no direct sea): $45/unit steel + $36 road shipping = <strong>$81 landed</strong>
+- <strong>Drakmoor</strong> (sanctioned, cheap steel): $30/unit steel + $24 road... but sanctions block the trade entirely</p>
+<p>If war disrupts the Korvath sea lane, suddenly Nordvik's $81 becomes the only option — and every company in Solhaven sees margins collapse.</p>
+</blockquote>
+<h5>[NEW] Infrastructure Construction &amp; Strategic Assets</h5>
+<ul>
+<li><strong>Grid-Based Construction</strong>: The map is divided into a fine <strong>triangular grid</strong>. When Presidents invest in new roads, they don't just click a button — they physically <strong>trace the route</strong> line-by-line across the triangles.</li>
+<li><strong>Distance, Terrain Costs &amp; Timeframes</strong>: The cost of roads depends heavily on the length of the traced route. Furthermore, construction is not instant. When planning a route, the system calculates a <strong>construction timeframe</strong> based on distance and terrain (e.g., 6 months [0.5 rounds], 1 year [1 round], 1.5 years, 2 years). Presidents must weigh this time delay when deciding whether to build a long road vs. utilizing existing routes.</li>
+<li><strong>Mountain Ranges</strong>: The map features impassable or highly restrictive mountain ranges. These natural barriers make road-building incredibly difficult, forcing presidents to either build long, expensive routes <em>around</em> the mountains or rely on premium air freight infrastructure.</li>
+<li><strong>River Crossings (Bridges)</strong>: If a traced road crosses a river tile, a bridge must be built. Bridges cost <strong>3x the price</strong> of a normal road segment.</li>
+<li><strong>Destructible Assets</strong>: War can destroy infrastructure. Enemies can bomb bridges (severing vital road connections), blockade ports, and mine sea lanes.</li>
+<li><strong>Strategic Chokepoints</strong>: Straits and canals can be blockaded by naval forces, disrupting trade for multiple nations simultaneously.</li>
+<li><strong>Zephyria's Advantage</strong>: Positioned as a crossroads with flat terrain and access to multiple routes, making it a natural trade hub (but also a prime military target).</li>
+</ul>
+<hr />
+<h4>The 8 Nations of Pangea</h4>
+<h5>[NEW] Nation design document</h5>
+<p>Each nation is designed to mirror real-world archetypes without mapping 1:1 to any real country, following the guidelines:</p>
+<table>
+<thead>
+<tr>
+<th style="text-align: left;">Nation</th>
+<th style="text-align: left;">Archetype</th>
+<th style="text-align: left;">Key Resources</th>
+<th style="text-align: left;">Economic Profile</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: left;"><strong>Valdoria</strong></td>
+<td style="text-align: left;">Resource-rich, politically complex</td>
+<td style="text-align: left;">Oil, natural gas, minerals</td>
+<td style="text-align: left;">High commodity exports, developing manufacturing</td>
+</tr>
+<tr>
+<td style="text-align: left;"><strong>Lunara</strong> 🏝️</td>
+<td style="text-align: left;">Isolated island nation (Iceland-like)</td>
+<td style="text-align: left;">Technology, fisheries, renewable energy</td>
+<td style="text-align: left;">High-skill economy, <strong>no land connections</strong> — all trade by sea/air</td>
+</tr>
+<tr>
+<td style="text-align: left;"><strong>Terranova</strong></td>
+<td style="text-align: left;">Agricultural powerhouse</td>
+<td style="text-align: left;">Grain, livestock, timber, freshwater</td>
+<td style="text-align: left;">Food exporter, growing middle class</td>
+</tr>
+<tr>
+<td style="text-align: left;"><strong>Korvath</strong></td>
+<td style="text-align: left;">Industrial manufacturing hub</td>
+<td style="text-align: left;">Steel, chemicals, labor</td>
+<td style="text-align: left;">Export-driven manufacturing, trade surplus</td>
+</tr>
+<tr>
+<td style="text-align: left;"><strong>Solhaven</strong></td>
+<td style="text-align: left;">Financial &amp; services center</td>
+<td style="text-align: left;">Capital, banking, insurance</td>
+<td style="text-align: left;">Financial hub, low resources, high GDP per capita</td>
+</tr>
+<tr>
+<td style="text-align: left;"><strong>Nordvik</strong></td>
+<td style="text-align: left;">Northern resource frontier</td>
+<td style="text-align: left;">Rare earth minerals, timber, oil</td>
+<td style="text-align: left;">Rich resources, harsh climate, small population</td>
+</tr>
+<tr>
+<td style="text-align: left;"><strong>Zephyria</strong></td>
+<td style="text-align: left;">Emerging market crossroads</td>
+<td style="text-align: left;">Mixed moderate resources, strategic location</td>
+<td style="text-align: left;">Trade route hub, rapid urbanization, young population</td>
+</tr>
+<tr>
+<td style="text-align: left;"><strong>Drakmoor</strong> 🤖</td>
+<td style="text-align: left;">Marginalized military state (AI-controlled)</td>
+<td style="text-align: left;">Iron, coal, weapons manufacturing</td>
+<td style="text-align: left;">Sanctioned economy, strong military, isolated, desperate</td>
+</tr>
+</tbody>
+</table>
+<blockquote>
+<p>[!NOTE]
+Each nation is intentionally designed with <strong>asymmetric advantages and vulnerabilities</strong> to force trade and diplomacy. No nation can be self-sufficient — this is a core design principle that teaches interdependence.</p>
+<p>[!WARNING]</p>
+<h3>🏝️ Lunara — The Island Struggle</h3>
+<p>Lunara has <strong>no land borders</strong> with any other nation. Like Iceland, this creates unique challenges:
+- <strong>All imports arrive by sea or air</strong> — no cheap road/river options. Minimum shipping cost is ~$2/unit (sea) vs. $0 for neighbors trading overland
+- <strong>Food insecurity</strong> — Lunara has fisheries but no agriculture. It must import grain, livestock, and timber from the mainland at premium shipping costs
+- <strong>Vulnerable to naval blockade</strong> — if a hostile nation (e.g., Drakmoor) blockades Lunara's ports, the entire economy grinds to a halt
+- <strong>Weather disruptions</strong> — storms can temporarily shut down sea lanes to Lunara, cutting off supplies for 1-2 rounds
+- <strong>High cost of living</strong> — imported goods drive up consumer prices, making Lunara's CPI naturally higher than mainland nations
+- <strong>Compensating strengths</strong> — Lunara's technology exports and renewable energy are highly valued, and its island position makes it hard to invade by land. Its educated workforce commands premium prices for tech and services</p>
+<p>This mirrors real-world island economies (Iceland, Japan, Singapore, New Zealand) that must navigate the constant tension between geographic isolation and global trade dependency.</p>
+</blockquote>
+<hr />
+<h4>🤖 Drakmoor — The AI-Controlled Antagonist Nation</h4>
+<p>Drakmoor is the <strong>8th nation</strong>, fully controlled by an AI agent (not played by students). It serves critical educational purposes:</p>
+<p><strong>Backstory &amp; Context:</strong>
+- Drakmoor was once a prosperous industrial power but has been <strong>marginalized by international sanctions</strong> due to authoritarian governance and aggressive posturing
+- Its economy is suffering — limited access to global markets, rising unemployment, crumbling infrastructure
+- However, it has maintained a <strong>disproportionately strong military</strong> (spending 40%+ of GDP on defense)
+- Its AI-driven leadership grows increasingly desperate and nationalistic as sanctions bite harder each round</p>
+<p><strong>Behavioral Programming — Randomized Per Game Instance:</strong></p>
+<p>At the start of each new game, Drakmoor's AI agent rolls a <strong>randomized profile</strong> so that no two games play out the same way. Students who replay the game cannot assume Drakmoor's behavior:</p>
+<table>
+<thead>
+<tr>
+<th style="text-align: left;">Randomized Element</th>
+<th style="text-align: left;">Possible Values</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: left;"><strong>Primary Motivation</strong></td>
+<td style="text-align: left;">Resource hunger (targets resource-rich nations), territorial expansion (targets neighbors), ideological rivalry (targets the most prosperous nation), revenge (targets whoever led the sanctions)</td>
+</tr>
+<tr>
+<td style="text-align: left;"><strong>Target Nation</strong></td>
+<td style="text-align: left;">Any of the 7 player nations — weighted by proximity and motivation (e.g., attacks Korvath for steel in one game, Lunara for technology in another, Terranova for food in another)</td>
+</tr>
+<tr>
+<td style="text-align: left;"><strong>Aggression Timeline</strong></td>
+<td style="text-align: left;">War initiation randomly falls between rounds 2-5; pre-war diplomacy length varies</td>
+</tr>
+<tr>
+<td style="text-align: left;"><strong>Diplomatic Personality</strong></td>
+<td style="text-align: left;">Cold &amp; calculating, erratic &amp; unpredictable, publicly aggressive, or deceptively friendly before striking</td>
+</tr>
+<tr>
+<td style="text-align: left;"><strong>War Strategy</strong></td>
+<td style="text-align: left;">Blitzkrieg (fast, concentrated attack), war of attrition (slow escalation), proxy conflict (funds instability in target nation first), or naval blockade</td>
+</tr>
+<tr>
+<td style="text-align: left;"><strong>Post-War Behavior</strong></td>
+<td style="text-align: left;">Seeks peace if losing, doubles down if winning, fragments into civil war, or pivots to a new target</td>
+</tr>
+</tbody>
+</table>
+<ul>
+<li><strong>Round 1</strong>: Drakmoor always begins with diplomatic overtures — but the <em>tone</em> varies (friendly trade proposals vs. threatening demands). It <strong>actively seeks alliances</strong> with player nations, offering cheap resources, military cooperation, or favorable trade terms</li>
+<li><strong>Rounds 2-5</strong>: War is initiated based on the rolled timeline. The buildup includes escalating news events, troop movements reported in the Pangea Times, and rejected ultimatums. Drakmoor will vote against any sanctions targeting itself or its allies in the FMI</li>
+<li><strong>Alliance strategy</strong>: Drakmoor specifically targets nations that are economically struggling or diplomatically isolated — offering them a lifeline that comes with international consequences. Any nation that aligns with Drakmoor risks sanctions from the other nations and reduced FMI lending access</li>
+<li><strong>Post-war</strong>: Behavior adapts dynamically based on both the randomized profile AND the actual outcomes</li>
+<li>The instructor can view (but students cannot see) Drakmoor's rolled profile for the current game via the GM panel</li>
+</ul>
+<p><strong>Educational Purpose:</strong>
+- Forces students to deal with <strong>geopolitical instability they didn't cause</strong>
+- Teaches that sanctions have consequences (pushing nations toward desperation)
+- Creates urgency for military preparedness, intelligence gathering, and alliance formation
+- Shows how war disrupts supply chains, trade routes, and commodity prices for ALL nations — even those not directly involved
+- Mirrors real-world scenarios where conflict emerges from marginalization and economic isolation</p>
+<blockquote>
+<p>[!IMPORTANT]
+Drakmoor's actions should generate <strong>ripple effects</strong> across the entire game world:
+- Commodity prices spike (especially energy, metals)
+- Trade routes through conflict zones are disrupted
+- Nations must choose sides or stay neutral (diplomatic pressure)
+- Companies face supply chain disruptions and must find alternative sourcing
+- The "Pangea Times" news feed covers the crisis extensively</p>
+</blockquote>
+<hr />
+<h3>Phase 2 — Multiplayer &amp; Round System</h3>
+<h5>[NEW] Drakmoor AI agent</h5>
+<ul>
+<li>AI decision engine with weighted randomization for diplomatic and military actions</li>
+<li>Configurable aggression timeline (default: war between rounds 2-5)</li>
+<li>Instructor override capability (GM can adjust Drakmoor's behavior mid-game)</li>
+<li>Drakmoor's actions generate automatic news articles and market disruption events</li>
+</ul>
+<h5>[NEW] Authentication &amp; session management</h5>
+<ul>
+<li>User registration with role assignment (President vs. Company Executive)</li>
+<li>Team formation and nation assignment</li>
+<li><strong>Customization (Round 1):</strong> Users have the option to change their assigned Nation's name or Company's name during the first round to increase team identity and ownership. <strong>Strict content moderation filters</strong> will block offensive, profane, or blasphemous names to maintain a professional educational environment.</li>
+<li>Session management for concurrent games</li>
+</ul>
+<h5>[NEW] AI bot backfill system</h5>
+<p>If there aren't enough students to fill all roles, <strong>AI bots automatically fill empty slots</strong> so the game world always runs at full capacity:</p>
+<p><strong>How it works:</strong>
+- The instructor sets up a game and assigns students to nations/companies
+- Any <strong>unfilled president seat</strong> is run by an AI bot (similar to Drakmoor, but non-antagonistic — plays as a rational, moderate leader)
+- Any <strong>unfilled company slot</strong> is run by an AI bot that makes reasonable business decisions (competitive but not dominant)
+- AI bots are clearly labeled in the UI with a 🤖 icon so students know which actors are human vs. AI</p>
+<p><strong>AI Bot Difficulty Levels:</strong></p>
+<table>
+<thead>
+<tr>
+<th style="text-align: left;">Level</th>
+<th style="text-align: left;">Behavior</th>
+<th style="text-align: left;">Best For</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: left;"><strong>Passive</strong></td>
+<td style="text-align: left;">Makes safe, conservative decisions — easy to outcompete</td>
+<td style="text-align: left;">Small classes, introductory courses</td>
+</tr>
+<tr>
+<td style="text-align: left;"><strong>Balanced</strong></td>
+<td style="text-align: left;">Makes competent decisions — realistic competition</td>
+<td style="text-align: left;">Standard gameplay</td>
+</tr>
+<tr>
+<td style="text-align: left;"><strong>Aggressive</strong></td>
+<td style="text-align: left;">Plays to win — challenges students to perform</td>
+<td style="text-align: left;">Advanced courses, experienced students</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Scaling scenarios:</strong></p>
+<table>
+<thead>
+<tr>
+<th style="text-align: left;">Class Size</th>
+<th style="text-align: left;">Setup</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: left;"><strong>200+ students</strong></td>
+<td style="text-align: left;">All 7 nations fully student-run, no bots needed</td>
+</tr>
+<tr>
+<td style="text-align: left;"><strong>100-200 students</strong></td>
+<td style="text-align: left;">4-5 student nations, 2-3 AI-run nations with AI companies</td>
+</tr>
+<tr>
+<td style="text-align: left;"><strong>50-100 students</strong></td>
+<td style="text-align: left;">2-3 student nations, rest AI-run; fewer companies per student nation</td>
+</tr>
+<tr>
+<td style="text-align: left;"><strong>20-50 students</strong></td>
+<td style="text-align: left;">1-2 student nations, rest AI-run; students focus on company roles</td>
+</tr>
+<tr>
+<td style="text-align: left;"><strong>&lt; 20 students</strong></td>
+<td style="text-align: left;">1 student nation (all students are company execs + 1 president), 6 AI nations</td>
+</tr>
+</tbody>
+</table>
+<ul>
+<li>The instructor can <strong>swap a bot for a student</strong> mid-game (e.g., a late-joining student takes over an AI company)</li>
+<li>AI bots submit decisions automatically during the submission phase — no waiting</li>
+<li>Bot-run nations still participate in <strong>sanctions votes, trade proposals, and FMI lending</strong> — creating a living world regardless of class size</li>
+</ul>
+<blockquote>
+<p>[!NOTE]
+This means PangeaWorld works for a class of 10 students or 300 students. The game world always has 8 nations, 80-120 companies, trade, diplomacy, and conflict — the only variable is how many of those actors are human.</p>
+</blockquote>
+<h5>[NEW] Round lifecycle system</h5>
+<pre><code>┌─────────────┐     ┌────────────────┐     ┌────────────────┐     ┌─────────────┐     ┌──────────────┐
+│  PLANNING   │────▶│ DAY 1: PRES.   │────▶│ DAY 2: COMPANY │────▶│ PROCESSING  │────▶│   RESULTS    │
+│  Phase      │     │ Deadline       │     │ Deadline       │     │ Engine      │     │  &amp; Debrief   │
+│             │     │                │     │                │     │ Calculates  │     │              │
+│ • Review    │     │ • Companies    │     │ • Policies &amp;   │     │ • Economy   │     │ • Updated    │
+│   results   │     │   lobby Pres.  │     │   Tariffs lock │     │ • Military  │     │   dashboards │
+│ • Analyze   │     │ • Presidents   │     │ • Companies    │     │ • Events    │     │ • News feed  │
+│   data      │     │   set macro    │     │   submit micro │     │ • Trade     │     │ • Rankings   │
+│ • Consult   │     │   policy       │     │   decisions    │     │ • Results   │     │ • AI debrief │
+│   AI        │     │                │     │                │     │             │     │              │
+└─────────────┘     └────────────────┘     └────────────────┘     └─────────────┘     └──────────────┘
+</code></pre>
+<h5>[NEW] Trade &amp; diplomacy system</h5>
+<ul>
+<li>Proposal/acceptance workflow for trade deals</li>
+<li>Treaty templates (mutual defense, trade agreements, non-aggression pacts)</li>
+<li>Tariff mechanics (set per nation, per product category)</li>
+<li>Public vs. secret negotiations</li>
+</ul>
+<h5>[NEW] Fundo Monetário Internacional (FMI)</h5>
+<p>The FMI is a <strong>multilateral financial institution</strong> — the game's equivalent of the IMF — that provides loans to nations and enforces financial discipline:</p>
+<p><strong>Lending Products:</strong></p>
+<table>
+<thead>
+<tr>
+<th style="text-align: left;">Loan Type</th>
+<th style="text-align: left;">Purpose</th>
+<th style="text-align: left;">Terms</th>
+<th style="text-align: left;">Conditions</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: left;"><strong>Emergency Credit</strong></td>
+<td style="text-align: left;">Short-term liquidity crisis (can't pay military, infrastructure)</td>
+<td style="text-align: left;">1-2 rounds, high interest (8-12%)</td>
+<td style="text-align: left;">Must be repaid quickly or credit rating drops</td>
+</tr>
+<tr>
+<td style="text-align: left;"><strong>Development Loan</strong></td>
+<td style="text-align: left;">Long-term infrastructure, education, industrialization</td>
+<td style="text-align: left;">4-6 rounds, moderate interest (3-6%)</td>
+<td style="text-align: left;">Requires reform commitments (e.g., reduce military spend)</td>
+</tr>
+<tr>
+<td style="text-align: left;"><strong>Bailout Package</strong></td>
+<td style="text-align: left;">Nation on verge of economic collapse</td>
+<td style="text-align: left;">Full game duration, low interest (1-3%)</td>
+<td style="text-align: left;">Severe conditions: austerity, privatization, oversight</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Lending Limits:</strong>
+- Each nation has a <strong>credit allowance</strong> based on GDP, debt-to-GDP ratio, international standing, and <strong>most importantly, their direct financial contributions (quotas) to the FMI</strong>. Presidents can invest national budget into the FMI to increase this limit.
+- Nations under sanctions have <strong>reduced FMI allowances</strong> — less access to cheap capital
+- Nations allied with Drakmoor face <strong>further FMI restrictions</strong> — the international community penalizes alignment with a sanctioned state
+- <strong>Automatic Sabotage Penalties</strong>: If a nation or its companies are caught conducting covert sabotage, the FMI automatically freezes their credit access and imposes strict sanctions for 1-2 rounds
+- Defaulting on FMI loans triggers automatic credit downgrades and trade penalties</p>
+<p><strong>Educational Purpose:</strong>
+- Teaches how international financial institutions influence national policy
+- Shows the tension between sovereignty and financial dependency
+- Demonstrates how debt can constrain a nation's freedom of action
+- Mirrors real-world IMF conditionality debates</p>
+<h5>[NEW] Sanctions voting system</h5>
+<p>Sanctions are <strong>not automatic</strong> — they require a democratic vote among all 8 presidents (including Drakmoor):</p>
+<ul>
+<li>Any president can <strong>propose sanctions</strong> against another nation (trade embargo, asset freeze, FMI restrictions)</li>
+<li>All 8 presidents vote: <strong>simple majority (5 of 8)</strong> passes a sanction</li>
+<li>Drakmoor gets a vote too — it will vote strategically (e.g., voting against sanctions on its allies)</li>
+<li><strong>Sanction types:</strong></li>
+<li>🚫 <strong>Trade Embargo</strong>: Blocks specific commodity trade with the sanctioned nation</li>
+<li>🏦 <strong>Financial Sanctions</strong>: Reduces the nation's FMI credit allowance by 30-50%</li>
+<li>⚓ <strong>Shipping Restrictions</strong>: Other nations' ports cannot service the sanctioned nation's cargo</li>
+<li>🔒 <strong>Full Isolation</strong>: Combination of all above (requires supermajority: 6 of 8)</li>
+<li>Sanctions can be <strong>lifted</strong> by a new vote (same majority threshold)</li>
+<li><strong>Consequences of aligning with Drakmoor</strong>:</li>
+<li>If a player nation votes consistently with Drakmoor or signs alliance/trade deals with it, other nations may propose sanctions against <em>them</em></li>
+<li>Their FMI credit allowance is reduced proportionally to the depth of the alliance</li>
+<li>This creates a <strong>diplomatic trap</strong>: Drakmoor may offer cheap iron, coal, or military support, but accepting it risks international isolation</li>
+</ul>
+<blockquote>
+<p>[!IMPORTANT]
+The sanctions voting system teaches that <strong>international pressure is a political process, not a rule of nature</strong>. Students learn that sanctions require coalition-building, and that sanctioned nations still have agency (they can seek allies, circumvent restrictions, or retaliate).</p>
+</blockquote>
+<hr />
+<h3>Phase 3 — Military, Events &amp; News</h3>
+<h5>[NEW] Military operations system</h5>
+<ul>
+<li>Unit types: Infantry, Navy, Air Force (each with cost and capability)</li>
+<li>Operations: Attack, Defend, Blockade, Intelligence Gathering</li>
+<li><strong>Resolution: Attack Index vs. Defense Index</strong> — each nation's ATK and DEF indices determine how many dice they roll (1–5 dice scaled by index level 1–10). Ties are won by the higher index. This replaces fixed RISK dice counts with a dynamic system that rewards sustained military investment. Outcomes remain randomized — war is unpredictable, but preparation matters.</li>
+<li>Multiple engagement rounds per battle, with the option to retreat</li>
+<li>Indices grow through sustained investment over multiple rounds (infantry, navy, air force, technology, fortifications, intelligence)</li>
+<li>This teaches that <strong>military capability is a long-term strategic investment</strong>, not a panic buy</li>
+<li>Costs: Military spending directly reduces money available for economic investment (teaching opportunity cost)</li>
+<li><strong>War ripple effects</strong>: Active conflicts disrupt trade routes, spike commodity prices, and trigger refugee/humanitarian events</li>
+</ul>
+<h5>[NEW] Dynamic event engine</h5>
+<ul>
+<li><strong>Instructor-triggered events</strong>: GM panel to inject custom scenarios</li>
+<li><strong>Scheduled events</strong>: Pre-programmed events tied to round numbers</li>
+<li><strong>Reactive events</strong>: Triggered by game state (e.g., if a nation's CPI exceeds 115, trigger "civil unrest")</li>
+<li><strong>Frequency &amp; Scale</strong>: A standard game contains <strong>3 major events</strong> (massive disruptions) and <strong>10-12 minor events</strong> randomly distributed throughout the game. Minor events usually require financial investments to rebuild or recover.</li>
+<li>Event categories:</li>
+<li>🌪️ Natural disasters &amp; Hazards (earthquakes, twisters, hurricanes, tsunamis, oil leakages, droughts)</li>
+<li>📰 Political crises (coups, elections, protests)</li>
+<li>📈 Market shocks (commodity price spikes, financial crises)</li>
+<li>🦠 Health emergencies (pandemics, supply disruptions)</li>
+<li>🔬 Technology breakthroughs (new resource discovery, innovation)</li>
+</ul>
+<h5>[NEW] "Pangea Times" news system</h5>
+<ul>
+<li>AI-generated news articles reflecting game events in journalistic style</li>
+<li>Market reports with charts and data</li>
+<li>Opinion pieces that introduce bias (teaching media literacy)</li>
+<li>Some articles contain <strong>deliberate misinformation</strong> (teaching source verification)</li>
+</ul>
+<hr />
+<h3>Phase 4 — AI Integration &amp; Analytics</h3>
+<h5>[NEW] Gemini AI advisor integration</h5>
+<ul>
+<li>Per-user chat interface with persistent conversation history</li>
+<li><strong>Global Event Ledger (Knowledge Base)</strong>: The game maintains a complete, immutable ledger of every action, disaster, decision, deal, rejected proposal, and news event. The AI advisor queries this ledger to provide context-aware advice grounded in the exact history of the current game instance.</li>
+<li><strong>System prompt engineering</strong>:</li>
+<li>Company advisors: Knowledgeable about business strategy, supply chain, finance</li>
+<li>President advisors: Knowledgeable about macroeconomics, geopolitics, military strategy</li>
+<li>Both: Will NOT give direct answers — uses Socratic method to guide thinking</li>
+<li>Both: Has access to the user's game data for contextual advice</li>
+<li><strong>AI usage logging</strong>: Track all AI interactions for instructor review</li>
+<li><strong>Guardrails</strong>: AI cannot reveal other players' secret decisions or provide optimal solutions</li>
+</ul>
+<h5>[NEW] Instructor analytics dashboard</h5>
+<ul>
+<li>Per-student engagement metrics (decisions made, AI usage, login frequency)</li>
+<li>Learning outcome tracking (did decision quality improve over rounds?)</li>
+<li>Game balance monitoring (is one nation too dominant?)</li>
+<li>Export functionality for grades and reports</li>
+</ul>
+<h5>[NEW] Post-game debrief tools</h5>
+<ul>
+<li>Historical playback of all rounds</li>
+<li>"What-if" analysis (what would have happened if X decision was different?)</li>
+<li>Connection to real-world examples: "Your nation experienced Y — here's when that happened in the real world"</li>
+</ul>
+<hr />
+<h2>Technical Architecture</h2>
+<h3>Recommended Stack</h3>
+<pre><code class="language-mermaid">graph TB
+    subgraph Frontend
+        A[&quot;Next.js (React)&quot;] --&gt; B[&quot;Dashboard UI&quot;]
+        A --&gt; C[&quot;Interactive Map (D3.js + Canvas)&quot;]
+        A --&gt; D[&quot;Charts (Recharts / Chart.js)&quot;]
+        A --&gt; E[&quot;AI Chat Panel&quot;]
+        C --&gt; C1[&quot;Route Calculator&quot;]
+        C --&gt; C2[&quot;Infrastructure Layer&quot;]
+        C --&gt; C3[&quot;Military Overlay&quot;]
+    end
+
+    subgraph Backend
+        F[&quot;Node.js + Express / Next.js API Routes&quot;] --&gt; G[&quot;Game Engine&quot;]
+        F --&gt; H[&quot;Authentication (NextAuth.js)&quot;]
+        F --&gt; I[&quot;WebSocket Server (Socket.io)&quot;]
+        G --&gt; J[&quot;Economy Simulator&quot;]
+        G --&gt; K[&quot;Military Resolver&quot;]
+        G --&gt; L[&quot;Event Engine&quot;]
+        G --&gt; M[&quot;Trade Processor&quot;]
+        G --&gt; N1[&quot;Logistics Engine (route calc, shipping costs)&quot;]
+    end
+
+    subgraph Data
+        N[&quot;PostgreSQL (Game State + Map Data)&quot;]
+        O[&quot;Redis (Sessions / Real-time)&quot;]
+    end
+
+    subgraph AI
+        P[&quot;Gemini API (via backend proxy)&quot;]
+        Q[&quot;System Prompt Templates&quot;]
+        R[&quot;Interaction Logging&quot;]
+    end
+
+    B &amp; C &amp; D &amp; E --&gt; F
+    F --&gt; N &amp; O
+    F --&gt; P
+</code></pre>
+<h3>Why This Stack?</h3>
+<ul>
+<li><strong>Next.js</strong>: Full-stack React framework with server-side rendering, API routes, and excellent developer experience</li>
+<li><strong>PostgreSQL</strong>: Complex relational data (nations, companies, rounds, decisions) demands a relational DB</li>
+<li><strong>Redis</strong>: Fast session management and real-time pub/sub for live updates</li>
+<li><strong>D3.js/Mapbox</strong>: Required for the interactive world map and complex data visualizations</li>
+<li><strong>Socket.io</strong>: Real-time notifications when events fire or trade proposals arrive</li>
+</ul>
+<hr />
+<h2>Verification Plan</h2>
+<h3>Automated Tests</h3>
+<ul>
+<li>Unit tests for economy engine (CPI calculation, GDP computation, trade balance)</li>
+<li>Unit tests for military resolution algorithm</li>
+<li>Integration tests for round lifecycle (planning → submission → processing → results)</li>
+<li>API endpoint tests for all CRUD operations</li>
+<li><code>npm run test</code> — Jest + React Testing Library</li>
+</ul>
+<h3>Manual Verification</h3>
+<ul>
+<li><strong>Phase 1</strong>: Single-player walkthrough — create a nation, run 3 rounds, verify economy math</li>
+<li><strong>Phase 2</strong>: 4-player test — 2 nations, 1 president + 1 company each, test trade flows</li>
+<li><strong>Phase 3</strong>: Full 8-nation stress test (7 player + Drakmoor AI) with instructor event injection and war scenario</li>
+<li><strong>Phase 4</strong>: AI advisor conversation quality review with sample prompts</li>
+<li><strong>User testing</strong>: Pilot with a small group of students before full classroom deployment</li>
+</ul>
+<hr />
+<h2>Development Timeline Estimate</h2>
+<table>
+<thead>
+<tr>
+<th style="text-align: left;">Phase</th>
+<th style="text-align: left;">Description</th>
+<th style="text-align: left;">Estimated Duration</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: left;"><strong>Phase 1</strong></td>
+<td style="text-align: left;">Foundation — data model, economy engine, single dashboard</td>
+<td style="text-align: left;">6-8 weeks</td>
+</tr>
+<tr>
+<td style="text-align: left;"><strong>Phase 2</strong></td>
+<td style="text-align: left;">Multiplayer — auth, rounds, trade, diplomacy</td>
+<td style="text-align: left;">4-6 weeks</td>
+</tr>
+<tr>
+<td style="text-align: left;"><strong>Phase 3</strong></td>
+<td style="text-align: left;">Military, events, news system</td>
+<td style="text-align: left;">4-6 weeks</td>
+</tr>
+<tr>
+<td style="text-align: left;"><strong>Phase 4</strong></td>
+<td style="text-align: left;">AI integration, analytics, instructor tools</td>
+<td style="text-align: left;">3-4 weeks</td>
+</tr>
+<tr>
+<td style="text-align: left;"><strong>Polish</strong></td>
+<td style="text-align: left;">Testing, balancing, UX refinement</td>
+<td style="text-align: left;">2-3 weeks</td>
+</tr>
+<tr>
+<td style="text-align: left;"><strong>Total</strong></td>
+<td style="text-align: left;"></td>
+<td style="text-align: left;"><strong>19-27 weeks</strong></td>
+</tr>
+</tbody>
+</table>
+<blockquote>
+<p>[!WARNING]
+These estimates assume focused development effort. The economy simulation engine (Phase 1) is the hardest part — it needs to be mathematically sound and produce realistic-feeling results. I recommend we invest significant time in prototyping and tuning the simulation formulas before building the UI around them.</p>
+</blockquote>
+<hr />
+<h2>Immediate Next Steps</h2>
+<p>Once you've reviewed this plan and answered the open questions above, I recommend we:</p>
+<ol>
+<li><strong>Finalize nation designs</strong> — flesh out each nation's complete resource profile, geography description, and starting companies</li>
+<li><strong>Define the economy model</strong> — nail down the exact formulas for CPI, GDP, trade, and company financials</li>
+<li><strong>Build Phase 1 MVP</strong> — start with the data model and a single company dashboard to validate the core loop</li>
+<li><strong>Design the world map</strong> — create the fictional geography that students will interact with</li>
+</ol>
+<p>I'm ready to start building as soon as you give the green light! 🌍</p>
+</body>
+</html>
