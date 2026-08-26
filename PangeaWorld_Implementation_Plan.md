@@ -618,9 +618,9 @@ graph TB
     end
     
     subgraph Backend
-        F["Node.js + Express / Next.js API Routes"] --> G["Game Engine"]
-        F --> H["Authentication (NextAuth.js)"]
-        F --> I["WebSocket Server (Socket.io)"]
+        F["Python (FastAPI)"] --> G["Game Engine"]
+        F --> H["Authentication"]
+        F --> I["WebSocket Server"]
         G --> J["Economy Simulator"]
         G --> K["Military Resolver"]
         G --> L["Event Engine"]
@@ -645,7 +645,8 @@ graph TB
 ```
 
 ### Why This Stack?
-- **Next.js**: Full-stack React framework with server-side rendering, API routes, and excellent developer experience
+- **Backend (Python + FastAPI)**: FastAPI is lightning-fast, uses modern Python type hints (Pydantic), and is ideal for complex game logic, mathematical simulations, and AI integrations.
+- **Frontend (React + Vite)**: A decoupled React single-page application built with Vite provides a fast, interactive user experience for the complex dashboards.
 - **PostgreSQL**: Complex relational data (nations, companies, rounds, decisions) demands a relational DB
 - **Redis**: Fast session management and real-time pub/sub for live updates
 - **D3.js/Mapbox**: Required for the interactive world map and complex data visualizations

@@ -1,0 +1,537 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PangeaWorld - Map Prototype</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #1e1e1e;
+            color: #f0f0f0;
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        h1 {
+            color: #4CAF50;
+            margin-bottom: 10px;
+        }
+        .container {
+            display: flex;
+            gap: 20px;
+            max-width: 1200px;
+            width: 100%;
+        }
+        .canvas-container {
+            flex: 1;
+            background-color: #000;
+            border: 2px solid #333;
+            border-radius: 8px;
+            overflow: hidden;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.5);
+        }
+        canvas {
+            display: block;
+            cursor: crosshair;
+        }
+        .sidebar {
+            width: 300px;
+            background-color: #2a2a2a;
+            padding: 20px;
+            border-radius: 8px;
+            border: 1px solid #444;
+        }
+        .panel {
+            margin-bottom: 20px;
+        }
+        .panel h3 {
+            margin-top: 0;
+            border-bottom: 1px solid #555;
+            padding-bottom: 10px;
+        }
+        .legend-item {
+            display: flex;
+            align-items: center;
+            margin-bottom: 8px;
+            font-size: 14px;
+        }
+        .color-box {
+            width: 20px;
+            height: 20px;
+            margin-right: 10px;
+            border-radius: 3px;
+        }
+        .btn {
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            padding: 10px 15px;
+            text-align: center;
+            text-decoration: none;
+            display: inline-block;
+            font-size: 14px;
+            margin: 4px 2px;
+            cursor: pointer;
+            border-radius: 4px;
+            width: 100%;
+            transition: background-color 0.3s;
+        }
+        .btn:hover {
+            background-color: #45a049;
+        }
+        .btn-danger {
+            background-color: #f44336;
+        }
+        .btn-danger:hover {
+            background-color: #da190b;
+        }
+        #cost-display {
+            font-size: 24px;
+            font-weight: bold;
+            color: #FFD700;
+            margin: 10px 0;
+        }
+        .instruction {
+            font-size: 13px;
+            color: #aaa;
+            line-height: 1.4;
+        }
+    </style>
+</head>
+<body>
+
+    <h1>PangeaWorld Map Prototype</h1>
+    <p>Click on the edges between triangles to build roads. Crossing rivers costs 3x. Mountains cannot be crossed directly.</p>
+
+    <div class="container">
+        <div class="canvas-container">
+            <canvas id="mapCanvas" width="800" height="600"></canvas>
+        </div>
+
+        <div class="sidebar">
+            <div class="panel">
+                <h3>Build Mode</h3>
+                <p class="instruction">Hover over edges to preview roads. Click to build.</p>
+                <div>Total Project Cost:</div>
+                <div id="cost-display">$0M</div>
+                <button class="btn btn-danger" onclick="clearRoads()">Clear All Roads</button>
+            </div>
+
+            <div class="panel">
+                <h3>Map Controls</h3>
+                <div>
+                    <label for="zoomSlider" class="instruction">Zoom Level:</label>
+                    <input type="range" id="zoomSlider" min="1" max="5" step="0.1" value="1" style="width: 100%;">
+                </div>
+            </div>
+
+            <div class="panel">
+                <h3>Country Legend</h3>
+                <div class="legend-item"><div class="color-box" style="background-color: #27ae60;"></div> Terranova (Plains)</div>
+                <div class="legend-item"><div class="color-box" style="background-color: #f1c40f;"></div> Solaria (Savanna)</div>
+                <div class="legend-item"><div class="color-box" style="background-color: #16a085;"></div> Kaelen (Swamp)</div>
+                <div class="legend-item"><div class="color-box" style="background-color: #f39c12;"></div> Valdoria (Desert)</div>
+                <div class="legend-item"><div class="color-box" style="background-color: #d35400;"></div> Zephyria (Hills)</div>
+                <div class="legend-item"><div class="color-box" style="background-color: #aed6f1;"></div> Nordvik (Tundra)</div>
+                <div class="legend-item"><div class="color-box" style="background-color: #228b22;"></div> Aethelgard (Forest)</div>
+                <div class="legend-item"><div class="color-box" style="background-color: #7f8c8d;"></div> Drakmoor (Mountains)</div>
+                <div class="legend-item"><div class="color-box" style="background-color: #555555;"></div> Peaks (Impassable)</div>
+                <div class="legend-item" style="margin-top: 10px;"><div class="color-box" style="background-color: #3498db; height: 4px;"></div> River (3x Bridge Cost)</div>
+                <div class="legend-item"><div class="color-box" style="background-color: #ecf0f1; height: 4px;"></div> Road (Base Cost: 1x)</div>
+            </div>
+            
+            <div class="panel">
+                <h3>Mechanics</h3>
+                <ul class="instruction" style="padding-left: 20px;">
+                    <li>Base road cost: $1M per segment</li>
+                    <li>River bridge cost: $3M per segment</li>
+                    <li>Mountain edge: IMPASSABLE</li>
+                    <li>Nodes act as cities/hubs.</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('mapCanvas');
+        const ctx = canvas.getContext('2d');
+        
+        // Grid properties
+        const sideLength = 7;
+        const h = sideLength * Math.sqrt(3) / 2; // height of an equilateral triangle
+        
+        // Terrain Types
+        const TERRAIN = {
+            OCEAN: { color: '#2c3e50', name: 'Ocean' },
+            MOUNTAIN: { color: '#555555', name: 'Impassable Peaks' },
+            TERRANOVA: { color: '#27ae60', name: 'Terranova (Plains)' },
+            SOLARIA: { color: '#f1c40f', name: 'Solaria (Savanna)' },
+            KAELEN: { color: '#16a085', name: 'Kaelen (Swamp)' },
+            VALDORIA: { color: '#f39c12', name: 'Valdoria (Desert)' },
+            ZEPHYRIA: { color: '#d35400', name: 'Zephyria (Hills)' },
+            NORDVIK: { color: '#aed6f1', name: 'Nordvik (Tundra)' },
+            AETHELGARD: { color: '#228b22', name: 'Aethelgard (Forest)' },
+            DRAKMOOR: { color: '#7f8c8d', name: 'Drakmoor (Mountains)' }
+        };
+
+        // Data structures
+        let triangles = []; // Stores triangle polygons
+        let edges = [];     // Stores all unique edges between nodes
+        let totalCost = 0;
+        let zoom = 1;
+
+        const countries = [
+            { id: 'TERRANOVA', name: 'Terranova', x: 480, y: 320, terrain: TERRAIN.TERRANOVA },
+            { id: 'SOLARIA', name: 'Solaria', x: 420, y: 440, terrain: TERRAIN.SOLARIA },
+            { id: 'KAELEN', name: 'Kaelen', x: 320, y: 420, terrain: TERRAIN.KAELEN },
+            { id: 'VALDORIA', name: 'Valdoria', x: 280, y: 300, terrain: TERRAIN.VALDORIA },
+            { id: 'NORDVIK', name: 'Nordvik', x: 340, y: 180, terrain: TERRAIN.NORDVIK },
+            { id: 'AETHELGARD', name: 'Aethelgard', x: 450, y: 160, terrain: TERRAIN.AETHELGARD },
+            { id: 'DRAKMOOR', name: 'Drakmoor', x: 520, y: 220, terrain: TERRAIN.DRAKMOOR },
+            { id: 'ZEPHYRIA', name: 'Zephyria', x: 140, y: 460, terrain: TERRAIN.ZEPHYRIA } // Island!
+        ];
+
+        function getVoronoiCountry(x, y) {
+            let closest = null;
+            let minDist = Infinity;
+            countries.forEach(c => {
+                let noise = Math.sin(x * 0.05) * Math.cos(y * 0.05) * 40; 
+                let d = Math.sqrt(Math.pow(c.x - x, 2) + Math.pow(c.y - y, 2)) + noise;
+                if (d < minDist) {
+                    minDist = d;
+                    closest = c;
+                }
+            });
+            return closest;
+        }
+
+        const zoomSlider = document.getElementById('zoomSlider');
+        zoomSlider.addEventListener('input', (e) => {
+            zoom = parseFloat(e.target.value);
+            render();
+        });
+
+        // Initialize grid
+        function initGrid() {
+            const rows = Math.ceil(canvas.height / h) + 1;
+            const cols = Math.ceil(canvas.width / (sideLength / 2)) + 2;
+            
+            // 1. Generate Triangles
+            for (let row = 0; row < rows; row++) {
+                for (let col = 0; col < cols; col++) {
+                    const isPointingUp = (row + col) % 2 === 0;
+                    
+                    let x1, y1, x2, y2, x3, y3;
+                    
+                    if (isPointingUp) {
+                        x1 = col * sideLength / 2;
+                        y1 = row * h + h;
+                        x2 = x1 + sideLength;
+                        y2 = y1;
+                        x3 = x1 + sideLength / 2;
+                        y3 = row * h;
+                    } else {
+                        x1 = col * sideLength / 2;
+                        y1 = row * h;
+                        x2 = x1 + sideLength;
+                        y2 = y1;
+                        x3 = x1 + sideLength / 2;
+                        y3 = row * h + h;
+                    }
+
+                    // Procedural map generation based on coordinates
+                    let terrain = TERRAIN.OCEAN;
+                    
+                    // Main continent
+                    let distFromMain = Math.sqrt(Math.pow(x3 - 400, 2) + Math.pow(y3 - 300, 2));
+                    let angleMain = Math.atan2(y3 - 300, x3 - 400);
+                    let mainRadius = 180 
+                        + 35 * Math.sin(angleMain) 
+                        + 25 * Math.cos(2 * angleMain) 
+                        + 20 * Math.sin(3 * angleMain) 
+                        + 15 * Math.cos(5 * angleMain);
+
+                    // Zephyria Island
+                    let distFromIsland = Math.sqrt(Math.pow(x3 - 140, 2) + Math.pow(y3 - 460, 2));
+                    let angleIsland = Math.atan2(y3 - 460, x3 - 140);
+                    let islandRadius = 70 
+                        + 15 * Math.sin(angleIsland * 2) 
+                        + 10 * Math.cos(angleIsland * 3);
+
+                    if (distFromMain < mainRadius || distFromIsland < islandRadius) {
+                        let country = getVoronoiCountry(x3, y3);
+                        terrain = country.terrain;
+                    }
+
+                    // Generate mountain ranges using coherent noise 
+                    if (terrain !== TERRAIN.OCEAN) {
+                        let mNoise1 = Math.sin(x3 * 0.02 + Math.cos(y3 * 0.025) * 2);
+                        let mNoise2 = Math.cos(x3 * 0.015 - y3 * 0.02);
+                        
+                        // Create distinct ridges when mNoise1 is close to 0, masked by mNoise2 to create patches
+                        if (Math.abs(mNoise1) < 0.15 && mNoise2 > 0) {
+                            // Add a tiny bit of random chance to make the ridge edges look natural and rocky
+                            if (Math.random() > 0.2) {
+                                terrain = TERRAIN.MOUNTAIN;
+                            }
+                        }
+                    }
+
+                    const tri = {
+                        id: `${row}-${col}`,
+                        points: [
+                            {x: x1, y: y1},
+                            {x: x2, y: y2},
+                            {x: x3, y: y3}
+                        ],
+                        terrain: terrain,
+                        center: {
+                            x: (x1 + x2 + x3) / 3,
+                            y: (y1 + y2 + y3) / 3
+                        }
+                    };
+                    triangles.push(tri);
+                    
+                    // Add edges
+                    addEdge(tri.points[0], tri.points[1], tri);
+                    addEdge(tri.points[1], tri.points[2], tri);
+                    addEdge(tri.points[2], tri.points[0], tri);
+                }
+            }
+            
+            // 2. Procedural Rivers & Impassable Edges
+            edges.forEach(edge => {
+                edge.isImpassable = edge.triangles.some(t => t.terrain === TERRAIN.OCEAN);
+                if (Math.random() > 0.92) {
+                    edge.isRiver = true;
+                }
+            });
+
+            // 3. Mountains block 2 out of 3 edges randomly to create mazes
+            triangles.forEach(tri => {
+                if (tri.terrain === TERRAIN.MOUNTAIN) {
+                    let triEdges = edges.filter(e => e.triangles.includes(tri));
+                    triEdges.sort(() => Math.random() - 0.5);
+                    if (triEdges.length > 0) triEdges[0].isImpassable = true;
+                    if (triEdges.length > 1) triEdges[1].isImpassable = true;
+                }
+            });
+        }
+
+        // Helper to add unique edges
+        function addEdge(p1, p2, tri) {
+            // Standardize edge direction to find duplicates
+            let xA = Math.min(p1.x, p2.x);
+            let xB = Math.max(p1.x, p2.x);
+            let yA = p1.x < p2.x ? p1.y : p2.y;
+            let yB = p1.x < p2.x ? p2.y : p1.y;
+            
+            if (p1.x === p2.x) {
+                yA = Math.min(p1.y, p2.y);
+                yB = Math.max(p1.y, p2.y);
+            }
+
+            const id = `${xA.toFixed(1)},${yA.toFixed(1)}-${xB.toFixed(1)},${yB.toFixed(1)}`;
+            
+            let existingEdge = edges.find(e => e.id === id);
+            if (!existingEdge) {
+                edges.push({
+                    id: id,
+                    p1: {x: xA, y: yA},
+                    p2: {x: xB, y: yB},
+                    triangles: [tri],
+                    hasRoad: false,
+                    isRiver: false,
+                    isHovered: false
+                });
+            } else {
+                existingEdge.triangles.push(tri);
+            }
+        }
+
+        // Draw everything
+        function render() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            
+            ctx.save();
+            ctx.translate(canvas.width / 2, canvas.height / 2);
+            ctx.scale(zoom, zoom);
+            ctx.translate(-canvas.width / 2, -canvas.height / 2);
+            
+            // 1. Draw Triangles
+            triangles.forEach(tri => {
+                ctx.beginPath();
+                ctx.moveTo(tri.points[0].x, tri.points[0].y);
+                ctx.lineTo(tri.points[1].x, tri.points[1].y);
+                ctx.lineTo(tri.points[2].x, tri.points[2].y);
+                ctx.closePath();
+                ctx.fillStyle = tri.terrain.color;
+                ctx.fill();
+                ctx.strokeStyle = 'rgba(0,0,0,0.1)';
+                ctx.lineWidth = 1;
+                ctx.stroke();
+            });
+
+            // 2. Draw Edges (Rivers & Roads)
+            edges.forEach(edge => {
+                const isImpassable = edge.isImpassable;
+                
+                if (edge.hasRoad) {
+                    ctx.beginPath();
+                    ctx.moveTo(edge.p1.x, edge.p1.y);
+                    ctx.lineTo(edge.p2.x, edge.p2.y);
+                    ctx.strokeStyle = '#ecf0f1'; // White road
+                    ctx.lineWidth = 1;
+                    ctx.stroke();
+                } else if (edge.isRiver && !isImpassable) {
+                    ctx.beginPath();
+                    ctx.moveTo(edge.p1.x, edge.p1.y);
+                    ctx.lineTo(edge.p2.x, edge.p2.y);
+                    ctx.strokeStyle = '#3498db'; // Blue river
+                    ctx.lineWidth = 1;
+                    ctx.stroke();
+                } else if (edge.isHovered && !isImpassable) {
+                    ctx.beginPath();
+                    ctx.moveTo(edge.p1.x, edge.p1.y);
+                    ctx.lineTo(edge.p2.x, edge.p2.y);
+                    ctx.strokeStyle = edge.isRiver ? '#f1c40f' : '#2ecc71'; // Preview color
+                    ctx.lineWidth = 1.5;
+                    ctx.stroke();
+                }
+            });
+            
+            // Draw nodes
+            edges.forEach(edge => {
+               if(edge.hasRoad) {
+                   ctx.beginPath();
+                   ctx.arc(edge.p1.x, edge.p1.y, 0.8, 0, Math.PI * 2);
+                   ctx.fillStyle = '#ecf0f1';
+                   ctx.fill();
+                   
+                   ctx.beginPath();
+                   ctx.arc(edge.p2.x, edge.p2.y, 0.8, 0, Math.PI * 2);
+                   ctx.fillStyle = '#ecf0f1';
+                   ctx.fill();
+               } 
+            });
+
+            // Draw country names
+            ctx.font = 'bold 26px "Segoe UI", Tahoma, Geneva, Verdana, sans-serif';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.lineWidth = 4;
+            ctx.strokeStyle = 'rgba(0, 0, 0, 0.75)';
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.95)';
+
+            const regions = countries;
+
+            regions.forEach(region => {
+                ctx.strokeText(region.name, region.x, region.y);
+                ctx.fillText(region.name, region.x, region.y);
+            });
+            
+            ctx.restore();
+        }
+
+        // Distance from point to line segment
+        function distToSegment(p, v, w) {
+            let l2 = Math.pow(v.x - w.x, 2) + Math.pow(v.y - w.y, 2);
+            if (l2 === 0) return Math.sqrt(Math.pow(p.x - v.x, 2) + Math.pow(p.y - v.y, 2));
+            let t = ((p.x - v.x) * (w.x - v.x) + (p.y - v.y) * (w.y - v.y)) / l2;
+            t = Math.max(0, Math.min(1, t));
+            return Math.sqrt(Math.pow(p.x - (v.x + t * (w.x - v.x)), 2) + Math.pow(p.y - (v.y + t * (w.y - v.y)), 2));
+        }
+
+        // Get closest edge to mouse
+        function getClosestEdge(mx, my) {
+            let closest = null;
+            let minDist = 4 / zoom; // Hitbox radius
+
+            edges.forEach(edge => {
+                if (edge.isImpassable) return;
+
+                let d = distToSegment({x: mx, y: my}, edge.p1, edge.p2);
+                if (d < minDist) {
+                    minDist = d;
+                    closest = edge;
+                }
+            });
+            return closest;
+        }
+
+        // Event Listeners
+        canvas.addEventListener('mousemove', (e) => {
+            const rect = canvas.getBoundingClientRect();
+            let mx = e.clientX - rect.left;
+            let my = e.clientY - rect.top;
+
+            // Apply inverse zoom
+            mx = (mx - canvas.width / 2) / zoom + canvas.width / 2;
+            my = (my - canvas.height / 2) / zoom + canvas.height / 2;
+
+            let redraw = false;
+            
+            const closest = getClosestEdge(mx, my);
+            
+            edges.forEach(edge => {
+                if (edge.isHovered && edge !== closest) {
+                    edge.isHovered = false;
+                    redraw = true;
+                }
+            });
+
+            if (closest && !closest.isHovered && !closest.hasRoad) {
+                closest.isHovered = true;
+                redraw = true;
+            }
+
+            if (redraw) render();
+        });
+
+        canvas.addEventListener('click', (e) => {
+            const rect = canvas.getBoundingClientRect();
+            let mx = e.clientX - rect.left;
+            let my = e.clientY - rect.top;
+
+            // Apply inverse zoom
+            mx = (mx - canvas.width / 2) / zoom + canvas.width / 2;
+            my = (my - canvas.height / 2) / zoom + canvas.height / 2;
+
+            const closest = getClosestEdge(mx, my);
+            if (closest && !closest.hasRoad) {
+                closest.hasRoad = true;
+                closest.isHovered = false;
+                
+                // Calculate cost
+                let cost = 1;
+                if (closest.isRiver) cost = 3; // Bridge cost 3x
+                
+                // If adjacent to mountain, cost increases
+                if (closest.triangles.some(t => t.terrain === TERRAIN.MOUNTAIN)) {
+                    cost += 2; 
+                }
+
+                totalCost += cost;
+                document.getElementById('cost-display').innerText = `$${totalCost}M`;
+                
+                render();
+            }
+        });
+
+        function clearRoads() {
+            edges.forEach(e => e.hasRoad = false);
+            totalCost = 0;
+            document.getElementById('cost-display').innerText = `$0M`;
+            render();
+        }
+
+        // Run
+        initGrid();
+        render();
+
+    </script>
+</body>
+</html>
