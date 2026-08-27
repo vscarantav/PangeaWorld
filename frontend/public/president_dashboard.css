@@ -1,6 +1,3 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
-@import url('https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css');
-
 :root {
   --bg-dark: #0f172a;
   --bg-panel: rgba(30, 41, 59, 0.7);
@@ -33,12 +30,6 @@ body {
   background-image: 
     radial-gradient(circle at 15% 50%, rgba(59, 130, 246, 0.15), transparent 25%),
     radial-gradient(circle at 85% 30%, rgba(16, 185, 129, 0.15), transparent 25%);
-}
-
-#root {
-  display: flex;
-  width: 100%;
-  height: 100%;
 }
 
 /* Sidebar */
@@ -110,10 +101,6 @@ body {
   transition: var(--transition);
   position: relative;
   cursor: pointer;
-  background: none;
-  border: none;
-  width: 100%;
-  text-align: left;
 }
 
 .nav-item:hover {
@@ -183,7 +170,6 @@ body {
 .kpi-container {
   display: flex;
   gap: 2rem;
-  align-items: center;
 }
 
 .kpi {
@@ -213,10 +199,14 @@ body {
   flex: 1;
   padding: 2rem;
   overflow-y: auto;
+  display: none;
+  animation: fadeIn 0.4s ease-out forwards;
+}
+
+.tab-content.active {
   display: flex;
   flex-direction: column;
   gap: 2rem;
-  animation: fadeIn 0.4s ease-out forwards;
 }
 
 /* Dashboard Grid */
@@ -263,10 +253,8 @@ body {
   gap: 0.5rem;
 }
 
-.card-title i, .card-title svg {
+.card-title i {
   color: var(--accent-primary);
-  width: 20px;
-  height: 20px;
 }
 
 .chart-container {

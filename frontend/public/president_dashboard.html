@@ -1,0 +1,402 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>President's Dashboard | PangeaWorld</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <link rel="stylesheet" href="president_dashboard.css">
+</head>
+<body>
+
+  <!-- Sidebar Navigation -->
+  <aside class="sidebar">
+    <div class="sidebar-header">
+      <div class="nation-brand">
+        <div class="flag-icon">V</div>
+        <div class="nation-info">
+          <h2>Valdoria</h2>
+          <p>The Republic</p>
+        </div>
+      </div>
+    </div>
+    
+    <nav class="nav-menu">
+      <a href="#" class="nav-item active" data-target="tab-infrastructure">
+        <i class="fa-solid fa-road"></i> Infrastructure
+      </a>
+      <a href="#" class="nav-item" data-target="tab-intel">
+        <i class="fa-solid fa-shield-halved"></i> Intel & Military
+      </a>
+      <a href="#" class="nav-item" data-target="tab-indexes">
+        <i class="fa-solid fa-chart-line"></i> Indexes
+      </a>
+      <a href="#" class="nav-item" data-target="tab-financing">
+        <i class="fa-solid fa-building-columns"></i> Financing
+      </a>
+    </nav>
+
+    <div class="sidebar-footer">
+      <a href="map_prototype.html" class="back-btn">
+        <i class="fa-solid fa-arrow-left"></i> Back to World Map
+      </a>
+    </div>
+  </aside>
+
+  <!-- Main Content -->
+  <main class="main-content">
+    
+    <!-- Topbar -->
+    <header class="topbar">
+      <div class="topbar-title">
+        <h1>Presidential Terminal <span style="color: var(--text-muted); font-size: 1rem; font-weight: normal; margin-left: 10px;">Round 3 (Year 2029)</span></h1>
+      </div>
+      <div class="kpi-container">
+        <div class="kpi">
+          <span class="kpi-label">Available Budget</span>
+          <span class="kpi-value text-green" id="global-budget-display">$2,000M</span>
+        </div>
+        <div class="kpi">
+          <span class="kpi-label">National GDP</span>
+          <span class="kpi-value text-green">$1.24 Trillion <i class="fa-solid fa-caret-up" style="font-size: 0.8em"></i></span>
+        </div>
+        <div class="kpi">
+          <span class="kpi-label">Approval Rating</span>
+          <span class="kpi-value">68%</span>
+        </div>
+        <div class="kpi">
+          <span class="kpi-label">FMI Debt Ratio</span>
+          <span class="kpi-value text-yellow">42%</span>
+        </div>
+      </div>
+    </header>
+
+    <!-- TAB: Infrastructure -->
+    <section id="tab-infrastructure" class="tab-content active">
+      <div class="dashboard-grid">
+        
+        <!-- Logistics Overview -->
+        <div class="card col-8">
+          <div class="card-header">
+            <h3 class="card-title"><i class="fa-solid fa-truck-fast"></i> Logistics & Shipping Index</h3>
+            <span class="text-muted">Avg Transit Delay: <span class="text-green">Normal</span></span>
+          </div>
+          <div class="chart-container">
+            <canvas id="logisticsChart"></canvas>
+          </div>
+        </div>
+
+        <!-- Current Projects -->
+        <div class="card col-4">
+          <div class="card-header">
+            <h3 class="card-title"><i class="fa-solid fa-person-digging"></i> Active Projects</h3>
+          </div>
+          <div class="data-list">
+            <div class="data-item">
+              <div class="data-item-info">
+                <h4>Northern Railway Exp.</h4>
+                <p>Est. Completion: Round 4</p>
+              </div>
+              <div class="data-item-value text-yellow">60%</div>
+            </div>
+            <div class="data-item">
+              <div class="data-item-info">
+                <h4>Valdoria Port Upgrade</h4>
+                <p>Est. Completion: Round 3</p>
+              </div>
+              <div class="data-item-value text-green">95%</div>
+            </div>
+          </div>
+          <button class="btn" style="margin-top: 1.5rem;">
+            <i class="fa-solid fa-plus"></i> Propose New Project
+          </button>
+        </div>
+
+        <!-- Infrastructure Budget -->
+        <div class="card col-8">
+          <div class="card-header">
+            <h3 class="card-title"><i class="fa-solid fa-money-bill-wave"></i> Infrastructure Budget Allocation (Next Round)</h3>
+          </div>
+          <div class="dashboard-grid" style="gap: 2rem;">
+            <div class="col-12">
+              <div class="input-group">
+                <label>Railroad Maintenance ($ Millions)</label>
+                <div class="range-slider-container">
+                  <input type="range" min="0" max="1000" value="450" id="rail-budget" class="budget-slider" oninput="this.nextElementSibling.innerText = '$' + this.value + 'M'">
+                  <span class="range-value" id="rail-val">$450M</span>
+                </div>
+              </div>
+              <div class="input-group">
+                <label>Port & Maritime Subsidies ($ Millions)</label>
+                <div class="range-slider-container">
+                  <input type="range" min="0" max="1000" value="200" id="port-budget" class="budget-slider" oninput="this.nextElementSibling.innerText = '$' + this.value + 'M'">
+                  <span class="range-value" id="port-val">$200M</span>
+                </div>
+              </div>
+            </div>
+            <div class="col-12">
+              <div class="chart-container" style="height: 150px;">
+                <canvas id="infraBudgetChart"></canvas>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Map Connection -->
+        <div class="card col-4">
+          <div class="card-header">
+            <h3 class="card-title"><i class="fa-solid fa-map-location-dot"></i> Territory Map</h3>
+          </div>
+          <div class="map-widget" id="open-map-modal">
+            <div class="map-overlay">
+              <i class="fa-solid fa-expand"></i>
+              <span>See Map</span>
+            </div>
+            <iframe src="map_prototype.html" class="map-iframe" scrolling="no" tabindex="-1"></iframe>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- TAB: Intel & Military -->
+    <section id="tab-intel" class="tab-content">
+      <div class="dashboard-grid">
+        <div class="card col-6">
+          <div class="card-header">
+            <h3 class="card-title"><i class="fa-solid fa-crosshairs"></i> Threat Assessment</h3>
+          </div>
+          <div class="chart-container large">
+            <canvas id="radarChart"></canvas>
+          </div>
+        </div>
+
+        <div class="card col-6">
+          <div class="card-header">
+            <h3 class="card-title"><i class="fa-solid fa-user-secret"></i> Intelligence Reports</h3>
+          </div>
+          <div class="data-list">
+            <div class="data-item">
+              <div class="data-item-info">
+                <h4 class="text-red">Drakmoor Troop Movements</h4>
+                <p>Heavy armor detected near Korvath border. Probability of invasion: High.</p>
+              </div>
+              <div class="data-item-value">CONFIDENTIAL</div>
+            </div>
+            <div class="data-item">
+              <div class="data-item-info">
+                <h4 class="text-blue">Solhaven Trade Leak</h4>
+                <p>Intercepted corporate chatter suggests tech subsidies ending.</p>
+              </div>
+              <div class="data-item-value">VERIFIED</div>
+            </div>
+            <div class="data-item" style="border-left: 3px solid var(--accent-warning);">
+              <div class="data-item-info">
+                <h4 class="text-yellow">Suspected Sabotage</h4>
+                <p>Recent rail disruption in Northern Sector linked to foreign operatives.</p>
+              </div>
+              <div class="data-item-value">INVESTIGATING</div>
+            </div>
+          </div>
+        </div>
+        
+        <div class="card col-12">
+          <div class="flex-between">
+            <h3 class="card-title"><i class="fa-solid fa-jet-fighter"></i> Military Readiness Index (DEF/ATK)</h3>
+            <button class="btn danger" style="width: auto;"><i class="fa-solid fa-skull"></i> DEFCON Settings</button>
+          </div>
+        </div>
+
+        <div class="card col-12">
+          <div class="card-header">
+            <h3 class="card-title"><i class="fa-solid fa-money-bill-wave"></i> Military & Intel Budget Allocation (Next Round)</h3>
+          </div>
+          <div class="dashboard-grid" style="gap: 2rem;">
+            <div class="col-6">
+              <div class="input-group">
+                <label>Troop Deployments ($ Millions)</label>
+                <div class="range-slider-container">
+                  <input type="range" min="0" max="1000" value="300" class="budget-slider" oninput="this.nextElementSibling.innerText = '$' + this.value + 'M'">
+                  <span class="range-value">$300M</span>
+                </div>
+              </div>
+              <div class="input-group">
+                <label>Intelligence Gathering ($ Millions)</label>
+                <div class="range-slider-container">
+                  <input type="range" min="0" max="1000" value="150" class="budget-slider" oninput="this.nextElementSibling.innerText = '$' + this.value + 'M'">
+                  <span class="range-value">$150M</span>
+                </div>
+              </div>
+            </div>
+            <div class="col-6">
+              <div class="input-group">
+                <label>Covert Operations ($ Millions)</label>
+                <div class="range-slider-container">
+                  <input type="range" min="0" max="1000" value="50" class="budget-slider" oninput="this.nextElementSibling.innerText = '$' + this.value + 'M'">
+                  <span class="range-value">$50M</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- TAB: Indexes -->
+    <section id="tab-indexes" class="tab-content">
+      <div class="dashboard-grid">
+        
+        <div class="card col-8">
+          <div class="card-header">
+            <h3 class="card-title"><i class="fa-solid fa-chart-area"></i> Macroeconomic Performance</h3>
+            <select style="background: rgba(255,255,255,0.1); color: white; border: none; padding: 5px 10px; border-radius: 4px;">
+              <option>GDP Growth</option>
+              <option>Inflation (CPI)</option>
+              <option>Unemployment</option>
+            </select>
+          </div>
+          <div class="chart-container large">
+            <canvas id="macroChart"></canvas>
+          </div>
+        </div>
+
+        <div class="card col-4">
+          <div class="card-header">
+            <h3 class="card-title"><i class="fa-solid fa-gavel"></i> Policy Controls</h3>
+          </div>
+          <div class="input-group">
+            <label>Corporate Tax Rate (%)</label>
+            <div class="range-slider-container">
+              <input type="range" min="10" max="40" value="21" oninput="this.nextElementSibling.innerText = this.value + '%'">
+              <span class="range-value">21%</span>
+            </div>
+          </div>
+          <div class="input-group">
+            <label>Income Tax Rate (%)</label>
+            <div class="range-slider-container">
+              <input type="range" min="10" max="50" value="28" oninput="this.nextElementSibling.innerText = this.value + '%'">
+              <span class="range-value">28%</span>
+            </div>
+          </div>
+          <div class="input-group">
+            <label>Import Tariffs (Avg %)</label>
+            <div class="range-slider-container">
+              <input type="range" min="0" max="50" value="15" oninput="this.nextElementSibling.innerText = this.value + '%'">
+              <span class="range-value">15%</span>
+            </div>
+          </div>
+          <button class="btn" style="margin-top: 1rem;">Apply Policies</button>
+        </div>
+
+        <div class="card col-12">
+          <div class="card-header">
+            <h3 class="card-title"><i class="fa-solid fa-money-bill-wave"></i> Domestic Budget Allocation (Next Round)</h3>
+          </div>
+          <div class="dashboard-grid" style="gap: 2rem;">
+            <div class="col-6">
+              <div class="input-group">
+                <label>Healthcare & Education ($ Millions)</label>
+                <div class="range-slider-container">
+                  <input type="range" min="0" max="1000" value="400" class="budget-slider" oninput="this.nextElementSibling.innerText = '$' + this.value + 'M'">
+                  <span class="range-value">$400M</span>
+                </div>
+              </div>
+            </div>
+            <div class="col-6">
+              <div class="input-group">
+                <label>Corporate Subsidies ($ Millions)</label>
+                <div class="range-slider-container">
+                  <input type="range" min="0" max="1000" value="250" class="budget-slider" oninput="this.nextElementSibling.innerText = '$' + this.value + 'M'">
+                  <span class="range-value">$250M</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </section>
+
+    <!-- TAB: Financing -->
+    <section id="tab-financing" class="tab-content">
+      <div class="dashboard-grid">
+        <div class="card col-6">
+          <div class="card-header">
+            <h3 class="card-title"><i class="fa-solid fa-landmark"></i> Treasury & Debt Profile</h3>
+          </div>
+          <div class="chart-container">
+            <canvas id="debtChart"></canvas>
+          </div>
+        </div>
+        
+        <div class="card col-6">
+          <div class="card-header">
+            <h3 class="card-title"><i class="fa-solid fa-globe"></i> FMI Portal</h3>
+            <span class="text-green">Credit Rating: AA-</span>
+          </div>
+          <div class="data-list">
+            <div class="data-item">
+              <div class="data-item-info">
+                <h4>Active Loan: Dev. Package 2028</h4>
+                <p>Interest: 4.5% | Maturing: Round 6</p>
+              </div>
+              <div class="data-item-value text-red">-$450M</div>
+            </div>
+            <div class="data-item">
+              <div class="data-item-info">
+                <h4>FMI Quota Contribution</h4>
+                <p>Increases national borrowing limit</p>
+              </div>
+              <div class="data-item-value text-blue">+$100M</div>
+            </div>
+          </div>
+          <div style="display: flex; gap: 1rem; margin-top: 1.5rem;">
+            <button class="btn secondary">Request New Loan</button>
+            <button class="btn">Increase FMI Quota</button>
+          </div>
+        </div>
+        
+        <div class="card col-12">
+          <div class="card-header">
+            <h3 class="card-title"><i class="fa-solid fa-money-bill-wave"></i> Financial Budget Allocation (Next Round)</h3>
+          </div>
+          <div class="dashboard-grid" style="gap: 2rem;">
+            <div class="col-6">
+              <div class="input-group">
+                <label>FMI Debt Repayment ($ Millions)</label>
+                <div class="range-slider-container">
+                  <input type="range" min="0" max="1000" value="150" class="budget-slider" oninput="this.nextElementSibling.innerText = '$' + this.value + 'M'">
+                  <span class="range-value">$150M</span>
+                </div>
+              </div>
+            </div>
+            <div class="col-6">
+              <div class="input-group">
+                <label>FMI Quota Increase ($ Millions)</label>
+                <div class="range-slider-container">
+                  <input type="range" min="0" max="1000" value="50" class="budget-slider" oninput="this.nextElementSibling.innerText = '$' + this.value + 'M'">
+                  <span class="range-value">$50M</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- Fullscreen Map Modal -->
+  <div class="modal-overlay" id="map-modal">
+    <div class="modal-content">
+      <button class="modal-close" id="close-map-modal"><i class="fa-solid fa-xmark"></i></button>
+      <iframe src="map_prototype.html" class="modal-iframe"></iframe>
+    </div>
+  </div>
+
+  <!-- Chart.js -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <!-- Dashboard Logic -->
+  <script src="president_dashboard.js"></script>
+</body>
+</html>

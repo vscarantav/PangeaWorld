@@ -164,6 +164,18 @@ PangeaWorld/
 - The Pangea Times may report: *"[Company X] appears to be on autopilot this quarter..."*
 - Presidents who skip a round default to status-quo policies with no military actions and abstain on sanctions votes
 
+### Project & Operation Timelines (Deployment Speed vs. Cost)
+When presidents deploy major projects, sweeping decisions, or military operations, they must choose a deployment timeframe ranging from 1 to 3 rounds. This forces a strategic trade-off between speed, financial cost, and secrecy:
+
+| Timeframe | Cost Multiplier | Intel Vulnerability | Description |
+|:---|:---|:---|:---|
+| **1 Round** (Rush) | 5x Normal Price | Immune to Interception | Executed immediately with maximum secrecy, but financially devastating. Foreign intel cannot intercept 1-round decisions before they happen. |
+| **2 Rounds** (Standard) | 2x Normal Price | Moderate Vulnerability | Executed with moderate urgency. There is a chance foreign spies might uncover the plans during the intermediate round. |
+| **3 Rounds** (Long-term) | 1x Normal Price | High Vulnerability | The most cost-effective option, requiring long-term planning. Because the operation develops over 3 years, it is highly susceptible to being discovered by rival intelligence networks before execution. |
+
+- This mechanic teaches that **fast execution requires massive capital** and that **secrecy has a steep price**.
+- The likelihood of rival nations finding out about a pending operation increases significantly as the timeframe increases.
+
 ### 4. Resource Types ✅
 Six resource categories confirmed:
 - **Energy** (oil, natural gas, renewables)
