@@ -106,7 +106,7 @@
 <body>
 
     <h1>PangeaWorld Map Prototype</h1>
-    <p>Click on the edges between triangles to build roads. Crossing rivers costs 3x. Mountains cannot be crossed directly.</p>
+    <p>Click on the edges between triangles to build railroads. Crossing rivers costs 3x. Mountains cannot be crossed directly.</p>
 
     <div class="container">
         <div class="canvas-container">
@@ -116,10 +116,10 @@
         <div class="sidebar">
             <div class="panel">
                 <h3>Build Mode</h3>
-                <p class="instruction">Hover over edges to preview roads. Click to build. Click and drag to pan.</p>
+                <p class="instruction">Hover over edges to preview railroads. Click to build. Click and drag to pan.</p>
                 <div>Total Project Cost:</div>
                 <div id="cost-display">$0M</div>
-                <button class="btn btn-danger" onclick="clearRoads()">Clear All Roads</button>
+                <button class="btn btn-danger" onclick="clearRoads()">Clear All Railroads</button>
             </div>
 
             <div class="panel">
@@ -133,24 +133,28 @@
             <div class="panel">
                 <h3>Country Legend</h3>
                 <div class="legend-item"><div class="color-box" style="background-color: #27ae60;"></div> Terranova (Plains)</div>
-                <div class="legend-item"><div class="color-box" style="background-color: #f1c40f;"></div> Solaria (Savanna)</div>
-                <div class="legend-item"><div class="color-box" style="background-color: #16a085;"></div> Kaelen (Swamp)</div>
+                <div class="legend-item"><div class="color-box" style="background-color: #f1c40f;"></div> Solhaven (Financial)</div>
+                <div class="legend-item"><div class="color-box" style="background-color: #16a085;"></div> Korvath (Industrial)</div>
                 <div class="legend-item"><div class="color-box" style="background-color: #f39c12;"></div> Valdoria (Desert)</div>
-                <div class="legend-item"><div class="color-box" style="background-color: #d35400;"></div> Zephyria (Hills)</div>
+                <div class="legend-item"><div class="color-box" style="background-color: #d35400;"></div> Lunara (Island)</div>
                 <div class="legend-item"><div class="color-box" style="background-color: #aed6f1;"></div> Nordvik (Tundra)</div>
-                <div class="legend-item"><div class="color-box" style="background-color: #228b22;"></div> Aethelgard (Forest)</div>
+                <div class="legend-item"><div class="color-box" style="background-color: #228b22;"></div> Zephyria (Trade Hub)</div>
                 <div class="legend-item"><div class="color-box" style="background-color: #7f8c8d;"></div> Drakmoor (Mountains)</div>
+                <div class="legend-item"><div class="color-box" style="background: conic-gradient(red, yellow, green, blue, magenta, red);"></div> Company City (Opposite Color)</div>
+                <div class="legend-item" style="display: flex; align-items: center;">
+                    <div style="width: 14px; height: 14px; background-color: rgba(255, 0, 0, 0.8); border-radius: 50%; margin: 3px 11px 3px 3px;"></div> Port City
+                </div>
                 <div class="legend-item"><div class="color-box" style="background-color: #555555;"></div> Peaks (Impassable)</div>
                 <div class="legend-item"><div class="color-box" style="background-color: #3498db;"></div> River (3x Bridge Cost)</div>
-                <div class="legend-item"><div class="color-box" style="background-color: #ecf0f1; height: 4px;"></div> Road (Base Cost: 1x)</div>
+                <div class="legend-item"><div class="color-box" style="background-color: #ecf0f1; height: 4px;"></div> Railroad (Base Cost: 1x)</div>
             </div>
             
             <div class="panel">
                 <h3>Mechanics</h3>
                 <ul class="instruction" style="padding-left: 20px;">
-                    <li>Base road cost: $1M per segment</li>
+                    <li>Base railroad cost: $1M per segment</li>
                     <li>River bridge cost: $3M per segment</li>
-                    <li>Mountain edge: IMPASSABLE</li>
+                    <li>Mountain edge cost: $1.5M per segment (1 passible side per mountain)</li>
                     <li>Nodes act as cities/hubs.</li>
                 </ul>
             </div>
@@ -171,13 +175,14 @@
             MOUNTAIN: { color: '#555555', name: 'Impassable Peaks' },
             RIVER: { color: '#3498db', name: 'River' },
             TERRANOVA: { color: '#27ae60', name: 'Terranova (Plains)' },
-            SOLARIA: { color: '#f1c40f', name: 'Solaria (Savanna)' },
-            KAELEN: { color: '#16a085', name: 'Kaelen (Swamp)' },
+            SOLHAVEN: { color: '#f1c40f', name: 'Solhaven' },
+            KORVATH: { color: '#16a085', name: 'Korvath' },
             VALDORIA: { color: '#f39c12', name: 'Valdoria (Desert)' },
-            ZEPHYRIA: { color: '#d35400', name: 'Zephyria (Hills)' },
+            LUNARA: { color: '#d35400', name: 'Lunara' },
             NORDVIK: { color: '#aed6f1', name: 'Nordvik (Tundra)' },
-            AETHELGARD: { color: '#228b22', name: 'Aethelgard (Forest)' },
-            DRAKMOOR: { color: '#7f8c8d', name: 'Drakmoor (Mountains)' }
+            ZEPHYRIA: { color: '#228b22', name: 'Zephyria' },
+            DRAKMOOR: { color: '#7f8c8d', name: 'Drakmoor (Mountains)' },
+            CITY: { color: '#ffffff', name: 'Company City' } // Base fallback
         };
 
         // Data structures
@@ -193,14 +198,14 @@
         let hasDragged = false;
 
         const countries = [
-            { id: 'TERRANOVA', name: 'Terranova', x: 480, y: 320, labelX: 740, labelY: 350, terrain: TERRAIN.TERRANOVA },
-            { id: 'SOLARIA', name: 'Solaria', x: 420, y: 440, labelX: 620, labelY: 580, terrain: TERRAIN.SOLARIA },
-            { id: 'KAELEN', name: 'Kaelen', x: 320, y: 420, labelX: 320, labelY: 580, terrain: TERRAIN.KAELEN },
-            { id: 'VALDORIA', name: 'Valdoria', x: 280, y: 300, labelX: 80, labelY: 250, terrain: TERRAIN.VALDORIA },
-            { id: 'NORDVIK', name: 'Nordvik', x: 340, y: 180, labelX: 250, labelY: 40, terrain: TERRAIN.NORDVIK },
-            { id: 'AETHELGARD', name: 'Aethelgard', x: 450, y: 160, labelX: 550, labelY: 40, terrain: TERRAIN.AETHELGARD },
-            { id: 'DRAKMOOR', name: 'Drakmoor', x: 520, y: 220, labelX: 720, labelY: 130, terrain: TERRAIN.DRAKMOOR },
-            { id: 'ZEPHYRIA', name: 'Zephyria', x: 140, y: 460, labelX: 40, labelY: 540, terrain: TERRAIN.ZEPHYRIA } // Island!
+            { id: 'TERRANOVA', name: 'Terranova', x: 480, y: 320, labelX: 740, labelY: 350, terrain: TERRAIN.TERRANOVA, cityColor: '#ae2775' },
+            { id: 'SOLHAVEN', name: 'Solhaven', x: 420, y: 440, labelX: 620, labelY: 580, terrain: TERRAIN.SOLHAVEN, cityColor: '#000080' },
+            { id: 'KORVATH', name: 'Korvath', x: 320, y: 420, labelX: 320, labelY: 580, terrain: TERRAIN.KORVATH, cityColor: '#a01631' },
+            { id: 'VALDORIA', name: 'Valdoria', x: 280, y: 300, labelX: 80, labelY: 250, terrain: TERRAIN.VALDORIA, cityColor: '#000080' },
+            { id: 'NORDVIK', name: 'Nordvik', x: 340, y: 180, labelX: 250, labelY: 40, terrain: TERRAIN.NORDVIK, cityColor: '#000080' },
+            { id: 'ZEPHYRIA', name: 'Zephyria', x: 450, y: 160, labelX: 550, labelY: 40, terrain: TERRAIN.ZEPHYRIA, cityColor: '#8b228b' },
+            { id: 'DRAKMOOR', name: 'Drakmoor', x: 520, y: 220, labelX: 720, labelY: 130, terrain: TERRAIN.DRAKMOOR, cityColor: '#e74c3c' },
+            { id: 'LUNARA', name: 'Lunara', x: 140, y: 460, labelX: 40, labelY: 540, terrain: TERRAIN.LUNARA, cityColor: '#000080' } 
         ];
 
         function getVoronoiCountry(x, y) {
@@ -267,7 +272,7 @@
                         + 20 * Math.sin(3 * angleMain) 
                         + 15 * Math.cos(5 * angleMain);
 
-                    // Zephyria Island
+                    // Lunara Island
                     let distFromIsland = Math.sqrt(Math.pow(cx - 140, 2) + Math.pow(cy - 460, 2));
                     let angleIsland = Math.atan2(cy - 460, cx - 140);
                     let islandRadius = 70 
@@ -281,6 +286,8 @@
 
                     // Generate mountain ranges using coherent noise 
                     if (terrain !== TERRAIN.OCEAN) {
+                        let isMountain = false;
+                        
                         let mNoise1 = Math.sin(cx * 0.02 + Math.cos(cy * 0.025) * 2);
                         let mNoise2 = Math.cos(cx * 0.015 - cy * 0.02);
                         
@@ -288,8 +295,25 @@
                         if (Math.abs(mNoise1) < 0.15 && mNoise2 > 0) {
                             // Add a tiny bit of random chance to make the ridge edges look natural and rocky
                             if (Math.random() > 0.2) {
-                                terrain = TERRAIN.MOUNTAIN;
+                                isMountain = true;
                             }
+                        }
+
+                        // Lunara South Coast Mountains
+                        if (terrain === TERRAIN.LUNARA) {
+                            // Southern coast: angle between roughly 0 (East) and PI (West)
+                            if (angleIsland > 0.1 && angleIsland < Math.PI - 0.2) {
+                                // 2-3 triangles thick is ~20-30 pixels from the edge (islandRadius)
+                                if (islandRadius - distFromIsland < 32 && islandRadius - distFromIsland >= 0) {
+                                    if (Math.random() > 0.15) {
+                                        isMountain = true;
+                                    }
+                                }
+                            }
+                        }
+
+                        if (isMountain) {
+                            terrain = TERRAIN.MOUNTAIN;
                         }
                     }
 
@@ -378,20 +402,334 @@
             edges.forEach(edge => {
                 // If an edge only connects to one triangle, it borders the un-generated ocean
                 edge.isImpassable = edge.triangles.length === 1;
-                // Mark edge as river if it borders or intersects a river triangle
-                if (edge.triangles.some(t => t.terrain === TERRAIN.RIVER)) {
+                // Mark edge as river (requiring a bridge) ONLY if it crosses the river, 
+                // meaning BOTH sides of the edge are River triangles.
+                if (edge.triangles.length === 2 && edge.triangles.every(t => t.terrain === TERRAIN.RIVER)) {
                     edge.isRiver = true;
                 }
             });
 
-            // 3. Mountains block 2 out of 3 edges randomly to create mazes
-            triangles.forEach(tri => {
-                if (tri.terrain === TERRAIN.MOUNTAIN) {
-                    let triEdges = edges.filter(e => e.triangles.includes(tri));
-                    triEdges.sort(() => Math.random() - 0.5);
-                    if (triEdges.length > 0) triEdges[0].isImpassable = true;
-                    if (triEdges.length > 1) triEdges[1].isImpassable = true;
+            // 3. Mountains: every mountain should have exactly 1 passible edge to create mazes
+            edges.forEach(e => {
+                if (e.triangles.some(t => t.terrain === TERRAIN.MOUNTAIN)) {
+                    e.isImpassable = true;
                 }
+            });
+
+            let mountains = triangles.filter(t => t.terrain === TERRAIN.MOUNTAIN);
+            mountains.sort(() => Math.random() - 0.5); // Shuffle for random maze generation
+
+            mountains.forEach(m => {
+                let mEdges = edges.filter(e => e.triangles.includes(m));
+                let passibleEdges = mEdges.filter(e => !e.isImpassable);
+                
+                if (passibleEdges.length === 0) {
+                    let validEdges = mEdges.filter(e => {
+                        let other = e.triangles.find(t => t !== m);
+                        if (!other) return true; 
+                        if (other.terrain !== TERRAIN.MOUNTAIN) return true; 
+                        
+                        let otherPassible = edges.filter(oe => oe.triangles.includes(other) && !oe.isImpassable).length;
+                        return otherPassible === 0;
+                    });
+
+                    let edgeToMakePassible;
+                    if (validEdges.length > 0) {
+                        edgeToMakePassible = validEdges[Math.floor(Math.random() * validEdges.length)];
+                    } else {
+                        edgeToMakePassible = mEdges[Math.floor(Math.random() * mEdges.length)];
+                    }
+                    
+                    if (edgeToMakePassible) {
+                        edgeToMakePassible.isImpassable = false;
+                    }
+                }
+            });
+
+            function getDist(startTri, conditionFn, maxD) {
+                let queue = [{ tri: startTri, d: 0 }];
+                let visited = new Set([startTri.id]);
+                while (queue.length > 0) {
+                    let { tri, d } = queue.shift();
+                    if (conditionFn(tri)) return d;
+                    if (d < maxD) {
+                        for (let n of tri.neighbors) {
+                            if (!visited.has(n.id)) {
+                                visited.add(n.id);
+                                queue.push({ tri: n, d: d + 1 });
+                            }
+                        }
+                    }
+                }
+                return Infinity;
+            }
+
+            // 4. City placement (1 city for each company, 12 companies per country)
+            // Positions are static within countries, distributed evenly
+            countries.forEach((country) => {
+                let validTris = triangles.filter(t => {
+                    if (t.terrain !== country.terrain) return false;
+                    if (!t.neighbors.some(n => n.terrain !== TERRAIN.RIVER)) return false; // Rivers should not surround them completely
+                    if (t.neighbors.filter(n => n.terrain === TERRAIN.MOUNTAIN).length === 3) return false; // Shouldn't be fully enclosed by mountains
+                    return true;
+                });
+                
+                // Sort by distance to country center to have a deterministic "static" position
+                validTris.sort((a, b) => {
+                    let distA = Math.pow(a.center.x - country.x, 2) + Math.pow(a.center.y - country.y, 2);
+                    let distB = Math.pow(b.center.x - country.x, 2) + Math.pow(b.center.y - country.y, 2);
+                    return distA - distB;
+                });
+                
+                let numCompanies = 12;
+                let cities = [];
+                let minCityDist = 35; // Minimum pixel distance to spread cities out
+                
+                let allCoastalTris = validTris.filter(t => t.neighbors.length < 3);
+                
+                // Filter ports based on rules:
+                // 1 - at least 2 triangles away from the country borders with another country
+                // 2 - 3 triangles away from mountains
+                let coastalTris = allCoastalTris.filter(t => {
+                    if (country.id !== 'LUNARA') {
+                        let distToBorder = getDist(t, n => n.terrain !== country.terrain && n.terrain !== TERRAIN.OCEAN && n.terrain !== TERRAIN.MOUNTAIN && n.terrain !== TERRAIN.RIVER, 2);
+                        if (distToBorder <= 2) return false;
+                    }
+                    
+                    let distToMountain = getDist(t, n => n.terrain === TERRAIN.MOUNTAIN, 3);
+                    if (distToMountain <= 3) return false;
+                    
+                    return true;
+                });
+                
+                // Fallback to less strict rules if not enough coastal triangles
+                if (coastalTris.length < 2) {
+                    coastalTris = allCoastalTris.filter(t => {
+                        if (country.id !== 'LUNARA') {
+                            let distToBorder = getDist(t, n => n.terrain !== country.terrain && n.terrain !== TERRAIN.OCEAN && n.terrain !== TERRAIN.MOUNTAIN && n.terrain !== TERRAIN.RIVER, 1);
+                            if (distToBorder <= 1) return false;
+                        }
+                        let distToMountain = getDist(t, n => n.terrain === TERRAIN.MOUNTAIN, 2);
+                        if (distToMountain <= 2) return false;
+                        return true;
+                    });
+                }
+                // Ultimate fallback
+                if (coastalTris.length < 2) {
+                    coastalTris = allCoastalTris;
+                }
+
+                let port1, port2;
+                if (coastalTris.length >= 2) {
+                    if (country.id === 'LUNARA') {
+                        let mx = 480, my = 320;
+                        coastalTris.sort((a,b) => ( (a.center.x-mx)**2 + (a.center.y-my)**2 ) - ( (b.center.x-mx)**2 + (b.center.y-my)**2 ));
+                        port1 = coastalTris[0];
+                        for(let i=1; i<coastalTris.length; i++) {
+                            let cand = coastalTris[i];
+                            if ( Math.sqrt((cand.center.x-port1.center.x)**2 + (cand.center.y-port1.center.y)**2) >= minCityDist ) {
+                                port2 = cand;
+                                break;
+                            }
+                        }
+                    } else {
+                        // Find borders (the furthest apart points on the full coast)
+                        let maxD = -1;
+                        let b1, b2;
+                        for(let i=0; i<allCoastalTris.length; i++) {
+                            for(let j=i+1; j<allCoastalTris.length; j++) {
+                                let d = (allCoastalTris[i].center.x-allCoastalTris[j].center.x)**2 + (allCoastalTris[i].center.y-allCoastalTris[j].center.y)**2;
+                                if (d > maxD) { maxD = d; b1 = allCoastalTris[i]; b2 = allCoastalTris[j]; }
+                            }
+                        }
+                        
+                        if (b1 && b2) {
+                            // Target points at 1/3 and 2/3 between the borders
+                            let t1x = b1.center.x + (b2.center.x - b1.center.x) / 3;
+                            let t1y = b1.center.y + (b2.center.y - b1.center.y) / 3;
+                            
+                            let t2x = b1.center.x + (b2.center.x - b1.center.x) * 2 / 3;
+                            let t2y = b1.center.y + (b2.center.y - b1.center.y) * 2 / 3;
+                            
+                            // Snap to the closest valid coastal triangle (respecting mountain/border rules)
+                            let minD1 = Infinity, minD2 = Infinity;
+                            for(let cand of coastalTris) {
+                                let d1 = (cand.center.x - t1x)**2 + (cand.center.y - t1y)**2;
+                                if (d1 < minD1) { minD1 = d1; port1 = cand; }
+                            }
+                            
+                            for(let cand of coastalTris) {
+                                if (cand === port1) continue;
+                                let d2 = (cand.center.x - t2x)**2 + (cand.center.y - t2y)**2;
+                                if (d2 < minD2) { minD2 = d2; port2 = cand; }
+                            }
+                        }
+                    }
+                }
+
+                let candidatesToProcess = [];
+                if (port1) { port1.isPort = true; candidatesToProcess.push(port1); }
+                if (port2) { port2.isPort = true; candidatesToProcess.push(port2); }
+                
+                candidatesToProcess.forEach(candidate => {
+                    candidate.terrain = TERRAIN.CITY;
+                    candidate.country = country;
+                    cities.push(candidate);
+                    
+                    let madeBig = false;
+                    if (Math.random() > 0.75) {
+                        let validNeighbor = candidate.neighbors.find(n => n.terrain === country.terrain);
+                        if (validNeighbor) {
+                            validNeighbor.terrain = TERRAIN.CITY;
+                            validNeighbor.country = country;
+                            madeBig = true;
+                        }
+                    }
+
+                    if (madeBig) {
+                        candidate.isBigCity = true;
+                        candidate.hasAirport = true;
+                    } else {
+                        candidate.isSmallCity = true;
+                    }
+                });
+                
+                for (let i = 0; i < validTris.length; i++) {
+                    if (cities.length >= numCompanies) break;
+                    
+                    let candidate = validTris[i];
+                    if (candidate.terrain === TERRAIN.CITY) continue;
+
+                    let tooClose = false;
+                    for (let city of cities) {
+                        let dx = candidate.center.x - city.center.x;
+                        let dy = candidate.center.y - city.center.y;
+                        if (Math.sqrt(dx * dx + dy * dy) < minCityDist) {
+                            tooClose = true;
+                            break;
+                        }
+                    }
+                    
+                    if (!tooClose) {
+                        candidate.terrain = TERRAIN.CITY;
+                        candidate.country = country;
+                        cities.push(candidate);
+                        
+                        // 25% chance for the city to span 2 connected triangles
+                        let madeBig = false;
+                        if (Math.random() > 0.75) {
+                            let validNeighbor = candidate.neighbors.find(n => n.terrain === country.terrain);
+                            if (validNeighbor) {
+                                validNeighbor.terrain = TERRAIN.CITY;
+                                validNeighbor.country = country;
+                                madeBig = true;
+                            }
+                        }
+
+                        if (madeBig) {
+                            candidate.isBigCity = true;
+                            candidate.hasAirport = true;
+                        } else {
+                            candidate.isSmallCity = true;
+                        }
+                    }
+                }
+            });
+
+            // 5. Pre-build railroads connecting small cities to big cities
+            let graph = {};
+            
+            edges.forEach(edge => {
+                if (edge.isImpassable) return;
+                let p1Id = edge.p1.x.toFixed(1) + ',' + edge.p1.y.toFixed(1);
+                let p2Id = edge.p2.x.toFixed(1) + ',' + edge.p2.y.toFixed(1);
+                
+                if (!graph[p1Id]) graph[p1Id] = [];
+                if (!graph[p2Id]) graph[p2Id] = [];
+                
+                let cost = 1;
+                if (edge.isRiver) cost = 3;
+                else if (edge.triangles.some(t => t.terrain === TERRAIN.MOUNTAIN)) cost = 1.5;
+                
+                // Add microscopic deterministic noise to break ties consistently.
+                // This forces all paths to prefer the same zig-zags, eliminating the DNA-like overlapping diamonds.
+                cost += (edge.p1.x * 0.00001) + (edge.p1.y * 0.00002) + (edge.p2.x * 0.00003);
+                
+                graph[p1Id].push({ to: p2Id, edge: edge, cost: cost });
+                graph[p2Id].push({ to: p1Id, edge: edge, cost: cost });
+            });
+
+            function getTriVertices(tri) {
+                return tri.points.map(p => p.x.toFixed(1) + ',' + p.y.toFixed(1));
+            }
+
+            countries.forEach(country => {
+                let countrySmallCities = triangles.filter(t => t.terrain === TERRAIN.CITY && t.country === country && t.isSmallCity);
+                let countryBigCities = triangles.filter(t => t.terrain === TERRAIN.CITY && t.country === country && t.isBigCity);
+                
+                if (countryBigCities.length === 0 || countrySmallCities.length === 0) return;
+
+                countrySmallCities.forEach(smallCity => {
+                    // Find nearest big city
+                    let nearestBig = null;
+                    let minDist = Infinity;
+                    countryBigCities.forEach(big => {
+                        let d = Math.pow(smallCity.center.x - big.center.x, 2) + Math.pow(smallCity.center.y - big.center.y, 2);
+                        if (d < minDist) {
+                            minDist = d;
+                            nearestBig = big;
+                        }
+                    });
+
+                    // Dijkstra from smallCity vertices to nearestBig vertices
+                    let startNodes = getTriVertices(smallCity).filter(id => graph[id]);
+                    let targetNodes = new Set(getTriVertices(nearestBig));
+                    
+                    if (startNodes.length === 0) return;
+
+                    let distances = {};
+                    let previous = {}; 
+                    let queue = []; 
+                    
+                    startNodes.forEach(id => {
+                        distances[id] = 0;
+                        queue.push({ id: id, dist: 0 });
+                    });
+                    
+                    let foundTarget = null;
+                    
+                    while(queue.length > 0) {
+                        queue.sort((a, b) => b.dist - a.dist);
+                        let curr = queue.pop();
+                        
+                        if (targetNodes.has(curr.id)) {
+                            foundTarget = curr.id;
+                            break;
+                        }
+                        
+                        if (curr.dist > distances[curr.id]) continue;
+                        
+                        let neighbors = graph[curr.id] || [];
+                        neighbors.forEach(n => {
+                            let newDist = distances[curr.id] + n.cost;
+                            if (distances[n.to] === undefined || newDist < distances[n.to]) {
+                                distances[n.to] = newDist;
+                                previous[n.to] = { prevId: curr.id, edge: n.edge };
+                                queue.push({ id: n.to, dist: newDist });
+                            }
+                        });
+                    }
+                    
+                    // Reconstruct path
+                    if (foundTarget) {
+                        let currId = foundTarget;
+                        while(previous[currId]) {
+                            let edge = previous[currId].edge;
+                            edge.hasRailroad = true;
+                            currId = previous[currId].prevId;
+                        }
+                    }
+                });
             });
         }
 
@@ -417,7 +755,7 @@
                     p1: {x: xA, y: yA},
                     p2: {x: xB, y: yB},
                     triangles: [tri],
-                    hasRoad: false,
+                    hasRailroad: false,
                     isRiver: false,
                     isHovered: false
                 });
@@ -442,44 +780,54 @@
                 ctx.lineTo(tri.points[1].x, tri.points[1].y);
                 ctx.lineTo(tri.points[2].x, tri.points[2].y);
                 ctx.closePath();
-                ctx.fillStyle = tri.terrain.color;
+                
+                if (tri.terrain === TERRAIN.CITY && tri.country) {
+                    ctx.fillStyle = tri.country.cityColor;
+                } else {
+                    ctx.fillStyle = tri.terrain.color;
+                }
+                
                 ctx.fill();
-                ctx.strokeStyle = 'rgba(0,0,0,0.03)'; // Made outlines more subtle
+                ctx.strokeStyle = 'rgba(0,0,0,0.03)'; // Subtle outlines
                 ctx.lineWidth = 1;
                 ctx.stroke();
             });
 
-            // 2. Draw Edges (Rivers & Roads)
+            // 2. Draw Edges (Rivers & Railroads)
             edges.forEach(edge => {
                 const isImpassable = edge.isImpassable;
                 
-                if (edge.hasRoad) {
-                    ctx.beginPath();
-                    ctx.moveTo(edge.p1.x, edge.p1.y);
-                    ctx.lineTo(edge.p2.x, edge.p2.y);
-                    ctx.strokeStyle = '#ecf0f1'; // White road
-                    ctx.lineWidth = 1;
-                    ctx.stroke();
-                } else if (edge.isRiver && !isImpassable) {
+                // Draw base river
+                if (edge.isRiver && !isImpassable) {
                     ctx.beginPath();
                     ctx.moveTo(edge.p1.x, edge.p1.y);
                     ctx.lineTo(edge.p2.x, edge.p2.y);
                     ctx.strokeStyle = '#3498db'; // Blue river
-                    ctx.lineWidth = 1;
+                    ctx.lineWidth = 2; // Slightly thicker so railroads show on top
+                    ctx.stroke();
+                }
+
+                // Draw railroads or hover states ON TOP
+                if (edge.hasRailroad) {
+                    ctx.beginPath();
+                    ctx.moveTo(edge.p1.x, edge.p1.y);
+                    ctx.lineTo(edge.p2.x, edge.p2.y);
+                    ctx.strokeStyle = edge.isRiver ? '#f1c40f' : '#ecf0f1'; // Bridge is yellow, railroad is white
+                    ctx.lineWidth = 1.5;
                     ctx.stroke();
                 } else if (edge.isHovered && !isImpassable) {
                     ctx.beginPath();
                     ctx.moveTo(edge.p1.x, edge.p1.y);
                     ctx.lineTo(edge.p2.x, edge.p2.y);
                     ctx.strokeStyle = edge.isRiver ? '#f1c40f' : '#2ecc71'; // Preview color
-                    ctx.lineWidth = 1.5;
+                    ctx.lineWidth = 2;
                     ctx.stroke();
                 }
             });
             
             // Draw nodes
             edges.forEach(edge => {
-               if(edge.hasRoad) {
+               if(edge.hasRailroad) {
                    ctx.beginPath();
                    ctx.arc(edge.p1.x, edge.p1.y, 0.8, 0, Math.PI * 2);
                    ctx.fillStyle = '#ecf0f1';
@@ -490,6 +838,16 @@
                    ctx.fillStyle = '#ecf0f1';
                    ctx.fill();
                } 
+            });
+            
+            // Draw port icons
+            triangles.forEach(tri => {
+                if (tri.isPort) {
+                    ctx.beginPath();
+                    ctx.arc(tri.center.x, tri.center.y, 1.5, 0, Math.PI * 2);
+                    ctx.fillStyle = 'rgba(255, 0, 0, 0.8)';
+                    ctx.fill();
+                }
             });
 
             // Draw country names
@@ -503,17 +861,36 @@
             const regions = countries;
 
             regions.forEach(region => {
-                // Draw connecting line to region center
+                // Find the coastal edge (triangle closest to the label)
+                let closestTri = null;
+                let minDist = Infinity;
+                
+                triangles.forEach(tri => {
+                    if (tri.terrain === region.terrain) {
+                        let dx = tri.center.x - region.labelX;
+                        let dy = tri.center.y - region.labelY;
+                        let dist = dx * dx + dy * dy;
+                        if (dist < minDist) {
+                            minDist = dist;
+                            closestTri = tri;
+                        }
+                    }
+                });
+
+                let targetX = closestTri ? closestTri.center.x : region.x;
+                let targetY = closestTri ? closestTri.center.y : region.y;
+
+                // Draw connecting line to the coast
                 ctx.beginPath();
                 ctx.moveTo(region.labelX, region.labelY);
-                ctx.lineTo(region.x, region.y);
+                ctx.lineTo(targetX, targetY);
                 ctx.strokeStyle = 'rgba(255, 255, 255, 0.4)';
                 ctx.lineWidth = 2;
                 ctx.stroke();
                 
-                // Draw small dot at the center
+                // Draw small dot at the coast
                 ctx.beginPath();
-                ctx.arc(region.x, region.y, 4, 0, Math.PI * 2);
+                ctx.arc(targetX, targetY, 4, 0, Math.PI * 2);
                 ctx.fillStyle = 'rgba(255, 255, 255, 0.6)';
                 ctx.fill();
 
@@ -602,7 +979,7 @@
                 }
             });
 
-            if (closest && !closest.isHovered && !closest.hasRoad) {
+            if (closest && !closest.isHovered && !closest.hasRailroad) {
                 closest.isHovered = true;
                 redraw = true;
             }
@@ -625,17 +1002,16 @@
             my = (my - canvas.height / 2 - panY) / zoom + canvas.height / 2;
 
             const closest = getClosestEdge(mx, my);
-            if (closest && !closest.hasRoad) {
-                closest.hasRoad = true;
+            if (closest && !closest.hasRailroad) {
+                closest.hasRailroad = true;
                 closest.isHovered = false;
                 
                 // Calculate cost
                 let cost = 1;
-                if (closest.isRiver) cost = 3; // Bridge cost 3x
-                
-                // If adjacent to mountain, cost increases
-                if (closest.triangles.some(t => t.terrain === TERRAIN.MOUNTAIN)) {
-                    cost += 2; 
+                if (closest.isRiver) {
+                    cost = 3; // Bridge cost 3x
+                } else if (closest.triangles.some(t => t.terrain === TERRAIN.MOUNTAIN)) {
+                    cost = 1.5; // Mountain railroad cost
                 }
 
                 totalCost += cost;
@@ -646,7 +1022,7 @@
         });
 
         function clearRoads() {
-            edges.forEach(e => e.hasRoad = false);
+            edges.forEach(e => e.hasRailroad = false);
             totalCost = 0;
             document.getElementById('cost-display').innerText = `$0M`;
             render();

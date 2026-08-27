@@ -29,25 +29,26 @@ PangeaWorld/
 - **Organic Procedural Generation**: The `map_prototype.html` generates a uniquely shaped continent upon every reload. The continent shape is calculated using complex sine waves.
 - **Natural Borders**: The 8 countries are divided using a Voronoi diagram based on fixed capital anchor points, enhanced with 2D noise to create squiggly, organic borders.
 - **Island Generation**: Zephyria is generated as a distinct island landmass off the coast of the main continent.
-- **Interactive Grid**: The map renders an equilateral triangle grid. Players can hover over the edges (which highlight in green/yellow) and click to permanently build roads.
+- **Interactive Grid**: The map renders an equilateral triangle grid. Players can hover over the edges (which highlight in green/yellow) and click to permanently build railroads.
 - **Dynamic Labels**: The country labels (e.g. "Terranova") dynamically position themselves deep within their respective borders based on the procedural shape formula.
 - **Zoom Controls**: The sidebar features a "Map Controls" panel with a slider to zoom the canvas in and out, preserving interaction accuracy.
 
 ## Architectural Constraints
-- **Procedural Generation Freeze**: The mathematical algorithms governing the procedural generation of the map (including the logic for rivers, mountains, coastlines, country boundaries, and cities) are explicitly **locked and finalized**. Do not modify or update these generation algorithms, nor alter the triangle grid rules dictating where roads can or cannot be built. The map must continue to randomly generate different layouts on each load using the current formulas, but the underlying terrain logic itself must remain untouched.
+- **Procedural Generation Freeze**: The mathematical algorithms governing the procedural generation of the map (including the logic for rivers, mountains, coastlines, country boundaries, and cities) are explicitly **locked and finalized**. Do not modify or update these generation algorithms, nor alter the triangle grid rules dictating where railroads can or cannot be built. The map must continue to randomly generate different layouts on each load using the current formulas, but the underlying terrain logic itself must remain untouched.
 
 ## Game Rules (As implemented in prototype)
-- **Road Construction**: Building a standard road costs **$1M** per segment.
-- **Bridges**: Roads built over river edges cost **$3M** per segment (3x multiplier).
+- **Railroad Construction**: Building a standard railroad costs **$1M** per segment.
+- **Bridges**: Railroads built over river edges cost **$3M** per segment.
+- **Mountain Railroads**: Railroads built on the passible sides of mountains cost **$1.5M** per segment.
 - **Impassable Ocean**: Edges touching ocean triangles cannot be built upon.
-- **Mountain Mazes**: Mountain generation creates clustered mountain ranges. Crucially, every mountain triangle randomly blocks **2 out of its 3 edges**, preventing any road construction on those edges. This forces players to navigate winding valleys and find specific "passes" through mountain ranges, making logistics a strategic challenge.
-- **Dynamic Cost Calculation**: The UI updates the "Total Project Cost" automatically as roads are placed.
+- **Mountain Mazes**: Mountain generation creates clustered mountain ranges. Crucially, every mountain triangle has **exactly 1 passible edge** (with the other 2 being impassable). This forces players to navigate winding valleys and find specific "passes" through mountain ranges, making logistics a strategic challenge.
+- **Dynamic Cost Calculation**: The UI updates the "Total Project Cost" automatically as railroads are placed.
 
 ## Applied vs. Not Yet Applied Planned Features
 
 ### ✅ Applied Features (Phase 1 Map Foundations)
 - **Grid-Based Construction**: The map is successfully divided into a fine grid where presidents "trace the route" line-by-line.
-- **Distance & Terrain Costs**: Baseline edge traversal costs are implemented (roads vs. bridges vs. impassable mountains).
+- **Distance & Terrain Costs**: Baseline edge traversal costs are implemented (railroads vs. bridges vs. impassable mountains).
 - **8 Nations Geography**: The 8 nations (including Drakmoor and the Zephyria island) are fully defined and geographically distributed.
 - **Mountain Ranges**: Distinct, restrictive mountain barriers are implemented.
 
@@ -144,7 +145,7 @@ PangeaWorld/
 | **Inflation (CPI Stability)** | How well the president managed inflation/deflation relative to their nation's baseline |
 | **Unemployment (Absolute & Change)** | Current unemployment % + the % reduction or increase |
 | **Trade Balance** | Total value of exports vs. imports |
-| **Infrastructure Index** | Quality and coverage of roads, ports, and routes |
+| **Infrastructure Index** | Quality and coverage of railroads, ports, and routes |
 | **Debt-to-GDP Ratio** | FMI debt relative to GDP — lower is healthier |
 | **Diplomatic Standing** | Number of active trade agreements, alliances, and sanctions (for/against) |
 | **Military Readiness** | Total defensive capability + capability relative to active threats |
@@ -177,7 +178,7 @@ Six resource categories confirmed:
 - Students choose **unit types** (infantry, navy, air force) and deploy them on the map
 - **Supply lines matter** — troops far from borders cost more to maintain
 - **Intelligence operations** — spend budget to spy on other nations. This can randomly uncover secret information, such as intercepted lobbying requests from foreign companies to their presidents, helping players deduce rival nations' long-term economic or military plans. **Note: Nations are fully protected from all espionage and sabotage during Rounds 1 and 2**, giving them a grace period to build their economies. However, presidents can begin investing in their intelligence capabilities starting in Round 1 to prepare for Round 3.
-- **Covert Sabotage** — When resources are scarce, rival nations building infrastructure (e.g., roads) to shared resource nodes will drive up your costs. Presidents and companies can fund covert sabotage to destroy this competing infrastructure. Success is randomized (resolved with Attack Index / Defense Index) and depends on both the attacker's and defender's intelligence capabilities, which can be upgraded through investments. If caught, the FMI automatically sanctions the aggressor for 1-2 rounds.
+- **Covert Sabotage** — When resources are scarce, rival nations building infrastructure (e.g., railroads) to shared resource nodes will drive up your costs. Presidents and companies can fund covert sabotage to destroy this competing infrastructure. Success is randomized (resolved with Attack Index / Defense Index) and depends on both the attacker's and defender's intelligence capabilities, which can be upgraded through investments. If caught, the FMI automatically sanctions the aggressor for 1-2 rounds.
 - **False Flag Attacks (Round 5+)** — Companies with high intelligence/military investments can orchestrate false flag attacks starting in Round 5. Success is randomized and odds scale with their investment level. If successful, the framed nation takes the blame and faces immediate international sanctions. If discovered (failed roll), the executing company and their home nation face severe FMI sanctions and diplomatic isolation.
 
 **Combat Resolution — Attack Index vs. Defense Index:**
@@ -267,7 +268,7 @@ World
 ├── Map
 │   ├── Nations (8 territories with borders & geography)
 │   ├── Infrastructure
-│   │   ├── Roads (inter-city, inter-nation — cost per unit distance)
+│   │   ├── Railroads (inter-city, inter-nation — cost per unit distance)
 │   │   ├── Rivers (navigable waterways — moderate shipping cost)
 │   │   ├── Ports (coastal access points for sea shipping)
 │   │   ├── Sea Lanes (cheapest long-distance routes between ports)
@@ -283,7 +284,7 @@ World
 │   ├── Resources (production rates, stockpiles, geographic location on map)
 │   ├── Military (budget, units, deployments on map)
 │   ├── Economy (GDP, CPI basket, inflation, unemployment)
-│   ├── Infrastructure (roads, ports, bridges — investable & destructible)
+│   ├── Infrastructure (railroads, ports, bridges — investable & destructible)
 │   ├── Policies (tax rates, tariffs, subsidies)
 │   └── Companies (10-15 per nation)
 │       ├── Team (users)
@@ -350,14 +351,14 @@ The map is the **centerpiece** of PangeaWorld — a fictional continent where al
               ║     └──────┬──────┘      ║
          ┌────╨───┐   river│        ┌────╨────┐
          │VALDORIA│◄───────┤        │DRAKMOOR │
-         │(desert/│  road  │        │(mountain│
+         │(desert/│  railroad  │        │(mountain│
          │ oil)   ├────────┤        │ fortress│
          └───┬────┘   ┌────┴────┐   └────┬────┘
-        port │        │KORVATH  │        │ road
+        port │        │KORVATH  │        │ railroad
      ~~~~~~~~│~~~~~~~~│(industr)│~~~~~~~~│~~~~~~~~~
      ~ SEA ~ │  port  └────┬────┘  port  │ ~ SEA ~
      ~~~~~~~~│~~~~~~~~~~~~~│~~~~~~~~~~~~~│~~~~~~~~~
-         ┌───┴────┐   road │        ┌────┴────┐
+         ┌───┴────┐   railroad │        ┌────┴────┐
          │SOLHAVEN│◄───────┤        │ZEPHYRIA │
          │(finan- │        │        │(trade   │
          │ cial)  │   ┌────┴────┐   │ hub)    │
@@ -377,12 +378,15 @@ The map is the **centerpiece** of PangeaWorld — a fictional continent where al
 |:---|:---|:---|:---|
 | **Sea Lanes** 🚢 | Ocean routes between ports | **~$2/unit** (cheapest) | Slow (2-3 days/round) |
 | **Rivers** 🛥️ | Navigable waterways within/between nations | **~$5/unit** | Moderate |
-| **Roads** 🚛 | Overland freight routes | **~$12/unit** (most expensive) | Fast (1 day/round) |
+| **Railroads** 🚛 | Overland freight routes | **~$12/unit** (most expensive) | Fast (1 day/round) |
 | **Air Freight** ✈️ | Emergency/premium cargo only | **~$30/unit** | Instant |
+
+> [!IMPORTANT]
+> **Oil Transportation Rule:** Oil cannot be transported by air freight. It must be transported by sea or railroad.
 
 - Costs scale with **distance** (number of map segments traversed)
 - Sea shipping requires both origin and destination to have **port access**
-- Landlocked nations (like Drakmoor) pay premium road costs unless they negotiate port access through neighbors
+- Landlocked nations (like Drakmoor) pay premium railroad costs unless they negotiate port access through neighbors
 - Rivers are only available along specific geographic features — not every nation pair has a river connection
 
 ##### [NEW] Logistics cost model
@@ -399,17 +403,20 @@ Landed Cost = Base Commodity Price
 **Example scenario:**
 > A company in Solhaven needs steel. Options:
 > - **Korvath** (nearby, has port): $50/unit steel + $4 sea shipping = **$54 landed**
-> - **Nordvik** (far, no direct sea): $45/unit steel + $36 road shipping = **$81 landed**
-> - **Drakmoor** (sanctioned, cheap steel): $30/unit steel + $24 road... but sanctions block the trade entirely
+> - **Nordvik** (far, no direct sea): $45/unit steel + $36 railroad shipping = **$81 landed**
+> - **Drakmoor** (sanctioned, cheap steel): $30/unit steel + $24 railroad... but sanctions block the trade entirely
 >
 > If war disrupts the Korvath sea lane, suddenly Nordvik's $81 becomes the only option — and every company in Solhaven sees margins collapse.
 
 ##### [NEW] Infrastructure Construction & Strategic Assets
-- **Grid-Based Construction**: The map is divided into a fine **triangular grid**. When Presidents invest in new roads, they don't just click a button — they physically **trace the route** line-by-line across the triangles.
-- **Distance, Terrain Costs & Timeframes**: The cost of roads depends heavily on the length of the traced route. Furthermore, construction is not instant. When planning a route, the system calculates a **construction timeframe** based on distance and terrain (e.g., 6 months [0.5 rounds], 1 year [1 round], 1.5 years, 2 years). Presidents must weigh this time delay when deciding whether to build a long road vs. utilizing existing routes.
-- **Mountain Ranges**: The map features impassable or highly restrictive mountain ranges. These natural barriers make road-building incredibly difficult, forcing presidents to either build long, expensive routes *around* the mountains or rely on premium air freight infrastructure.
-- **River Crossings (Bridges)**: If a traced road crosses a river tile, a bridge must be built. Bridges cost **3x the price** of a normal road segment.
-- **Destructible Assets**: War can destroy infrastructure. Enemies can bomb bridges (severing vital road connections), blockade ports, and mine sea lanes.
+- **Grid-Based Construction**: The map is divided into a fine **triangular grid**. When Presidents invest in new railroads, they don't just click a button — they physically **trace the route** line-by-line across the triangles.
+- **Distance, Terrain Costs & Timeframes**: The cost of railroads depends heavily on the length of the traced route. Furthermore, construction is not instant. When planning a route, the system calculates a **construction timeframe** based on distance and terrain (e.g., 6 months [0.5 rounds], 1 year [1 round], 1.5 years, 2 years). Presidents must weigh this time delay when deciding whether to build a long railroad vs. utilizing existing routes.
+- **Mountain Ranges**: The map features impassable or highly restrictive mountain ranges. These natural barriers make railroad-building incredibly difficult, forcing presidents to either build long, expensive routes *around* the mountains or rely on premium air freight infrastructure.
+- **River Crossings (Bridges)**: If a traced railroad crosses a river tile, a bridge must be built. Bridges cost **3x the price** of a normal railroad segment.
+- **Airports & Hubs**: Airports are located exclusively in the largest cities (cities spanning 2 triangles). These large cities serve as the major logistics hubs for their respective countries.
+- **Port City Placement**: Each country starts with two port cities located on their coastline. To optimize distribution and strategic viability, ports are automatically placed at the 1/3 and 2/3 marks along the coastline between the country's borders. Ports are strictly forbidden from spawning within 2 triangles of another country's border, within 3 triangles of an impassable mountain range, or on tiles entirely enclosed by mountains. (Lunara is an exception, having a dedicated 2-3 triangle thick mountain range on its southern coast, and its ports clustered specifically on the Strait of Lunara).
+- **Starting Railroad Networks**: At the start of the game, every small city (1-triangle) is automatically connected to its nearest large city/airport hub via pre-built railroad networks. The paths are algorithmically plotted to avoid impassable terrain and minimize the number of expensive river crossings.
+- **Destructible Assets**: War can destroy infrastructure. Enemies can bomb bridges (severing vital railroad connections), blockade ports, and mine sea lanes.
 - **Strategic Chokepoints**: Straits and canals can be blockaded by naval forces, disrupting trade for multiple nations simultaneously.
 - **Zephyria's Advantage**: Positioned as a crossroads with flat terrain and access to multiple routes, making it a natural trade hub (but also a prime military target).
 
@@ -423,7 +430,7 @@ Each nation is designed to mirror real-world archetypes without mapping 1:1 to a
 | Nation | Archetype | Key Resources | Economic Profile |
 |:---|:---|:---|:---|
 | **Valdoria** | Resource-rich, politically complex | Oil, natural gas, minerals | High commodity exports, developing manufacturing |
-| **Lunara** 🏝️ | Isolated island nation (Iceland-like) | Technology, fisheries, renewable energy | High-skill economy, **no land connections** — all trade by sea/air |
+| **Lunara** 🏝️ | Isolated island nation (Iceland-like) | Highest oil production, technology, fisheries, renewable energy | High-skill economy, **no land connections** — all trade by sea/air |
 | **Terranova** | Agricultural powerhouse | Grain, livestock, timber, freshwater | Food exporter, growing middle class |
 | **Korvath** | Industrial manufacturing hub | Steel, chemicals, labor | Export-driven manufacturing, trade surplus |
 | **Solhaven** | Financial & services center | Capital, banking, insurance | Financial hub, low resources, high GDP per capita |
@@ -437,7 +444,7 @@ Each nation is designed to mirror real-world archetypes without mapping 1:1 to a
 > [!WARNING]
 > ### 🏝️ Lunara — The Island Struggle
 > Lunara has **no land borders** with any other nation. Like Iceland, this creates unique challenges:
-> - **All imports arrive by sea or air** — no cheap road/river options. Minimum shipping cost is ~$2/unit (sea) vs. $0 for neighbors trading overland
+> - **All imports arrive by sea or air** — no cheap railroad/river options. Minimum shipping cost is ~$2/unit (sea) vs. $0 for neighbors trading overland
 > - **Food insecurity** — Lunara has fisheries but no agriculture. It must import grain, livestock, and timber from the mainland at premium shipping costs
 > - **Vulnerable to naval blockade** — if a hostile nation (e.g., Drakmoor) blockades Lunara's ports, the entire economy grinds to a halt
 > - **Weather disruptions** — storms can temporarily shut down sea lanes to Lunara, cutting off supplies for 1-2 rounds
