@@ -464,6 +464,23 @@
                 return Infinity;
             }
 
+            function isTrapped(startTri, minSize) {
+                let queue = [startTri];
+                let visited = new Set([startTri.id]);
+                let count = 0;
+                while (queue.length > 0 && count < minSize) {
+                    let curr = queue.shift();
+                    count++;
+                    for (let n of curr.neighbors) {
+                        if (n.terrain !== TERRAIN.MOUNTAIN && n.terrain !== TERRAIN.OCEAN && !visited.has(n.id)) {
+                            visited.add(n.id);
+                            queue.push(n);
+                        }
+                    }
+                }
+                return count < minSize;
+            }
+
             // 4. City placement (1 city for each company, 12 companies per country)
             // Positions are static within countries, distributed evenly
             countries.forEach((country) => {
@@ -471,6 +488,7 @@
                     if (t.terrain !== country.terrain) return false;
                     if (!t.neighbors.some(n => n.terrain !== TERRAIN.RIVER)) return false; // Rivers should not surround them completely
                     if (t.neighbors.filter(n => n.terrain === TERRAIN.MOUNTAIN).length === 3) return false; // Shouldn't be fully enclosed by mountains
+                    if (isTrapped(t, 25)) return false; // Must not be trapped in a tiny pocket of land
                     return true;
                 });
                 
@@ -522,11 +540,21 @@
                 let port1, port2;
                 if (coastalTris.length >= 2) {
                     if (country.id === 'LUNARA') {
+                        let lunaraValid = coastalTris.filter(t => {
+                            let parts = t.id.split('-');
+                            let r = parseInt(parts[0]);
+                            let c = parseInt(parts[1]);
+                            return r >= 65 && r <= 71 && c >= 40 && c <= 60;
+                        });
+                        
+                        // Fallback just in case generation shifts
+                        if (lunaraValid.length < 2) lunaraValid = coastalTris;
+                        
                         let mx = 480, my = 320;
-                        coastalTris.sort((a,b) => ( (a.center.x-mx)**2 + (a.center.y-my)**2 ) - ( (b.center.x-mx)**2 + (b.center.y-my)**2 ));
-                        port1 = coastalTris[0];
-                        for(let i=1; i<coastalTris.length; i++) {
-                            let cand = coastalTris[i];
+                        lunaraValid.sort((a,b) => ( (a.center.x-mx)**2 + (a.center.y-my)**2 ) - ( (b.center.x-mx)**2 + (b.center.y-my)**2 ));
+                        port1 = lunaraValid[0];
+                        for(let i=1; i<lunaraValid.length; i++) {
+                            let cand = lunaraValid[i];
                             if ( Math.sqrt((cand.center.x-port1.center.x)**2 + (cand.center.y-port1.center.y)**2) >= minCityDist ) {
                                 port2 = cand;
                                 break;
@@ -634,6 +662,21 @@
                         }
                     }
                 }
+
+                // Ensure at least 1 big city
+                if (!cities.some(c => c.isBigCity)) {
+                    for (let c of cities) {
+                        let validNeighbor = c.neighbors.find(n => n.terrain === country.terrain);
+                        if (validNeighbor) {
+                            validNeighbor.terrain = TERRAIN.CITY;
+                            validNeighbor.country = country;
+                            c.isBigCity = true;
+                            c.hasAirport = true;
+                            c.isSmallCity = false;
+                            break;
+                        }
+                    }
+                }
             });
 
             // 5. Pre-build railroads connecting small cities to big cities
@@ -669,10 +712,10 @@
                 
                 if (countryBigCities.length === 0 || countrySmallCities.length === 0) return;
 
+                // Calculate distance to nearest big city for each small city
                 countrySmallCities.forEach(smallCity => {
-                    // Find nearest big city
-                    let nearestBig = null;
                     let minDist = Infinity;
+                    let nearestBig = null;
                     countryBigCities.forEach(big => {
                         let d = Math.pow(smallCity.center.x - big.center.x, 2) + Math.pow(smallCity.center.y - big.center.y, 2);
                         if (d < minDist) {
@@ -680,6 +723,16 @@
                             nearestBig = big;
                         }
                     });
+                    smallCity.distToNearestBig = minDist;
+                    smallCity.nearestBig = nearestBig;
+                });
+
+                // Only connect half of the small cities (the ones closest to big cities) at the start of the game
+                countrySmallCities.sort((a, b) => a.distToNearestBig - b.distToNearestBig);
+                let citiesToConnect = countrySmallCities.slice(0, Math.ceil(countrySmallCities.length / 2));
+
+                citiesToConnect.forEach(smallCity => {
+                    let nearestBig = smallCity.nearestBig;
 
                     // Dijkstra from smallCity vertices to nearestBig vertices
                     let startNodes = getTriVertices(smallCity).filter(id => graph[id]);
@@ -711,7 +764,21 @@
                         
                         let neighbors = graph[curr.id] || [];
                         neighbors.forEach(n => {
-                            let newDist = distances[curr.id] + n.cost;
+                            // Prevent autogenerated railroads from crossing into other countries
+                            let inOtherCountry = n.edge.triangles.some(t => {
+                                let tCountry = t.country || countries.find(c => c.terrain === t.terrain);
+                                return tCountry && tCountry !== country;
+                            });
+                            
+                            if (inOtherCountry) return;
+
+                            // Apply a massive penalty to avoid routing through OTHER small cities
+                            let passesThroughOtherCity = n.edge.triangles.some(t => {
+                                return t.terrain === TERRAIN.CITY && t.isSmallCity && t !== smallCity;
+                            });
+                            let extraCost = passesThroughOtherCity ? 10000 : 0;
+
+                            let newDist = distances[curr.id] + n.cost + extraCost;
                             if (distances[n.to] === undefined || newDist < distances[n.to]) {
                                 distances[n.to] = newDist;
                                 previous[n.to] = { prevId: curr.id, edge: n.edge };
@@ -845,7 +912,11 @@
                 if (tri.isPort) {
                     ctx.beginPath();
                     ctx.arc(tri.center.x, tri.center.y, 1.5, 0, Math.PI * 2);
-                    ctx.fillStyle = 'rgba(255, 0, 0, 0.8)';
+                    if (tri.country && tri.country.id === 'DRAKMOOR') {
+                        ctx.fillStyle = '#000080'; // Navy blue circle for Drakmoor
+                    } else {
+                        ctx.fillStyle = 'rgba(255, 0, 0, 0.8)';
+                    }
                     ctx.fill();
                 }
             });
