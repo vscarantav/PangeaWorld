@@ -1,5 +1,7 @@
 # PangeaWorld Architecture & Instructions
 
+> **Reference**: [PangeaWorld Implementation Plan](./PangeaWorld_Implementation_Plan.md)
+
 ## File Map
 The current structure of the PangeaWorld repository:
 
