@@ -27,7 +27,9 @@
         }
         .canvas-container {
             flex: 1;
-            background-color: #000;
+            background-color: #2c3e50; /* Fallback */
+            background-image: url('ocean-color.jpg');
+            background-size: cover;
             border: 2px solid #333;
             border-radius: 8px;
             overflow: hidden;
@@ -114,7 +116,7 @@
         <div class="sidebar">
             <div class="panel">
                 <h3>Build Mode</h3>
-                <p class="instruction">Hover over edges to preview roads. Click to build.</p>
+                <p class="instruction">Hover over edges to preview roads. Click to build. Click and drag to pan.</p>
                 <div>Total Project Cost:</div>
                 <div id="cost-display">$0M</div>
                 <button class="btn btn-danger" onclick="clearRoads()">Clear All Roads</button>
@@ -139,7 +141,7 @@
                 <div class="legend-item"><div class="color-box" style="background-color: #228b22;"></div> Aethelgard (Forest)</div>
                 <div class="legend-item"><div class="color-box" style="background-color: #7f8c8d;"></div> Drakmoor (Mountains)</div>
                 <div class="legend-item"><div class="color-box" style="background-color: #555555;"></div> Peaks (Impassable)</div>
-                <div class="legend-item" style="margin-top: 10px;"><div class="color-box" style="background-color: #3498db; height: 4px;"></div> River (3x Bridge Cost)</div>
+                <div class="legend-item"><div class="color-box" style="background-color: #3498db;"></div> River (3x Bridge Cost)</div>
                 <div class="legend-item"><div class="color-box" style="background-color: #ecf0f1; height: 4px;"></div> Road (Base Cost: 1x)</div>
             </div>
             
@@ -167,6 +169,7 @@
         const TERRAIN = {
             OCEAN: { color: '#2c3e50', name: 'Ocean' },
             MOUNTAIN: { color: '#555555', name: 'Impassable Peaks' },
+            RIVER: { color: '#3498db', name: 'River' },
             TERRANOVA: { color: '#27ae60', name: 'Terranova (Plains)' },
             SOLARIA: { color: '#f1c40f', name: 'Solaria (Savanna)' },
             KAELEN: { color: '#16a085', name: 'Kaelen (Swamp)' },
@@ -182,16 +185,22 @@
         let edges = [];     // Stores all unique edges between nodes
         let totalCost = 0;
         let zoom = 1;
+        let panX = 0;
+        let panY = 0;
+        let isDragging = false;
+        let dragStartX = 0;
+        let dragStartY = 0;
+        let hasDragged = false;
 
         const countries = [
-            { id: 'TERRANOVA', name: 'Terranova', x: 480, y: 320, terrain: TERRAIN.TERRANOVA },
-            { id: 'SOLARIA', name: 'Solaria', x: 420, y: 440, terrain: TERRAIN.SOLARIA },
-            { id: 'KAELEN', name: 'Kaelen', x: 320, y: 420, terrain: TERRAIN.KAELEN },
-            { id: 'VALDORIA', name: 'Valdoria', x: 280, y: 300, terrain: TERRAIN.VALDORIA },
-            { id: 'NORDVIK', name: 'Nordvik', x: 340, y: 180, terrain: TERRAIN.NORDVIK },
-            { id: 'AETHELGARD', name: 'Aethelgard', x: 450, y: 160, terrain: TERRAIN.AETHELGARD },
-            { id: 'DRAKMOOR', name: 'Drakmoor', x: 520, y: 220, terrain: TERRAIN.DRAKMOOR },
-            { id: 'ZEPHYRIA', name: 'Zephyria', x: 140, y: 460, terrain: TERRAIN.ZEPHYRIA } // Island!
+            { id: 'TERRANOVA', name: 'Terranova', x: 480, y: 320, labelX: 740, labelY: 350, terrain: TERRAIN.TERRANOVA },
+            { id: 'SOLARIA', name: 'Solaria', x: 420, y: 440, labelX: 620, labelY: 580, terrain: TERRAIN.SOLARIA },
+            { id: 'KAELEN', name: 'Kaelen', x: 320, y: 420, labelX: 320, labelY: 580, terrain: TERRAIN.KAELEN },
+            { id: 'VALDORIA', name: 'Valdoria', x: 280, y: 300, labelX: 80, labelY: 250, terrain: TERRAIN.VALDORIA },
+            { id: 'NORDVIK', name: 'Nordvik', x: 340, y: 180, labelX: 250, labelY: 40, terrain: TERRAIN.NORDVIK },
+            { id: 'AETHELGARD', name: 'Aethelgard', x: 450, y: 160, labelX: 550, labelY: 40, terrain: TERRAIN.AETHELGARD },
+            { id: 'DRAKMOOR', name: 'Drakmoor', x: 520, y: 220, labelX: 720, labelY: 130, terrain: TERRAIN.DRAKMOOR },
+            { id: 'ZEPHYRIA', name: 'Zephyria', x: 140, y: 460, labelX: 40, labelY: 540, terrain: TERRAIN.ZEPHYRIA } // Island!
         ];
 
         function getVoronoiCountry(x, y) {
@@ -242,12 +251,16 @@
                         y3 = row * h + h;
                     }
 
+                    // Calculate true center of the triangle
+                    let cx = (x1 + x2 + x3) / 3;
+                    let cy = (y1 + y2 + y3) / 3;
+
                     // Procedural map generation based on coordinates
                     let terrain = TERRAIN.OCEAN;
                     
                     // Main continent
-                    let distFromMain = Math.sqrt(Math.pow(x3 - 400, 2) + Math.pow(y3 - 300, 2));
-                    let angleMain = Math.atan2(y3 - 300, x3 - 400);
+                    let distFromMain = Math.sqrt(Math.pow(cx - 400, 2) + Math.pow(cy - 300, 2));
+                    let angleMain = Math.atan2(cy - 300, cx - 400);
                     let mainRadius = 180 
                         + 35 * Math.sin(angleMain) 
                         + 25 * Math.cos(2 * angleMain) 
@@ -255,21 +268,21 @@
                         + 15 * Math.cos(5 * angleMain);
 
                     // Zephyria Island
-                    let distFromIsland = Math.sqrt(Math.pow(x3 - 140, 2) + Math.pow(y3 - 460, 2));
-                    let angleIsland = Math.atan2(y3 - 460, x3 - 140);
+                    let distFromIsland = Math.sqrt(Math.pow(cx - 140, 2) + Math.pow(cy - 460, 2));
+                    let angleIsland = Math.atan2(cy - 460, cx - 140);
                     let islandRadius = 70 
                         + 15 * Math.sin(angleIsland * 2) 
                         + 10 * Math.cos(angleIsland * 3);
 
                     if (distFromMain < mainRadius || distFromIsland < islandRadius) {
-                        let country = getVoronoiCountry(x3, y3);
+                        let country = getVoronoiCountry(cx, cy);
                         terrain = country.terrain;
                     }
 
                     // Generate mountain ranges using coherent noise 
                     if (terrain !== TERRAIN.OCEAN) {
-                        let mNoise1 = Math.sin(x3 * 0.02 + Math.cos(y3 * 0.025) * 2);
-                        let mNoise2 = Math.cos(x3 * 0.015 - y3 * 0.02);
+                        let mNoise1 = Math.sin(cx * 0.02 + Math.cos(cy * 0.025) * 2);
+                        let mNoise2 = Math.cos(cx * 0.015 - cy * 0.02);
                         
                         // Create distinct ridges when mNoise1 is close to 0, masked by mNoise2 to create patches
                         if (Math.abs(mNoise1) < 0.15 && mNoise2 > 0) {
@@ -278,6 +291,10 @@
                                 terrain = TERRAIN.MOUNTAIN;
                             }
                         }
+                    }
+
+                    if (terrain === TERRAIN.OCEAN) {
+                        continue; // Skip generating and rendering ocean triangles to save resources
                     }
 
                     const tri = {
@@ -289,8 +306,8 @@
                         ],
                         terrain: terrain,
                         center: {
-                            x: (x1 + x2 + x3) / 3,
-                            y: (y1 + y2 + y3) / 3
+                            x: cx,
+                            y: cy
                         }
                     };
                     triangles.push(tri);
@@ -302,10 +319,67 @@
                 }
             }
             
-            // 2. Procedural Rivers & Impassable Edges
+            // 2. Procedural Continuous Rivers
+            // Build adjacency list
+            triangles.forEach(t => t.neighbors = []);
+            edges.forEach(e => {
+                if (e.triangles.length === 2) {
+                    e.triangles[0].neighbors.push(e.triangles[1]);
+                    e.triangles[1].neighbors.push(e.triangles[0]);
+                }
+            });
+
+            // Generate rivers flowing outwards, capped at 8% of landmass
+            let maxRiverTriangles = triangles.length * 0.08;
+            let currentRiverTriangles = 0;
+
+            for(let i = 0; i < 500; i++) {
+                if (currentRiverTriangles >= maxRiverTriangles) break;
+
+                let startTri = triangles[Math.floor(Math.random() * triangles.length)];
+                if (startTri.terrain === TERRAIN.MOUNTAIN || startTri.terrain === TERRAIN.RIVER) continue;
+                
+                let currentTri = startTri;
+                let length = 0;
+                let maxLength = 10 + Math.floor(Math.random() * 20); // Random length between 10 and 30
+                while(currentTri && length < maxLength) {
+                    if (currentRiverTriangles >= maxRiverTriangles) break;
+
+                    if (currentTri.terrain !== TERRAIN.RIVER) {
+                        currentTri.terrain = TERRAIN.RIVER;
+                        currentRiverTriangles++;
+                    }
+                    length++;
+                    
+                    if (currentTri.neighbors.length < 3) break; // Reached coast/ocean
+
+                    
+                    let validNeighbors = currentTri.neighbors.filter(n => 
+                        n.terrain !== TERRAIN.MOUNTAIN && n.terrain !== TERRAIN.RIVER
+                    );
+                    
+                    if (validNeighbors.length === 0) break;
+                    
+                    // Bias towards outward flow
+                    validNeighbors.sort((a, b) => {
+                        let distA = Math.pow(a.center.x - 400, 2) + Math.pow(a.center.y - 300, 2);
+                        let distB = Math.pow(b.center.x - 400, 2) + Math.pow(b.center.y - 300, 2);
+                        return distB - distA; 
+                    });
+                    
+                    currentTri = validNeighbors[0];
+                    if (validNeighbors.length > 1 && Math.random() > 0.6) {
+                        currentTri = validNeighbors[1];
+                    }
+                }
+            }
+
+            // 3. Procedural Rivers & Impassable Edges
             edges.forEach(edge => {
-                edge.isImpassable = edge.triangles.some(t => t.terrain === TERRAIN.OCEAN);
-                if (Math.random() > 0.92) {
+                // If an edge only connects to one triangle, it borders the un-generated ocean
+                edge.isImpassable = edge.triangles.length === 1;
+                // Mark edge as river if it borders or intersects a river triangle
+                if (edge.triangles.some(t => t.terrain === TERRAIN.RIVER)) {
                     edge.isRiver = true;
                 }
             });
@@ -357,7 +431,7 @@
             ctx.clearRect(0, 0, canvas.width, canvas.height);
             
             ctx.save();
-            ctx.translate(canvas.width / 2, canvas.height / 2);
+            ctx.translate(canvas.width / 2 + panX, canvas.height / 2 + panY);
             ctx.scale(zoom, zoom);
             ctx.translate(-canvas.width / 2, -canvas.height / 2);
             
@@ -370,7 +444,7 @@
                 ctx.closePath();
                 ctx.fillStyle = tri.terrain.color;
                 ctx.fill();
-                ctx.strokeStyle = 'rgba(0,0,0,0.1)';
+                ctx.strokeStyle = 'rgba(0,0,0,0.03)'; // Made outlines more subtle
                 ctx.lineWidth = 1;
                 ctx.stroke();
             });
@@ -429,8 +503,26 @@
             const regions = countries;
 
             regions.forEach(region => {
-                ctx.strokeText(region.name, region.x, region.y);
-                ctx.fillText(region.name, region.x, region.y);
+                // Draw connecting line to region center
+                ctx.beginPath();
+                ctx.moveTo(region.labelX, region.labelY);
+                ctx.lineTo(region.x, region.y);
+                ctx.strokeStyle = 'rgba(255, 255, 255, 0.4)';
+                ctx.lineWidth = 2;
+                ctx.stroke();
+                
+                // Draw small dot at the center
+                ctx.beginPath();
+                ctx.arc(region.x, region.y, 4, 0, Math.PI * 2);
+                ctx.fillStyle = 'rgba(255, 255, 255, 0.6)';
+                ctx.fill();
+
+                // Draw text at the label position
+                ctx.lineWidth = 4;
+                ctx.strokeStyle = 'rgba(0, 0, 0, 0.75)';
+                ctx.fillStyle = 'rgba(255, 255, 255, 0.95)';
+                ctx.strokeText(region.name, region.labelX, region.labelY);
+                ctx.fillText(region.name, region.labelX, region.labelY);
             });
             
             ctx.restore();
@@ -463,14 +555,41 @@
         }
 
         // Event Listeners
+        canvas.addEventListener('mousedown', (e) => {
+            isDragging = true;
+            hasDragged = false;
+            dragStartX = e.clientX;
+            dragStartY = e.clientY;
+        });
+
+        canvas.addEventListener('mouseup', () => {
+            isDragging = false;
+        });
+
+        canvas.addEventListener('mouseleave', () => {
+            isDragging = false;
+        });
+
         canvas.addEventListener('mousemove', (e) => {
+            if (isDragging) {
+                let dx = e.clientX - dragStartX;
+                let dy = e.clientY - dragStartY;
+                if (Math.abs(dx) > 2 || Math.abs(dy) > 2) hasDragged = true;
+                panX += dx;
+                panY += dy;
+                dragStartX = e.clientX;
+                dragStartY = e.clientY;
+                render();
+                return;
+            }
+
             const rect = canvas.getBoundingClientRect();
             let mx = e.clientX - rect.left;
             let my = e.clientY - rect.top;
 
-            // Apply inverse zoom
-            mx = (mx - canvas.width / 2) / zoom + canvas.width / 2;
-            my = (my - canvas.height / 2) / zoom + canvas.height / 2;
+            // Apply inverse zoom and pan
+            mx = (mx - canvas.width / 2 - panX) / zoom + canvas.width / 2;
+            my = (my - canvas.height / 2 - panY) / zoom + canvas.height / 2;
 
             let redraw = false;
             
@@ -492,13 +611,18 @@
         });
 
         canvas.addEventListener('click', (e) => {
+            if (hasDragged) {
+                hasDragged = false;
+                return;
+            }
+
             const rect = canvas.getBoundingClientRect();
             let mx = e.clientX - rect.left;
             let my = e.clientY - rect.top;
 
-            // Apply inverse zoom
-            mx = (mx - canvas.width / 2) / zoom + canvas.width / 2;
-            my = (my - canvas.height / 2) / zoom + canvas.height / 2;
+            // Apply inverse zoom and pan
+            mx = (mx - canvas.width / 2 - panX) / zoom + canvas.width / 2;
+            my = (my - canvas.height / 2 - panY) / zoom + canvas.height / 2;
 
             const closest = getClosestEdge(mx, my);
             if (closest && !closest.hasRoad) {

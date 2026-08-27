@@ -34,6 +34,9 @@ PangeaWorld/
 - **Dynamic Labels**: The country labels (e.g. "Terranova") dynamically position themselves deep within their respective borders based on the procedural shape formula.
 - **Zoom Controls**: The sidebar features a "Map Controls" panel with a slider to zoom the canvas in and out, preserving interaction accuracy.
 
+## Architectural Constraints
+- **Procedural Generation Freeze**: The mathematical algorithms governing the procedural generation of the map (including the logic for rivers, mountains, coastlines, country boundaries, and cities) are explicitly **locked and finalized**. Do not modify or update these generation algorithms, nor alter the triangle grid rules dictating where roads can or cannot be built. The map must continue to randomly generate different layouts on each load using the current formulas, but the underlying terrain logic itself must remain untouched.
+
 ## Game Rules (As implemented in prototype)
 - **Road Construction**: Building a standard road costs **$1M** per segment.
 - **Bridges**: Roads built over river edges cost **$3M** per segment (3x multiplier).
