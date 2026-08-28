@@ -28,7 +28,7 @@ PangeaWorld/
 ## Expected Behaviors
 - **Organic Procedural Generation**: The `map_prototype.html` generates a uniquely shaped continent upon every reload. The continent shape is calculated using complex sine waves.
 - **Natural Borders**: The 8 countries are divided using a Voronoi diagram based on fixed capital anchor points, enhanced with 2D noise to create squiggly, organic borders.
-- **Island Generation**: Zephyria is generated as a distinct island landmass off the coast of the main continent.
+- **Map Adjustments**: Zephyria is positioned on the main continent between Nordvik and Drakmoor, reducing Terranova's coastline. Lunara has a small land connection (strait) to the mainland.
 - **Interactive Grid**: The map renders an equilateral triangle grid. Players can hover over the edges (which highlight in green/yellow) and click to permanently build railroads.
 - **Dynamic Labels**: The country labels (e.g. "Terranova") dynamically position themselves deep within their respective borders based on the procedural shape formula.
 - **Zoom Controls**: The sidebar features a "Map Controls" panel with a slider to zoom the canvas in and out, preserving interaction accuracy.
@@ -43,13 +43,14 @@ PangeaWorld/
 - **Impassable Ocean**: Edges touching ocean triangles cannot be built upon.
 - **Mountain Mazes**: Mountain generation creates clustered mountain ranges. Crucially, every mountain triangle has **exactly 1 passible edge** (with the other 2 being impassable). This forces players to navigate winding valleys and find specific "passes" through mountain ranges, making logistics a strategic challenge.
 - **Dynamic Cost Calculation**: The UI updates the "Total Project Cost" automatically as railroads are placed.
+- **River Quotas**: Rivers are generated such that Terranova receives approximately 45% of all river tiles, while all other nations receive at least 5% each.
 
 ## Applied vs. Not Yet Applied Planned Features
 
 ### ✅ Applied Features (Phase 1 Map Foundations)
 - **Grid-Based Construction**: The map is successfully divided into a fine grid where presidents "trace the route" line-by-line.
 - **Distance & Terrain Costs**: Baseline edge traversal costs are implemented (railroads vs. bridges vs. impassable mountains).
-- **8 Nations Geography**: The 8 nations (including Drakmoor and the Zephyria island) are fully defined and geographically distributed.
+- **8 Nations Geography**: The 8 nations are fully defined and geographically distributed based on the updated positioning logic.
 - **Mountain Ranges**: Distinct, restrictive mountain barriers are implemented.
 
 ### ⏳ Not Yet Applied Planned Features (Pending Future Phases)
@@ -346,7 +347,7 @@ World
 - **Military Command**: Troop deployment map, budget allocation, operation planning
 - **Diplomacy Center**: Active treaties, trade agreements, pending proposals, **sanctions voting panel**
 - **FMI Portal**: Apply for loans, view repayment schedule, monitor credit rating, and **allocate budget to FMI contributions** (which increases borrowing capacity)
-- **Policy Controls**: Tax rates, tariffs, subsidies
+- **Policy Controls**: Tax rates, tariffs, subsidies, **immigration quotas (stimulate/restrict based on labor needs)**
 - **AI Advisor Panel**: Embedded Gemini chatbot with nation-specific context
 
 ---
@@ -402,11 +403,18 @@ The map is the **centerpiece** of PangeaWorld — a fictional continent where al
 - Rivers are only available along specific geographic features — not every nation pair has a river connection
 
 ##### [NEW] Logistics cost model
-Shipping cost is factored into every trade and sourcing decision:
+Shipping cost is factored into every trade and sourcing decision, heavily relying on **volume, weight, and distance**.
+
+- **Distance Scale**:
+  - Every tile edge (triangle side), whether land or ocean, represents **100 kilometers**.
+  - International waters for freight and transportation are represented by **3-4 connected ocean triangles** (currently, ocean triangles are pending implementation on the map).
+- **Distance Calculation**:
+  - **By Plane (Air Freight)**: Calculated as a straight line from origin point to destination point.
+  - **By Rail and Sea**: Calculated by tracing the actual path taken along existing route traffic (railroad networks or international sea lanes).
 
 ```
 Landed Cost = Base Commodity Price
-            + (Shipping Rate × Distance × Mode Multiplier)
+            + (Freight Cost based on Volume & Weight × Distance × Mode Multiplier)
             + Tariffs (if crossing borders)
             + Insurance (higher in conflict zones)
             + Port/Transit Fees
@@ -422,6 +430,8 @@ Landed Cost = Base Commodity Price
 
 ##### [NEW] Infrastructure Construction & Strategic Assets
 - **Grid-Based Construction**: The map is divided into a fine **triangular grid**. When Presidents invest in new railroads, they don't just click a button — they physically **trace the route** line-by-line across the triangles.
+- **Project Creation & Approval Flow**: Both the government (Presidents) and companies (Executives) can create new infrastructure projects like building new routes. The government directly builds and approves these projects. Executives, however, propose (lobby) projects to the government; these lobbied projects appear in the Presidential dashboard for final approval.
+- **AI Route Generation & Corruption Mechanic**: When creating routes, both Presidents and Executives have the option to trace routes manually or generate them with AI (using the optimized route builder algorithm). However, the AI has a **3% chance of choosing an unoptimized route** (adding 3-6 unnecessary tiles). If the Executives and Presidential cabinet both fail to review the route and it gets built, *PangeaNews* will generate an article exposing the scandal. The article will highlight the millions of extra tax dollars wasted, suggesting money laundering or a corruption scheme, which heavily penalizes the government's approval rating and the company's reputation. **However, if the Executives fail to review the proposed unoptimized route but the Government catches the error during approval, the Government will reject the project and apply a financial penalty to the company, negatively impacting their profit reports.**
 - **Distance, Terrain Costs & Timeframes**: The cost of railroads depends heavily on the length of the traced route. Furthermore, construction is not instant. When planning a route, the system calculates a **construction timeframe** based on distance and terrain (e.g., 6 months [0.5 rounds], 1 year [1 round], 1.5 years, 2 years). Presidents must weigh this time delay when deciding whether to build a long railroad vs. utilizing existing routes.
 - **Mountain Ranges**: The map features impassable or highly restrictive mountain ranges. These natural barriers make railroad-building incredibly difficult, forcing presidents to either build long, expensive routes *around* the mountains or rely on premium air freight infrastructure.
 - **River Crossings (Bridges)**: If a traced railroad crosses a river tile, a bridge must be built. Bridges cost **3x the price** of a normal railroad segment.
@@ -442,23 +452,23 @@ Each nation is designed to mirror real-world archetypes without mapping 1:1 to a
 | Nation | Archetype | Key Resources | Economic Profile |
 |:---|:---|:---|:---|
 | **Valdoria** | Resource-rich, politically complex | Oil, natural gas, minerals | High commodity exports, developing manufacturing |
-| **Lunara** 🏝️ | Isolated island nation (Iceland-like) | Highest oil production, technology, fisheries, renewable energy | High-skill economy, **no land connections** — all trade by sea/air |
+| **Lunara** 🏝️ | Middle East-like peninsula | Highest oil production, technology, fisheries, renewable energy | High-skill economy, **small land connection (strait)** — most trades made by sea |
 | **Terranova** | Agricultural powerhouse | Grain, livestock, timber, freshwater | Food exporter, growing middle class |
 | **Korvath** | Industrial manufacturing hub | Steel, chemicals, labor | Export-driven manufacturing, trade surplus |
-| **Solhaven** | Financial & services center | Capital, banking, insurance | Financial hub, low resources, high GDP per capita |
+| **Solhaven** | Financial & services center | Capital, banking, insurance | Financial hub, **Headquarters of the IMF**, low resources, high GDP per capita |
 | **Nordvik** | Northern resource frontier | Rare earth minerals, timber, oil | Rich resources, harsh climate, small population |
-| **Zephyria** | Emerging market crossroads | Mixed moderate resources, strategic location | Trade route hub, rapid urbanization, young population |
+| **Zephyria** | Emerging market crossroads | Mixed moderate resources, strategic location | Trade route hub, land shared between Nordvik and Drakmoor, rapid urbanization |
 | **Drakmoor** 🤖 | Marginalized military state (AI-controlled) | Iron, coal, weapons manufacturing | Sanctioned economy, strong military, isolated, desperate |
 
 > [!NOTE]
 > Each nation is intentionally designed with **asymmetric advantages and vulnerabilities** to force trade and diplomacy. No nation can be self-sufficient — this is a core design principle that teaches interdependence.
 
 > [!WARNING]
-> ### 🏝️ Lunara — The Island Struggle
-> Lunara has **no land borders** with any other nation. Like Iceland, this creates unique challenges:
-> - **All imports arrive by sea or air** — no cheap railroad/river options. Minimum shipping cost is ~$2/unit (sea) vs. $0 for neighbors trading overland
+> ### 🏝️ Lunara — The Strait Strategy
+> Lunara has only a **small land connection (strait)** with the mainland. Like a Middle Eastern peninsula, this creates unique challenges and advantages:
+> - **Most imports and exports arrive by sea** — limited railroad options through the narrow strait. Minimum shipping cost is ~$2/unit (sea) for most volume
 > - **Food insecurity** — Lunara has fisheries but no agriculture. It must import grain, livestock, and timber from the mainland at premium shipping costs
-> - **Vulnerable to naval blockade** — if a hostile nation (e.g., Drakmoor) blockades Lunara's ports, the entire economy grinds to a halt
+> - **Vulnerable to naval blockade** — if a hostile nation (e.g., Drakmoor) blockades Lunara's ports or the strait, the entire economy grinds to a halt
 > - **Weather disruptions** — storms can temporarily shut down sea lanes to Lunara, cutting off supplies for 1-2 rounds
 > - **High cost of living** — imported goods drive up consumer prices, making Lunara's CPI naturally higher than mainland nations
 > - **Compensating strengths** — Lunara's technology exports and renewable energy are highly valued, and its island position makes it hard to invade by land. Its educated workforce commands premium prices for tech and services

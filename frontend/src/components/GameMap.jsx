@@ -24,12 +24,20 @@ const textureImgs = {
     grass: new Image(),
     sand: new Image(),
     snow: new Image(),
-    rock: new Image()
+    rock: new Image(),
+    forest: new Image(),
+    bushes: new Image(),
+    mountain: new Image(),
+    redrock: new Image()
 };
 textureImgs.grass.src = '/grass.jpg';
 textureImgs.sand.src = '/sand.jpg';
 textureImgs.snow.src = '/snow.jpg';
 textureImgs.rock.src = '/rock.jpg';
+textureImgs.forest.src = '/forest.jpg';
+textureImgs.bushes.src = '/bushes.jpg';
+textureImgs.mountain.src = '/mountain.jpg';
+textureImgs.redrock.src = '/redrock.jpg';
 
 // --------------------------------------------------------
 // TOPOLOGICAL BOUNDARY EXTRACTION
@@ -183,8 +191,6 @@ export default function GameMap({ seed = 'PangeaGameSeed123', width = 800, heigh
         
         const terrainGroups = new Map();
         data.triangles.forEach(tri => {
-            if (tri.terrain === TERRAIN.OCEAN) return;
-            
             // Group logic: By Country if it exists, otherwise by Terrain.
             let key = tri.terrain.name;
             if (tri.terrain === TERRAIN.CITY && tri.country) {
@@ -217,7 +223,11 @@ export default function GameMap({ seed = 'PangeaGameSeed123', width = 800, heigh
             new Promise(res => { textureImgs.grass.onload = res; if (textureImgs.grass.complete) res(); }),
             new Promise(res => { textureImgs.sand.onload = res; if (textureImgs.sand.complete) res(); }),
             new Promise(res => { textureImgs.snow.onload = res; if (textureImgs.snow.complete) res(); }),
-            new Promise(res => { textureImgs.rock.onload = res; if (textureImgs.rock.complete) res(); })
+            new Promise(res => { textureImgs.rock.onload = res; if (textureImgs.rock.complete) res(); }),
+            new Promise(res => { textureImgs.forest.onload = res; if (textureImgs.forest.complete) res(); }),
+            new Promise(res => { textureImgs.bushes.onload = res; if (textureImgs.bushes.complete) res(); }),
+            new Promise(res => { textureImgs.mountain.onload = res; if (textureImgs.mountain.complete) res(); }),
+            new Promise(res => { textureImgs.redrock.onload = res; if (textureImgs.redrock.complete) res(); })
         ]).then(() => setImagesLoaded(true));
     }, [seed, width, height]);
 
@@ -254,9 +264,11 @@ export default function GameMap({ seed = 'PangeaGameSeed123', width = 800, heigh
             if (tri.terrain === TERRAIN.CITY && tri.country) ctx.fillStyle = tri.country.cityColor;
             else ctx.fillStyle = tri.terrain.color;
             ctx.fill();
-            ctx.strokeStyle = 'rgba(0,0,0,0.03)';
-            ctx.lineWidth = 1;
-            ctx.stroke();
+            if (tri.terrain !== TERRAIN.OCEAN) {
+                ctx.strokeStyle = 'rgba(0,0,0,0.03)';
+                ctx.lineWidth = 1;
+                ctx.stroke();
+            }
         });
 
         mapData.edges.forEach(edge => {
@@ -322,31 +334,16 @@ export default function GameMap({ seed = 'PangeaGameSeed123', width = 800, heigh
         cache.organicPolys.forEach(group => {
             if (group.texture && textureImgs[group.texture].complete) {
                 const pattern = ctx.createPattern(textureImgs[group.texture], 'repeat');
-                const matrix = new DOMMatrix().scale(0.3, 0.3); // Scale down the textures so they look like fine detail
+                const matrix = new DOMMatrix().scale(0.075, 0.075); // Scale down the textures so they look like fine detail
                 pattern.setTransform(matrix);
                 ctx.fillStyle = pattern;
             } else {
                 ctx.fillStyle = group.color;
             }
 
-            ctx.strokeStyle = group.color;
-            ctx.lineWidth = 4; // Soft, slightly thick cartographic border
-            ctx.lineJoin = 'round';
-            
             ctx.beginPath();
             group.rings.forEach(ring => drawCurve(ctx, ring, 0.4, true));
             ctx.fill();
-            
-            // Cartographic styling: drop a subtle shadow around the country boundaries
-            ctx.shadowColor = "rgba(0,0,0,0.5)";
-            ctx.shadowBlur = 10;
-            ctx.stroke();
-            ctx.shadowBlur = 0;
-
-            // Highlight border on top of the shadow
-            ctx.lineWidth = 1;
-            ctx.strokeStyle = 'rgba(255,255,255,0.4)';
-            ctx.stroke();
         });
 
         // 2. Straight Railroads (Contrasting the curved geography cleanly)
@@ -397,14 +394,14 @@ export default function GameMap({ seed = 'PangeaGameSeed123', width = 800, heigh
                 if (!tooClose) {
                     let jitterX = (tri.center.x % 4) - 2;
                     let jitterY = (tri.center.y % 4) - 2;
-                    ctx.drawImage(icons.mountain, tri.center.x - 12 + jitterX, tri.center.y - 12 + jitterY, 24, 24);
+                    ctx.drawImage(icons.mountain, tri.center.x - 6 + jitterX, tri.center.y - 6 + jitterY, 12, 12);
                     drawnMountains.push(tri.center);
                 }
             }
         });
         
         mapData.triangles.forEach(tri => {
-            if (tri.terrain === TERRAIN.CITY) {
+            if (tri.terrain === TERRAIN.CITY && !tri.isBigCityPart) {
                 let img = tri.isBigCity ? icons.bigCity : icons.city;
                 if (img.complete) {
                     let size = tri.isBigCity ? 20 : 14;

@@ -13,17 +13,17 @@ export function seededRandom(seedStr) {
 
 // Terrain Types
 export const TERRAIN = {
-    OCEAN: { color: '#2c3e50', name: 'Ocean' },
-    MOUNTAIN: { color: '#555555', texture: 'rock', name: 'Impassable Peaks' },
+    OCEAN: { color: 'rgba(44, 62, 80, 0.6)', name: 'Ocean' },
+    MOUNTAIN: { color: '#555555', texture: 'mountain', name: 'Impassable Peaks' },
     RIVER: { color: '#3498db', name: 'River' },
     TERRANOVA: { color: '#27ae60', texture: 'grass', name: 'Terranova (Plains)' },
     SOLHAVEN: { color: '#f1c40f', texture: 'sand', name: 'Solhaven' },
-    KORVATH: { color: '#16a085', texture: 'rock', name: 'Korvath' },
+    KORVATH: { color: '#16a085', texture: 'bushes', name: 'Korvath' },
     VALDORIA: { color: '#f39c12', texture: 'sand', name: 'Valdoria (Desert)' },
-    LUNARA: { color: '#d35400', texture: 'rock', name: 'Lunara' },
+    LUNARA: { color: '#d35400', texture: 'redrock', name: 'Lunara' },
     NORDVIK: { color: '#aed6f1', texture: 'snow', name: 'Nordvik (Tundra)' },
-    ZEPHYRIA: { color: '#228b22', texture: 'grass', name: 'Zephyria' },
-    DRAKMOOR: { color: '#7f8c8d', texture: 'rock', name: 'Drakmoor (Mountains)' },
+    ZEPHYRIA: { color: '#228b22', texture: 'forest', name: 'Zephyria' },
+    DRAKMOOR: { color: '#7f8c8d', texture: 'mountain', name: 'Drakmoor (Mountains)' },
     CITY: { color: '#ffffff', name: 'Company City' } 
 };
 
@@ -33,7 +33,7 @@ export const countriesDef = [
     { id: 'KORVATH', name: 'Korvath', x: 320, y: 420, labelX: 320, labelY: 580, terrain: TERRAIN.KORVATH, cityColor: '#a01631' },
     { id: 'VALDORIA', name: 'Valdoria', x: 280, y: 300, labelX: 80, labelY: 250, terrain: TERRAIN.VALDORIA, cityColor: '#000080' },
     { id: 'NORDVIK', name: 'Nordvik', x: 340, y: 180, labelX: 250, labelY: 40, terrain: TERRAIN.NORDVIK, cityColor: '#000080' },
-    { id: 'ZEPHYRIA', name: 'Zephyria', x: 450, y: 160, labelX: 550, labelY: 40, terrain: TERRAIN.ZEPHYRIA, cityColor: '#8b228b' },
+    { id: 'ZEPHYRIA', name: 'Zephyria', x: 420, y: 220, labelX: 420, labelY: 150, terrain: TERRAIN.ZEPHYRIA, cityColor: '#8b228b' },
     { id: 'DRAKMOOR', name: 'Drakmoor', x: 520, y: 220, labelX: 720, labelY: 130, terrain: TERRAIN.DRAKMOOR, cityColor: '#e74c3c' },
     { id: 'LUNARA', name: 'Lunara', x: 140, y: 460, labelX: 40, labelY: 540, terrain: TERRAIN.LUNARA, cityColor: '#000080' } 
 ];
@@ -154,7 +154,16 @@ export function generateMapData(seedStr = 'default', width = 800, height = 600) 
                 + 15 * Math.sin(angleIsland * 2) 
                 + 10 * Math.cos(angleIsland * 3);
 
-            if (distFromMain < mainRadius || distFromIsland < islandRadius) {
+            // Strait connecting Lunara to mainland
+            let dx = 280 - 140;
+            let dy = 380 - 460;
+            let l2 = dx * dx + dy * dy;
+            let t = Math.max(0, Math.min(1, ((cx - 140) * dx + (cy - 460) * dy) / l2));
+            let projX = 140 + t * dx;
+            let projY = 460 + t * dy;
+            let distToStrait = Math.sqrt(Math.pow(cx - projX, 2) + Math.pow(cy - projY, 2));
+
+            if (distFromMain < mainRadius || distFromIsland < islandRadius || distToStrait < 15) {
                 let country = getVoronoiCountry(cx, cy);
                 terrain = country.terrain;
             }
@@ -193,7 +202,10 @@ export function generateMapData(seedStr = 'default', width = 800, height = 600) 
             }
 
             if (terrain === TERRAIN.OCEAN) {
-                continue; // Skip generating and rendering ocean triangles to save resources
+                let oceanMargin = 28; // ~3-4 triangles of ocean border
+                if (distFromMain > mainRadius + oceanMargin && distFromIsland > islandRadius + oceanMargin) {
+                    continue; // Skip generating deep ocean triangles to save resources
+                }
             }
 
             const tri = {
@@ -231,12 +243,36 @@ export function generateMapData(seedStr = 'default', width = 800, height = 600) 
     // Generate rivers flowing outwards, capped at 8% of landmass
     let maxRiverTriangles = triangles.length * 0.08;
     let currentRiverTriangles = 0;
+    let riverCountByCountry = {};
+    countries.forEach(c => riverCountByCountry[c.id] = 0);
+    
+    // Generate quotas
+    let quotas = {};
+    countries.forEach(c => {
+        if (c.id === 'TERRANOVA') quotas[c.id] = maxRiverTriangles * 0.45;
+        else quotas[c.id] = maxRiverTriangles * 0.05;
+    });
 
-    for(let i = 0; i < 500; i++) {
+    for(let i = 0; i < 2000; i++) {
         if (currentRiverTriangles >= maxRiverTriangles) break;
 
-        let startTri = triangles[Math.floor(rnd() * triangles.length)];
-        if (startTri.terrain === TERRAIN.MOUNTAIN || startTri.terrain === TERRAIN.RIVER) continue;
+        // Pick a country that needs rivers
+        let candidates = countries.filter(c => riverCountByCountry[c.id] < quotas[c.id]);
+        let targetCountry = candidates.length > 0 ? candidates[Math.floor(rnd() * candidates.length)] : null;
+        
+        let startTri;
+        if (targetCountry) {
+            let countryTris = triangles.filter(t => t.country === targetCountry && t.terrain !== TERRAIN.MOUNTAIN && t.terrain !== TERRAIN.RIVER && t.terrain !== TERRAIN.OCEAN);
+            if (countryTris.length > 0) {
+                startTri = countryTris[Math.floor(rnd() * countryTris.length)];
+            }
+        }
+        
+        if (!startTri) {
+            startTri = triangles[Math.floor(rnd() * triangles.length)];
+        }
+
+        if (startTri.terrain === TERRAIN.MOUNTAIN || startTri.terrain === TERRAIN.RIVER || startTri.terrain === TERRAIN.OCEAN) continue;
         
         let currentTri = startTri;
         let length = 0;
@@ -247,10 +283,13 @@ export function generateMapData(seedStr = 'default', width = 800, height = 600) 
             if (currentTri.terrain !== TERRAIN.RIVER) {
                 currentTri.terrain = TERRAIN.RIVER;
                 currentRiverTriangles++;
+                if (currentTri.country) {
+                    riverCountByCountry[currentTri.country.id] = (riverCountByCountry[currentTri.country.id] || 0) + 1;
+                }
             }
             length++;
             
-            if (currentTri.neighbors.length < 3) break; // Reached coast/ocean
+            if (currentTri.neighbors.length < 3 || currentTri.neighbors.some(n => n.terrain === TERRAIN.OCEAN)) break; // Reached coast/ocean
 
             let validNeighbors = currentTri.neighbors.filter(n => 
                 n.terrain !== TERRAIN.MOUNTAIN && n.terrain !== TERRAIN.RIVER
@@ -274,8 +313,8 @@ export function generateMapData(seedStr = 'default', width = 800, height = 600) 
 
     // 3. Procedural Rivers & Impassable Edges
     edges.forEach(edge => {
-        // If an edge only connects to one triangle, it borders the un-generated ocean
-        edge.isImpassable = edge.triangles.length === 1;
+        // An edge is impassable if it borders un-generated ocean or an explicitly generated ocean triangle
+        edge.isImpassable = edge.triangles.length === 1 || edge.triangles.some(t => t.terrain === TERRAIN.OCEAN);
         // Mark edge as river (requiring a bridge) ONLY if it crosses the river, 
         // meaning BOTH sides of the edge are River triangles.
         if (edge.triangles.length === 2 && edge.triangles.every(t => t.terrain === TERRAIN.RIVER)) {
@@ -377,7 +416,7 @@ export function generateMapData(seedStr = 'default', width = 800, height = 600) 
         let cities = [];
         let minCityDist = 35; // Minimum pixel distance to spread cities out
         
-        let allCoastalTris = validTris.filter(t => t.neighbors.length < 3);
+        let allCoastalTris = validTris.filter(t => t.neighbors.length < 3 || t.neighbors.some(n => n.terrain === TERRAIN.OCEAN));
         
         // Filter ports based on rules
         let coastalTris = allCoastalTris.filter(t => {
@@ -480,6 +519,7 @@ export function generateMapData(seedStr = 'default', width = 800, height = 600) 
                 if (validNeighbor) {
                     validNeighbor.terrain = TERRAIN.CITY;
                     validNeighbor.country = country;
+                    validNeighbor.isBigCityPart = true;
                     madeBig = true;
                 }
             }
@@ -519,6 +559,7 @@ export function generateMapData(seedStr = 'default', width = 800, height = 600) 
                     if (validNeighbor) {
                         validNeighbor.terrain = TERRAIN.CITY;
                         validNeighbor.country = country;
+                        validNeighbor.isBigCityPart = true;
                         madeBig = true;
                     }
                 }
@@ -538,6 +579,7 @@ export function generateMapData(seedStr = 'default', width = 800, height = 600) 
                 if (validNeighbor) {
                     validNeighbor.terrain = TERRAIN.CITY;
                     validNeighbor.country = country;
+                    validNeighbor.isBigCityPart = true;
                     c.isBigCity = true;
                     c.hasAirport = true;
                     c.isSmallCity = false;

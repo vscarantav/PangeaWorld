@@ -285,6 +285,13 @@
               <span class="range-value">15%</span>
             </div>
           </div>
+          <div class="input-group">
+            <label>Immigration Quota (Target Net %)</label>
+            <div class="range-slider-container">
+              <input type="range" min="-5" max="5" value="1" oninput="let v = Number(this.value); this.nextElementSibling.innerText = (v > 0 ? '+' : '') + v + '%'">
+              <span class="range-value">+1%</span>
+            </div>
+          </div>
           <button class="btn" style="margin-top: 1rem;">Apply Policies</button>
         </div>
 

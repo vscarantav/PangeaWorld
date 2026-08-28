@@ -12,6 +12,7 @@ export default function IndexesTab({ setBudget }) {
   const [corpTax, setCorpTax] = useState(21);
   const [incTax, setIncTax] = useState(28);
   const [tariff, setTariff] = useState(15);
+  const [immigration, setImmigration] = useState(1);
 
   const macroData = {
     labels: ['Round 1', 'Round 2', 'Round 3 (Current)'],
@@ -89,6 +90,13 @@ export default function IndexesTab({ setBudget }) {
           <div className="range-slider-container">
             <input type="range" min="0" max="50" value={tariff} onChange={e => setTariff(Number(e.target.value))} />
             <span className="range-value">{tariff}%</span>
+          </div>
+        </div>
+        <div className="input-group">
+          <label>Immigration Quota (Target Net %)</label>
+          <div className="range-slider-container">
+            <input type="range" min="-5" max="5" value={immigration} onChange={e => setImmigration(Number(e.target.value))} />
+            <span className="range-value">{immigration > 0 ? '+' : ''}{immigration}%</span>
           </div>
         </div>
         <button className="btn" style={{ marginTop: '1rem' }}>Apply Policies</button>
