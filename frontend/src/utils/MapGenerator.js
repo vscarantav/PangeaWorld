@@ -244,11 +244,11 @@ export function generateMapData(seedStr = 'default', width = 800, height = 600) 
     let maxRiverTriangles = triangles.length * 0.08;
     let currentRiverTriangles = 0;
     let riverCountByCountry = {};
-    countries.forEach(c => riverCountByCountry[c.id] = 0);
+    countriesDef.forEach(c => riverCountByCountry[c.id] = 0);
     
     // Generate quotas
     let quotas = {};
-    countries.forEach(c => {
+    countriesDef.forEach(c => {
         if (c.id === 'TERRANOVA') quotas[c.id] = maxRiverTriangles * 0.45;
         else quotas[c.id] = maxRiverTriangles * 0.05;
     });
@@ -257,7 +257,7 @@ export function generateMapData(seedStr = 'default', width = 800, height = 600) 
         if (currentRiverTriangles >= maxRiverTriangles) break;
 
         // Pick a country that needs rivers
-        let candidates = countries.filter(c => riverCountByCountry[c.id] < quotas[c.id]);
+        let candidates = countriesDef.filter(c => riverCountByCountry[c.id] < quotas[c.id]);
         let targetCountry = candidates.length > 0 ? candidates[Math.floor(rnd() * candidates.length)] : null;
         
         let startTri;
