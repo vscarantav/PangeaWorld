@@ -10,23 +10,13 @@
             background-color: #1e1e1e;
             color: #f0f0f0;
             margin: 0;
-            padding: 20px;
+            padding: 0;
             display: flex;
-            flex-direction: column;
+            justify-content: center;
             align-items: center;
-        }
-        h1 {
-            color: #4CAF50;
-            margin-bottom: 10px;
-        }
-        .container {
-            display: flex;
-            gap: 20px;
-            max-width: 1200px;
-            width: 100%;
+            height: 100vh;
         }
         .canvas-container {
-            flex: 1;
             background-color: #2c3e50; /* Fallback */
             background-image: url('ocean-color.jpg');
             background-size: cover;
@@ -39,126 +29,12 @@
             display: block;
             cursor: crosshair;
         }
-        .sidebar {
-            width: 300px;
-            background-color: #2a2a2a;
-            padding: 20px;
-            border-radius: 8px;
-            border: 1px solid #444;
-        }
-        .panel {
-            margin-bottom: 20px;
-        }
-        .panel h3 {
-            margin-top: 0;
-            border-bottom: 1px solid #555;
-            padding-bottom: 10px;
-        }
-        .legend-item {
-            display: flex;
-            align-items: center;
-            margin-bottom: 8px;
-            font-size: 14px;
-        }
-        .color-box {
-            width: 20px;
-            height: 20px;
-            margin-right: 10px;
-            border-radius: 3px;
-        }
-        .btn {
-            background-color: #4CAF50;
-            color: white;
-            border: none;
-            padding: 10px 15px;
-            text-align: center;
-            text-decoration: none;
-            display: inline-block;
-            font-size: 14px;
-            margin: 4px 2px;
-            cursor: pointer;
-            border-radius: 4px;
-            width: 100%;
-            transition: background-color 0.3s;
-        }
-        .btn:hover {
-            background-color: #45a049;
-        }
-        .btn-danger {
-            background-color: #f44336;
-        }
-        .btn-danger:hover {
-            background-color: #da190b;
-        }
-        #cost-display {
-            font-size: 24px;
-            font-weight: bold;
-            color: #FFD700;
-            margin: 10px 0;
-        }
-        .instruction {
-            font-size: 13px;
-            color: #aaa;
-            line-height: 1.4;
-        }
     </style>
 </head>
 <body>
 
-    <h1>PangeaWorld Map Prototype</h1>
-    <p>Click on the edges between triangles to build railroads. Crossing rivers costs 3x. Mountains cannot be crossed directly.</p>
-
-    <div class="container">
-        <div class="canvas-container">
-            <canvas id="mapCanvas" width="800" height="600"></canvas>
-        </div>
-
-        <div class="sidebar">
-            <div class="panel">
-                <h3>Build Mode</h3>
-                <p class="instruction">Hover over edges to preview railroads. Click to build. Click and drag to pan.</p>
-                <div>Total Project Cost:</div>
-                <div id="cost-display">$0M</div>
-                <button class="btn btn-danger" onclick="clearRoads()">Clear All Railroads</button>
-            </div>
-
-            <div class="panel">
-                <h3>Map Controls</h3>
-                <div>
-                    <label for="zoomSlider" class="instruction">Zoom Level:</label>
-                    <input type="range" id="zoomSlider" min="1" max="5" step="0.1" value="1" style="width: 100%;">
-                </div>
-            </div>
-
-            <div class="panel">
-                <h3>Country Legend</h3>
-                <div class="legend-item"><div class="color-box" style="background-color: #27ae60;"></div> Terranova (Plains)</div>
-                <div class="legend-item"><div class="color-box" style="background-color: #f1c40f;"></div> Solhaven (Financial)</div>
-                <div class="legend-item"><div class="color-box" style="background-color: #16a085;"></div> Korvath (Industrial)</div>
-                <div class="legend-item"><div class="color-box" style="background-color: #f39c12;"></div> Valdoria (Desert)</div>
-                <div class="legend-item"><div class="color-box" style="background-color: #d35400;"></div> Lunara (Island)</div>
-                <div class="legend-item"><div class="color-box" style="background-color: #aed6f1;"></div> Nordvik (Tundra)</div>
-                <div class="legend-item"><div class="color-box" style="background-color: #228b22;"></div> Zephyria (Trade Hub)</div>
-                <div class="legend-item"><div class="color-box" style="background-color: #7f8c8d;"></div> Drakmoor (Mountains)</div>
-                <div class="legend-item"><div class="color-box" style="background: conic-gradient(red, yellow, green, blue, magenta, red);"></div> Company City (Opposite Color)</div>
-                <div class="legend-item" style="display: flex; align-items: center;">
-                    <div style="width: 14px; height: 14px; background-color: rgba(255, 0, 0, 0.8); border-radius: 50%; margin: 3px 11px 3px 3px;"></div> Port City
-                </div>
-                <div class="legend-item"><div class="color-box" style="background-color: #555555;"></div> Peaks (Impassable)</div>
-                <div class="legend-item"><div class="color-box" style="background-color: #3498db;"></div> River (3x Bridge Cost)</div>
-                <div class="legend-item"><div class="color-box" style="background-color: #ecf0f1; height: 4px;"></div> Railroad (Base Cost: 1x)</div>
-            </div>
-            
-            <div class="panel">
-                <h3>Mechanics</h3>
-                <ul class="instruction" style="padding-left: 20px;">
-                    <li>Base railroad cost: $1M per segment</li>
-                    <li>River bridge cost: $3M per segment</li>
-                    <li>Mountain edge cost: $1.5M per segment (1 passible side per mountain)</li>
-                    <li>Nodes act as cities/hubs.</li>
-                </ul>
-            </div>
-        </div>
+    <div class="canvas-container">
+        <canvas id="mapCanvas" width="800" height="600"></canvas>
     </div>
 
     <script>
@@ -223,10 +99,12 @@
         }
 
         const zoomSlider = document.getElementById('zoomSlider');
-        zoomSlider.addEventListener('input', (e) => {
-            zoom = parseFloat(e.target.value);
-            render();
-        });
+        if (zoomSlider) {
+            zoomSlider.addEventListener('input', (e) => {
+                zoom = parseFloat(e.target.value);
+                render();
+            });
+        }
 
         // Initialize grid
         function initGrid() {
@@ -1086,7 +964,10 @@
                 }
 
                 totalCost += cost;
-                document.getElementById('cost-display').innerText = `$${totalCost}M`;
+                const costDisplay = document.getElementById('cost-display');
+                if (costDisplay) {
+                    costDisplay.innerText = `$${totalCost}M`;
+                }
                 
                 render();
             }
@@ -1095,7 +976,10 @@
         function clearRoads() {
             edges.forEach(e => e.hasRailroad = false);
             totalCost = 0;
-            document.getElementById('cost-display').innerText = `$0M`;
+            const costDisplay = document.getElementById('cost-display');
+            if (costDisplay) {
+                costDisplay.innerText = `$0M`;
+            }
             render();
         }
 

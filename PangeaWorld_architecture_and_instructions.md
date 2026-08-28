@@ -525,7 +525,8 @@ At the start of each new game, Drakmoor's AI agent rolls a **randomized profile*
 - User registration with role assignment (President vs. Company Executive)
 - Team formation and nation assignment
 - **Customization (Round 1):** Users have the option to change their assigned Nation's name or Company's name during the first round to increase team identity and ownership. **Strict content moderation filters** will block offensive, profane, or blasphemous names to maintain a professional educational environment.
-- Session management for concurrent games
+- **Independent Game Sessions:** The architecture supports multiple concurrent game sessions that run completely independently. 
+- **Session-Locked Map Generation:** When a new session is started, a random seed is generated to procedurally create the map (rivers, mountains, cities, borders). After this initial creation, the map generation is locked for that session. The map will only get updates and upgrades based on users' decisions (like building roads) across the 7 rounds.
 
 ##### [NEW] AI bot backfill system
 If there aren't enough students to fill all roles, **AI bots automatically fill empty slots** so the game world always runs at full capacity:
