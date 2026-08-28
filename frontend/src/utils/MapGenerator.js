@@ -262,7 +262,7 @@ export function generateMapData(seedStr = 'default', width = 800, height = 600) 
         
         let startTri;
         if (targetCountry) {
-            let countryTris = triangles.filter(t => t.country === targetCountry && t.terrain !== TERRAIN.MOUNTAIN && t.terrain !== TERRAIN.RIVER && t.terrain !== TERRAIN.OCEAN);
+            let countryTris = triangles.filter(t => t.terrain === targetCountry.terrain && t.terrain !== TERRAIN.MOUNTAIN && t.terrain !== TERRAIN.RIVER && t.terrain !== TERRAIN.OCEAN);
             if (countryTris.length > 0) {
                 startTri = countryTris[Math.floor(rnd() * countryTris.length)];
             }
@@ -280,11 +280,13 @@ export function generateMapData(seedStr = 'default', width = 800, height = 600) 
         while(currentTri && length < maxLength) {
             if (currentRiverTriangles >= maxRiverTriangles) break;
 
-            if (currentTri.terrain !== TERRAIN.RIVER) {
+            let originalTerrain = currentTri.terrain;
+            if (originalTerrain !== TERRAIN.RIVER) {
                 currentTri.terrain = TERRAIN.RIVER;
                 currentRiverTriangles++;
-                if (currentTri.country) {
-                    riverCountByCountry[currentTri.country.id] = (riverCountByCountry[currentTri.country.id] || 0) + 1;
+                let countryDef = countriesDef.find(c => c.terrain === originalTerrain);
+                if (countryDef) {
+                    riverCountByCountry[countryDef.id] = (riverCountByCountry[countryDef.id] || 0) + 1;
                 }
             }
             length++;
