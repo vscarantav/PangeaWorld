@@ -23,7 +23,7 @@ export const TERRAIN = {
     LUNARA: { color: '#d35400', texture: 'redrock', name: 'Lunara' },
     NORDVIK: { color: '#aed6f1', texture: 'snow', name: 'Nordvik (Tundra)' },
     ZEPHYRIA: { color: '#228b22', texture: 'forest', name: 'Zephyria' },
-    DRAKMOOR: { color: '#7f8c8d', texture: 'mountain', name: 'Drakmoor (Mountains)' },
+    DRAKMOOR: { color: '#7f8c8d', texture: 'drakmoor', name: 'Drakmoor (Mountains)' },
     CITY: { color: '#ffffff', name: 'Company City' } 
 };
 
@@ -162,8 +162,12 @@ export function generateMapData(seedStr = 'default', width = 800, height = 600) 
             let projX = 140 + t * dx;
             let projY = 460 + t * dy;
             let distToStrait = Math.sqrt(Math.pow(cx - projX, 2) + Math.pow(cy - projY, 2));
+            
+            let crossP = dx * (cy - projY) - dy * (cx - projX);
+            let isTopSide = crossP < 0;
+            let straitRadius = isTopSide ? 0 : 15;
 
-            if (distFromMain < mainRadius || distFromIsland < islandRadius || distToStrait < 15) {
+            if (distFromMain < mainRadius || distFromIsland < islandRadius || distToStrait < straitRadius) {
                 let country = getVoronoiCountry(cx, cy);
                 terrain = country.terrain;
             }

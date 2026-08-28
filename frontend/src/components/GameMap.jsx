@@ -28,7 +28,8 @@ const textureImgs = {
     forest: new Image(),
     bushes: new Image(),
     mountain: new Image(),
-    redrock: new Image()
+    redrock: new Image(),
+    drakmoor: new Image()
 };
 textureImgs.grass.src = '/grass.jpg';
 textureImgs.sand.src = '/sand.jpg';
@@ -38,6 +39,7 @@ textureImgs.forest.src = '/forest.jpg';
 textureImgs.bushes.src = '/bushes.jpg';
 textureImgs.mountain.src = '/mountain.jpg';
 textureImgs.redrock.src = '/redrock.jpg';
+textureImgs.drakmoor.src = '/drakmoor.jpg';
 
 // --------------------------------------------------------
 // TOPOLOGICAL BOUNDARY EXTRACTION
@@ -227,7 +229,8 @@ export default function GameMap({ seed = 'PangeaGameSeed123', width = 800, heigh
             new Promise(res => { textureImgs.forest.onload = res; if (textureImgs.forest.complete) res(); }),
             new Promise(res => { textureImgs.bushes.onload = res; if (textureImgs.bushes.complete) res(); }),
             new Promise(res => { textureImgs.mountain.onload = res; if (textureImgs.mountain.complete) res(); }),
-            new Promise(res => { textureImgs.redrock.onload = res; if (textureImgs.redrock.complete) res(); })
+            new Promise(res => { textureImgs.redrock.onload = res; if (textureImgs.redrock.complete) res(); }),
+            new Promise(res => { textureImgs.drakmoor.onload = res; if (textureImgs.drakmoor.complete) res(); })
         ]).then(() => setImagesLoaded(true));
     }, [seed, width, height]);
 

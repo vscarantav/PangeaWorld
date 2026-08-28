@@ -165,8 +165,12 @@
                     let projX = 140 + t * dx;
                     let projY = 460 + t * dy;
                     let distToStrait = Math.sqrt(Math.pow(cx - projX, 2) + Math.pow(cy - projY, 2));
+                    
+                    let crossP = dx * (cy - projY) - dy * (cx - projX);
+                    let isTopSide = crossP < 0;
+                    let straitRadius = isTopSide ? 0 : 15;
 
-                    if (distFromMain < mainRadius || distFromIsland < islandRadius || distToStrait < 15) {
+                    if (distFromMain < mainRadius || distFromIsland < islandRadius || distToStrait < straitRadius) {
                         let country = getVoronoiCountry(cx, cy);
                         terrain = country.terrain;
                     }
