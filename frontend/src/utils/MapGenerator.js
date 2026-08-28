@@ -33,7 +33,7 @@ export const countriesDef = [
     { id: 'KORVATH', name: 'Korvath', x: 320, y: 420, labelX: 320, labelY: 580, terrain: TERRAIN.KORVATH, cityColor: '#a01631' },
     { id: 'VALDORIA', name: 'Valdoria', x: 280, y: 300, labelX: 80, labelY: 250, terrain: TERRAIN.VALDORIA, cityColor: '#000080' },
     { id: 'NORDVIK', name: 'Nordvik', x: 340, y: 180, labelX: 250, labelY: 40, terrain: TERRAIN.NORDVIK, cityColor: '#000080' },
-    { id: 'ZEPHYRIA', name: 'Zephyria', x: 420, y: 220, labelX: 420, labelY: 150, terrain: TERRAIN.ZEPHYRIA, cityColor: '#8b228b' },
+    { id: 'ZEPHYRIA', name: 'Zephyria', x: 420, y: 260, labelX: 420, labelY: 260, terrain: TERRAIN.ZEPHYRIA, cityColor: '#8b228b' },
     { id: 'DRAKMOOR', name: 'Drakmoor', x: 520, y: 220, labelX: 720, labelY: 130, terrain: TERRAIN.DRAKMOOR, cityColor: '#e74c3c' },
     { id: 'LUNARA', name: 'Lunara', x: 140, y: 460, labelX: 40, labelY: 540, terrain: TERRAIN.LUNARA, cityColor: '#000080' } 
 ];
