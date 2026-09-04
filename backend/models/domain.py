@@ -42,6 +42,62 @@ class GameSession(Base):
     rounds = relationship("Round", back_populates="session")
     nations = relationship("Nation", back_populates="session")
     map_snapshots = relationship("MapSnapshot", back_populates="session", cascade="all, delete-orphan")
+    memberships = relationship("GameMembership", back_populates="session", cascade="all, delete-orphan")
+
+
+class User(Base):
+    """A person who can participate in one or more game sessions."""
+
+    __tablename__ = "users"
+
+    id = Column(Integer, primary_key=True, index=True)
+    email = Column(String, nullable=False, unique=True, index=True)
+    password_hash = Column(String, nullable=False)
+    display_name = Column(String, nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    memberships = relationship("GameMembership", back_populates="user", cascade="all, delete-orphan")
+    auth_sessions = relationship("AuthSession", back_populates="user", cascade="all, delete-orphan")
+
+
+class AuthSession(Base):
+    """A revocable, hashed bearer session token stored server-side."""
+
+    __tablename__ = "auth_sessions"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    token_hash = Column(String, nullable=False, unique=True, index=True)
+    expires_at = Column(DateTime(timezone=True), nullable=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    revoked_at = Column(DateTime(timezone=True), nullable=True)
+
+    user = relationship("User", back_populates="auth_sessions")
+
+
+class GameMembership(Base):
+    """A user's seat in a particular game session.
+
+    ``role`` is intentionally a string for this first migration so later role
+    types can be added without an SQLite enum migration. ``entity_id`` points
+    to a Nation for presidents and a Company for executives.
+    """
+
+    __tablename__ = "game_memberships"
+
+    id = Column(Integer, primary_key=True, index=True)
+    session_id = Column(Integer, ForeignKey("game_sessions.id"), nullable=False, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    role = Column(String, nullable=False)
+    entity_id = Column(Integer, nullable=True)
+    joined_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    session = relationship("GameSession", back_populates="memberships")
+    user = relationship("User", back_populates="memberships")
+
+    __table_args__ = (
+        UniqueConstraint("session_id", "user_id", name="uq_membership_user_per_session"),
+    )
 
 class MapSnapshot(Base):
     __tablename__ = "map_snapshots"

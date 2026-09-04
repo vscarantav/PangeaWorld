@@ -71,7 +71,7 @@ PangeaWorld/
 - **Event Engine**: Seeded events modify production, CPI, approval, and eligible persisted railroad infrastructure.
 
 ### ⏳ Not Yet Applied (Phase 2 and Later)
-- **Multiplayer & Authentication**: Accounts, role assignment, real-time synchronization, and enforced 48-hour deadlines are not yet built; Phase 1 provides the local authoritative phase loop.
+- **Multiplayer & Authentication**: Phase 2 Day 1 account registration, login, logout, revocable sessions, and membership-role data are complete. Instructor assignment, role enforcement, real-time synchronization, and enforced 48-hour deadlines remain in the active Phase 2 sprint; Phase 1 provides the local authoritative phase loop.
 - **AI Agent Integration**: The embedded Gemini AI Advisor and the Drakmoor AI antagonist bot are not yet wired up.
 - **Future Portals**: The FMI portal and Pangea Assembly remain planned product features.
 - **Military Mechanics**: Attack/Defense indices, troop deployments, and intelligence operations are pending.
@@ -809,6 +809,14 @@ graph TB
 
 > **Completion status (Sep 4, 2026): ✅ COMPLETE.** The playable Phase 1 scope is implemented and covered by a three-round acceptance test. Advanced multiplayer, Drakmoor AI, Gemini advisors, FMI, military, intelligence, sanctions, and full route-construction systems remain assigned to their later roadmap phases.
 
+### Phase 1 Sprint Checklist — 5/5 Days Complete
+
+- [x] **Day 1:** Data models, SQLite persistence, seed data, and nation/company/resource initialization
+- [x] **Day 2:** Economy, resources, logistics, round lifecycle, and automatic fallback decisions
+- [x] **Day 3:** Session, nation, company, market, decision, map, results, and news APIs
+- [x] **Day 4:** React API client, shared game context, and live President/Executive dashboards
+- [x] **Day 5:** Seeded events, end-to-end acceptance coverage, lint, and production-build verification
+
 ### Phase 0 Completion Status
 
 | Component | Status | Key Files |
@@ -838,11 +846,11 @@ graph TB
 | **Database setup** (persistent game state) | ✅ Day 1 complete | 🔴 Critical |
 | **Map snapshot persistence** (seed → validate → store → reload) | ✅ Complete | 🟡 Important |
 
-### Day 1 (Sep 4) — Data Models & Database Foundation
+### ✅ Day 1 (Sep 4) — Data Models & Database Foundation — Complete
 
 **Theme:** _"Build the skeleton — every entity in the game gets a Python model and a database table."_
 
-#### [NEW] `backend/models/` — SQLAlchemy / Pydantic models
+#### [x] `backend/models/` — SQLAlchemy / Pydantic models
 
 Full data schema from the architecture (lines 294–342):
 
@@ -854,88 +862,88 @@ Full data schema from the architecture (lines 294–342):
 - `MapSnapshot` — id, session_id, validated_map_json (entire generated map stored after invariant validation)
 - `Decision` — id, round_id, player_type (president/company), entity_id, decision_data (JSON), submitted_at
 
-#### [NEW] `backend/database.py` — Database connection & session management
+#### [x] `backend/database.py` — Database connection & session management
 - SQLite for local development (swap to PostgreSQL for deployment later)
 - Synchronous SQLAlchemy engine with FastAPI dependency injection for the local SQLite MVP (async/PostgreSQL migration deferred to deployment work)
 
-#### [NEW] `backend/seed_data.py` — Nation starting profiles
+#### [x] `backend/seed_data.py` — Nation starting profiles
 - All 8 nations with resource profiles, starting GDP, military indices, and geographic data
 - Starting resource allocations per nation (asymmetric by design)
 - Starting company templates (10–15 per nation)
 
-### Day 2 (Sep 5) — Economy & Resource Engines
+### ✅ Day 2 (Sep 5) — Economy & Resource Engines — Complete
 
 **Theme:** _"The math that makes the simulation feel real."_
 
-#### [NEW] `backend/engines/economy.py` — GDP, CPI, Inflation Engine
+#### [x] `backend/engines/economy.py` — GDP, CPI, Inflation Engine
 - `calculate_gdp(nation)` — sum of all company revenues + government spending + net exports
 - `calculate_cpi(nation, round)` — weighted basket of 6 resource categories; CPI changes based on supply/demand
 - `calculate_inflation(nation)` — (CPI_current / CPI_previous - 1) × 100
 - `calculate_unemployment(nation)` — based on company headcount vs. labor pool
 - `calculate_trade_balance(nation)` — total exports value - total imports value
 
-#### [NEW] `backend/engines/resources.py` — Resource Production & Trade
+#### [x] `backend/engines/resources.py` — Resource Production & Trade
 - `produce_resources(nation, round)` — each nation produces based on rates; apply depletion
 - `calculate_scarcity(resource_type)` — global supply vs. demand → price multiplier
 - `process_trade(exporter, importer, resource, quantity, route)` — apply landed cost formula
 
-#### [NEW] `backend/engines/logistics.py` — Landed Cost Calculator
+#### [x] `backend/engines/logistics.py` — Landed Cost Calculator
 - Implements the landed cost formula: `Landed Cost = Base Price + (Freight × Distance × Mode Multiplier) + Tariffs + Insurance + Port Fees`
 - Mode multipliers: Sea ($2/unit), River ($5/unit), Rail ($12/unit), Air ($30/unit)
 - Distance calculation from map grid (100km per edge)
 
-#### [NEW] `backend/engines/round_manager.py` — Round Lifecycle
+#### [x] `backend/engines/round_manager.py` — Round Lifecycle
 - `advance_phase(session)` — planning → presidential → company → processing → results
 - `process_round(session)` — orchestrates all engines after both deadlines pass
 - `apply_auto_decisions(entity)` — suboptimal defaults for missed submissions
 - `generate_round_results(session)` — snapshots for all nations/companies
 
-### Day 3 (Sep 6) — API Layer & Game Session Endpoints
+### ✅ Day 3 (Sep 6) — API Layer & Game Session Endpoints — Complete
 
 **Theme:** _"Everything the frontend needs to talk to."_
 
-#### [NEW] `backend/routes/sessions.py` — Game session management
+#### [x] `backend/routes/sessions.py` — Game session management
 - `POST /api/sessions` — create new game (generates seed, runs map generation, validates invariants, persists snapshot)
 - `GET /api/sessions/{id}` — get session state (current round, phase, map)
 - `POST /api/sessions/{id}/advance` — advance to next phase (triggers round processing)
 
-#### [NEW] `backend/routes/nations.py` — Nation data & presidential actions
+#### [x] `backend/routes/nations.py` — Nation data & presidential actions
 - `GET /api/sessions/{id}/nations` — all nations with current stats
 - `GET /api/sessions/{id}/nations/{nation_id}` — detailed nation view (GDP, CPI, resources, military)
 - `POST /api/sessions/{id}/nations/{nation_id}/decisions` — submit presidential decisions
 
-#### [NEW] `backend/routes/companies.py` — Company data & executive actions
+#### [x] `backend/routes/companies.py` — Company data & executive actions
 - `GET /api/sessions/{id}/companies` — all companies
 - `GET /api/sessions/{id}/companies/{company_id}` — detailed company view (financials, supply chain)
 - `POST /api/sessions/{id}/companies/{company_id}/decisions` — submit executive decisions
 
-#### [NEW] `backend/routes/market.py` — Global market data
+#### [x] `backend/routes/market.py` — Global market data
 - `GET /api/sessions/{id}/market` — commodity prices, exchange rates, shipping index
 - `GET /api/sessions/{id}/market/resources/{type}` — available suppliers with landed cost estimates
 
-#### [MODIFY] `backend/main.py` — Wire up all routers
+#### [x] `backend/main.py` — All routers wired into FastAPI
 
-### Day 4 (Sep 7) — Frontend ↔ Backend Integration
+### ✅ Day 4 (Sep 7) — Frontend ↔ Backend Integration — Complete
 
 **Theme:** _"Mock data out, live API data in."_
 
-#### [NEW] `frontend/src/api/client.js` — API client
+#### [x] `frontend/src/api/client.js` — API client
 - Base URL config, fetch wrappers, error handling
 - Functions: `createSession()`, `getSession()`, `getNations()`, `getNation()`, `getCompanies()`, `getCompany()`, `submitDecision()`, `getMarket()`, `advanceRound()`
 
-#### [NEW] `frontend/src/context/GameContext.jsx` — React context for game state
+#### [x] `frontend/src/context/GameContext.jsx` — React context for game state
 - Holds current session, nation, company, round, and phase
 - Auto-refreshes on round transitions
 - Provides `useGame()` hook for all components
 
-#### [MODIFY] President Dashboard tabs — replace mock data with API calls
+#### [x] President Dashboard tabs — live API data replaces mock data
 - **IndexesTab**: Live GDP, CPI, inflation, unemployment, trade balance
 - **InfrastructureTab**: Real infrastructure data from map snapshot + nation state
 - **FinancingTab**: Live treasury, FMI debt status, budget allocation
 - **DiplomacyTab**: Active treaties and proposals (simplified for Phase 1)
 - **IntelTab**: Public data for other nations
 
-#### [MODIFY] Executive Dashboard tabs — replace mock data with API calls
+#### [x] Executive Dashboard tabs — live API data replaces mock data
 - **FinancialsTab**: Live revenue, COGS, margin, profit, cash
 - **SourcingTab**: Real resource marketplace with landed cost estimates
 - **MarketTab**: Live market share, competitor pricing, demand curves
@@ -943,46 +951,206 @@ Full data schema from the architecture (lines 294–342):
   - Pricing, hiring, production volume, R&D investment, and sourcing supplier/route decisions
   - Separate local draft save and server-confirmed submission states
 
-### Day 5 (Sep 8) — Event Engine, Polish & End-to-End Verification
+### ✅ Day 5 (Sep 8) — Event Engine, Polish & End-to-End Verification — Complete
 
 **Theme:** _"Play through a full 3-round single-nation game and fix everything that breaks."_
 
-#### [NEW] `backend/engines/events.py` — World event system
+#### [x] `backend/engines/events.py` — World event system
 - Event categories: Natural disasters, political crises, market shocks, health emergencies, tech breakthroughs
 - `generate_round_events(session, round)` — randomly inject 1–2 minor events per round
 - Events modify resource production, prices, persisted railroad infrastructure, and approval ratings
 
-#### [MODIFY] `frontend/src/components/ExecutiveDashboard/Widgets/NewsFeed.jsx`
+#### [x] `frontend/src/components/ExecutiveDashboard/Widgets/NewsFeed.jsx`
 - Wire to `GET /api/sessions/{id}/news` endpoint
 - Display system-generated event articles and round results
 
-#### [NEW] `backend/tests/` — Backend test suite
+#### [x] `backend/tests/` — Backend test suite
 - `test_day1_foundation.py` — schema and seed-data invariants
 - `test_day2_engines.py` — economy, resources, logistics, events, phase transitions, auto-decisions, and three-round acceptance
 - `test_api.py` — session, map, decision, sourcing/trade, results, and news endpoint integration
 
-#### End-to-End Verification
-1. Create a new game session → verify map invariants pass
-2. Submit presidential and company decisions for Rounds 1–3
-3. Advance rounds → verify economy engine produces sane outputs
-4. Verify dashboards reflect updated state after each round
-5. Confirm resource depletion, scarcity effects, and event injection work
+#### [x] End-to-End Verification
+
+- [x] Create a new game session and verify map invariants pass
+- [x] Submit presidential and company decisions for Rounds 1–3
+- [x] Advance rounds and verify the economy engine produces sane outputs
+- [x] Verify dashboards reflect updated state after each round
+- [x] Confirm resource depletion, scarcity effects, and event injection work
 
 **Verified:** all five acceptance steps are automated. Company sourcing moves authoritative stockpiles, uses map-based distance and landed cost, updates COGS/shipping costs and trade balances, and persists the selected supply chain in round results.
 
 **Phase 1 verification baseline:** 16 backend tests passing, 2 deterministic frontend map tests passing, frontend lint completing without errors, and the Vite production build succeeding.
 
 ### Sprint Verification Commands
-```bash
-# Frontend map invariants (existing)
-cd frontend && npm test
+```powershell
+# Frontend map invariants
+Set-Location frontend
+npm test
 
-# Backend engine tests (new)
-cd backend && python -m pytest tests/ -v
-
-# API integration tests
-cd backend && python -m pytest tests/test_api.py -v
+# Backend engine and API tests
+Set-Location ../backend
+.\.venv\Scripts\python.exe -m pytest tests -v
 ```
 
-> [!WARNING]
-> Day 2 (Economy Engine) is the highest-risk day. The math needs to produce "realistic-feeling" results. Start with simplified formulas and tune iteratively rather than aiming for full fidelity on day one.
+> [!NOTE]
+> **Phase 1 retrospective:** Economy tuning remains an ongoing balancing activity, but it does not block the completed Phase 1 acceptance criteria.
+
+---
+
+## Phase 2 Sprint 1 (Sep 9–13, 2026) — Multiplayer Foundation
+
+> **Goal:** Deliver a secure four-player vertical slice in which two Presidents and two Company Executives can sign in from separate browsers, join the same game, see only their assigned role, submit authorized decisions, observe synchronized phase changes, and complete one authoritative round.
+
+> **Sprint status: 🟡 IN PROGRESS — 1/5 days complete.** This is the first five-day delivery slice of the broader 4–6 week Phase 2 roadmap. Trade proposals, treaties, sanctions, FMI lending, AI backfill, and the Drakmoor antagonist remain in later Phase 2 sprints.
+
+### Progress Tracker
+
+- [x] **Day 1:** Authentication and multiplayer data model
+- [ ] **Day 2:** Session lobby, invitations, and role assignment
+- [ ] **Day 3:** Authorization and decision-readiness workflow
+- [ ] **Day 4:** Deadlines and real-time synchronization
+- [ ] **Day 5:** Four-player acceptance test, hardening, and documentation
+
+### Sprint Architecture Decisions
+
+- Use email/password authentication for the local multiplayer MVP. Store only strong password hashes and use secure, HTTP-only session cookies; university SSO remains a deployment integration.
+- Keep REST commands authoritative. WebSocket messages notify clients that session state changed; clients then reload canonical state through the REST API.
+- Instructors create games and assign seats. A shareable join code admits players to a lobby but never grants a role by itself.
+- Preserve SQLite for local development while keeping models and migrations compatible with the planned PostgreSQL deployment.
+- Enforce authorization on the server for every read and write. Hiding a control in React is not an authorization boundary.
+
+### ✅ Day 1 (Sep 9) — Authentication & Multiplayer Data Model — Complete
+
+**Theme:** _"Give every action an authenticated owner."_
+
+#### Backend
+
+- [x] Extend the backwards-compatible schema bootstrap and create `User`, `AuthSession`, and `GameMembership` models without invalidating existing Phase 1 sessions.
+- [x] Define instructor, President, and Company Executive membership roles and the entity-seat reference used by the Day 2 assignment workflow.
+- [x] Add `POST /api/auth/register`, `POST /api/auth/login`, `POST /api/auth/logout`, and `GET /api/auth/me`.
+- [x] Hash passwords with PBKDF2-SHA256, rotate session identifiers on login, set cookie security attributes, and never return password fields.
+- [x] Add API tests for registration, duplicate email rejection, login failure/success, logout, expired sessions, and schema compatibility.
+
+#### Day 1 Acceptance
+
+- [x] Two users can create accounts, sign in independently, refresh the browser without losing their login, and sign out.
+- [x] The full Phase 1 regression suite remains green after the schema extension (19 backend tests passing).
+
+### Day 2 (Sep 10) — Session Lobby, Invitations & Role Assignment
+
+**Theme:** _"Turn a local session into a game people can join."_
+
+#### Backend
+
+- [ ] Make session creation instructor-only and generate a unique, revocable lobby join code.
+- [ ] Add lobby endpoints to join, list members/seats, assign or remove a member, and start the game.
+- [ ] Validate that assignments reference entities from the same session and reject conflicting President assignments.
+- [ ] Permit nation/company renaming only during Round 1, with length/character validation, moderation, uniqueness checks, and an audit record.
+
+#### Frontend
+
+- [ ] Add register/login screens and a lobby view showing unassigned players, available seats, and human/AI-vacant status.
+- [ ] Add instructor assignment controls and replace the unrestricted Phase 1 role switcher with the signed-in user's assigned seat.
+- [ ] Show clear empty, loading, validation, unauthorized, and join-code error states.
+
+#### Day 2 Acceptance
+
+- [ ] Four accounts can join one game; the instructor can assign two Presidents and two Company Executives across two nations.
+- [ ] Each player lands on the correct dashboard after assignment and cannot select an unassigned role from the UI.
+
+### Day 3 (Sep 11) — Server Authorization & Decision Readiness
+
+**Theme:** _"A player can act only for the seat they own."_
+
+#### Backend
+
+- [ ] Require authentication on session, nation, company, market, map, news, and decision routes; define the intentionally public lobby response separately.
+- [ ] Enforce membership, session boundary, role, entity ownership, and current-phase checks on every command.
+- [ ] Restrict phase advancement and map mutation to the instructor; freeze the initial map when the game starts except through future validated infrastructure commands.
+- [ ] Add per-seat decision status (`not_started`, `draft`, `submitted`, `auto_submitted`) and a session readiness summary without exposing private decision payloads.
+- [ ] Preserve idempotent decision resubmission during the correct open phase and lock decisions when that phase closes.
+- [ ] Add negative integration tests for cross-session access, horizontal privilege escalation, wrong-role submission, closed-phase submission, and non-instructor advancement.
+
+#### Frontend
+
+- [ ] Show the player's submission status and an instructor readiness board with counts only, not other teams' secret decisions.
+- [ ] Disable closed-phase forms and explain whether a decision is editable, submitted, or locked.
+
+#### Day 3 Acceptance
+
+- [ ] Direct API calls cannot let one player read or mutate another player's protected seat.
+- [ ] The instructor can tell who is ready while secret decisions remain private until results make them public.
+
+### Day 4 (Sep 12) — Phase Deadlines & Real-Time Synchronization
+
+**Theme:** _"Every browser sees the same clock and authoritative phase."_
+
+#### Backend
+
+- [ ] Add timezone-aware `presidential_deadline_at` and `company_deadline_at` values plus an instructor-configurable accelerated mode for local testing.
+- [ ] Enforce deadlines server-side and make transition processing transactional and idempotent so a round cannot process twice.
+- [ ] Apply the existing conservative auto-decisions to seats that miss their deadline and record why/when each automatic submission occurred.
+- [ ] Add a session-scoped WebSocket channel for phase, readiness, assignment, and results notifications; send identifiers and event types, not secret payloads.
+- [ ] Add concurrency tests for simultaneous submissions, reconnects, and duplicate phase-transition attempts.
+
+#### Frontend
+
+- [ ] Add a server-time-based countdown and live phase/readiness updates with reconnect and periodic-refresh fallback.
+- [ ] Refresh canonical session data after each notification and visibly label automatic submissions.
+
+#### Day 4 Acceptance
+
+- [ ] A phase change made in one browser appears in the other three without a manual reload.
+- [ ] Late writes are rejected, missing decisions are filled automatically, and concurrent transition attempts yield one stored round result.
+
+### Day 5 (Sep 13) — Four-Player Vertical Slice & Hardening
+
+**Theme:** _"Prove the multiplayer loop from four independent clients."_
+
+#### End-to-End Scenario
+
+- [ ] Instructor creates a game, shares the join code, assigns four players, and starts the session.
+- [ ] Both Presidents submit macro decisions during the Presidential phase; both Company Executives remain unable to submit early.
+- [ ] The Company phase opens and both executives submit pricing, production, R&D, and sourcing decisions.
+- [ ] One test seat intentionally misses a deadline and receives the recorded conservative auto-decision.
+- [ ] The engine processes exactly once; all four clients receive the update and see consistent Round 1 results and news.
+- [ ] Refresh and sign-out/sign-in tests restore the same membership, session, role, phase, and persisted map snapshot.
+
+#### Quality Gate
+
+- [ ] Backend authentication, authorization, deadline, concurrency, and four-player API tests pass.
+- [ ] Existing Phase 1 backend and deterministic map tests pass with no regressions.
+- [ ] Frontend lint and production build pass.
+- [ ] `RUNNING.md` documents account creation, instructor setup, four-client testing, accelerated deadlines, and recovery from a disconnected client.
+- [ ] Security review confirms no password leakage, cross-session access, secret-decision exposure, or client-authoritative phase transition.
+
+### Definition of Done
+
+The sprint is complete only when every Progress Tracker item is checked and the four-player scenario passes from separate browser sessions. A working UI without server authorization, or working APIs without the four-client acceptance test, does not count as complete.
+
+### Explicitly Deferred to Later Phase 2 Sprints
+
+- [ ] Bilateral trade proposals, acceptance/rejection, and negotiated contract terms
+- [ ] Treaty and public/secret diplomacy workflows
+- [ ] Sanctions proposals, voting, enforcement, and lifting
+- [ ] FMI quotas, lending products, conditionality, repayment, and default
+- [ ] General AI seat backfill and mid-game human takeover
+- [ ] Drakmoor's randomized diplomatic/war AI and instructor behavior overrides
+- [ ] Production deployment with PostgreSQL, Redis, university SSO, TLS, email verification, and password recovery
+
+### Sprint Verification Commands
+
+```powershell
+# Backend regression and multiplayer tests
+Set-Location backend
+.\.venv\Scripts\python.exe -m pytest tests -v
+
+# Frontend regression suite
+Set-Location ../frontend
+npm test
+npm run lint
+npm run build
+```
+
+> [!IMPORTANT]
+> When work is verified, change its checkbox from `[ ]` to `[x]` immediately. Mark a day complete in the Progress Tracker only after all of that day's acceptance checks pass; update the sprint status count at the same time.

@@ -1,5 +1,6 @@
 from .domain import (
     GameSession, MapSnapshot, Nation, Company, Resource, Round, Decision,
+    User, AuthSession, GameMembership,
     PhaseEnum, RoundStatus, ResourceType,
 )
 from .schemas import (
