@@ -121,6 +121,7 @@ class Round(Base):
     number = Column(Integer, nullable=False)
     status = Column(Enum(RoundStatus), default=RoundStatus.PLANNING, nullable=False)
     events = Column(JSON, default=list)
+    results = Column(JSON, default=dict)
 
     session = relationship("GameSession", back_populates="rounds")
     decisions = relationship("Decision", back_populates="round")

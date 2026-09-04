@@ -20,22 +20,31 @@ def calculate_gdp(nation, government_spending: float = 0.0, net_exports: float |
 
 
 def calculate_cpi(nation, resource_demands: dict[str, float] | None = None) -> float:
-    """Estimate CPI from weighted resource demand relative to available supply.
+    """Estimate CPI from weighted demand relative to normal production.
 
-    A balanced resource has a 1.0 price multiplier. The result is anchored to
-    the nation's current CPI, allowing later rounds to compound gradually.
+    Stockpiles are buffers, not an unlimited source of price deflation. When no
+    demand is supplied, each resource is at its baseline demand and CPI is
+    therefore stable. Explicitly higher demand can move CPI upward, while the
+    bounded multiplier prevents a single resource from destroying the index.
     """
     demands = resource_demands or {}
     pressure = 0.0
     for resource in nation.resources:
         resource_name = getattr(resource.type, "value", resource.type)
-        supply = max(0.01, float(resource.stockpile or 0.0) + float(resource.production_rate or 0.0))
-        demand = float(demands.get(resource_name, resource.production_rate or 0.0))
-        multiplier = min(2.0, max(0.5, demand / supply))
+        production = float(resource.production_rate or 0.0)
+        demand = float(demands.get(resource_name, production))
+        if production <= 0 and demand <= 0:
+            continue
+        supply = max(0.01, production)
+        multiplier = min(1.5, max(0.75, demand / supply))
         pressure += RESOURCE_WEIGHTS.get(resource_name, 0.0) * multiplier
     covered_weight = sum(
         weight for name, weight in RESOURCE_WEIGHTS.items()
-        if any(getattr(r.type, "value", r.type) == name for r in nation.resources)
+        if any(
+            getattr(r.type, "value", r.type) == name
+            and (float(r.production_rate or 0.0) > 0 or float(demands.get(name, 0.0)) > 0)
+            for r in nation.resources
+        )
     )
     if covered_weight == 0:
         return float(nation.cpi or 100.0)

@@ -64,7 +64,7 @@ export default function AIAdvisor() {
           
           <div style={{ background: 'rgba(59, 130, 246, 0.1)', border: '1px solid rgba(59, 130, 246, 0.3)', padding: '1rem', borderRadius: '8px', alignSelf: 'flex-start', maxWidth: '90%' }}>
             <p style={{ fontSize: '0.9rem', lineHeight: '1.5' }}>
-              Good afternoon, Executive. I've analyzed the latest market reports. Korvath Tech just dropped their prices by $20. If you do not adjust our pricing, projected sales volume will decrease by 8% this round. 
+              The Gemini Advisor is planned for Phase 4. It is not connected to this Phase 1 session or its event ledger yet.
             </p>
           </div>
 
@@ -74,7 +74,7 @@ export default function AIAdvisor() {
 
           <div style={{ background: 'rgba(59, 130, 246, 0.1)', border: '1px solid rgba(59, 130, 246, 0.3)', padding: '1rem', borderRadius: '8px', alignSelf: 'flex-start', maxWidth: '90%' }}>
             <p style={{ fontSize: '0.9rem', lineHeight: '1.5' }}>
-              Dropping our price to $279.00 will reduce our gross margin from 26.1% to 22.4%, assuming COGS remains unchanged. However, the increased volume might offset the net profit loss. Would you like me to simulate the exact figures?
+              Pricing simulations are available after the Phase 1 company model is extended with the advisor integration.
             </p>
           </div>
 

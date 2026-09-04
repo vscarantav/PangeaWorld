@@ -14,3 +14,11 @@ If PowerShell blocks local scripts for the current session, run:
 Set-ExecutionPolicy -Scope Process Bypass
 .\start-game.ps1
 ```
+
+The browser keeps the active session ID so refreshing the page reloads the same
+game and map snapshot. To deliberately start a fresh local game, open the
+browser developer console and run:
+
+```js
+localStorage.removeItem('pangeaworld.sessionId');
+```

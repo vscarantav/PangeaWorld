@@ -116,7 +116,7 @@ def generate_company_name(nation_name: str, index: int) -> str:
     suffixes = ["Corp", "Industries", "Logistics", "Enterprises", "Dynamics"]
     return f"{prefixes[index % len(prefixes)]} {nation_name} {suffixes[index % len(suffixes)]}"
 
-def seed_game_session(db: Session, session_id: int):
+def seed_game_session(db: Session, session_id: int, commit: bool = True):
     # Check if nations already exist for this session to avoid duplicates
     existing_nations = db.query(Nation).filter(Nation.session_id == session_id).first()
     if existing_nations:
@@ -137,8 +137,12 @@ def seed_game_session(db: Session, session_id: int):
         db.add(nation)
         db.flush() # To get nation.id
 
-        # Add Resources
-        for r_data in n_data["resources"]:
+        # Add a complete six-category profile. Zero-rate rows preserve the
+        # schema for future trade/production decisions while keeping each
+        # nation's starting asymmetry in the non-zero values.
+        configured_resources = {r_data["type"]: r_data for r_data in n_data["resources"]}
+        for resource_type in ResourceType:
+            r_data = configured_resources.get(resource_type, {"type": resource_type, "production_rate": 0.0, "stockpile": 0.0})
             resource = Resource(
                 nation_id=nation.id,
                 type=r_data["type"],
@@ -148,22 +152,25 @@ def seed_game_session(db: Session, session_id: int):
             )
             db.add(resource)
 
-        # Phase 1 starts each nation with ten company templates.
+        # Phase 1 starts each nation with ten company templates whose revenue
+        # totals the nation's starting GDP. This keeps the first simulation
+        # round stable instead of multiplying GDP by the template index sum.
         for i in range(10):
             company = Company(
                 nation_id=nation.id,
                 name=generate_company_name(nation.name, i),
-                revenue=nation.gdp * 0.1 * (i + 1), # Simple arbitrary revenue
+                revenue=nation.gdp / 10,
                 cash=5000.0,
-                cogs=nation.gdp * 0.05 * (i + 1),
+                cogs=nation.gdp / 10 * 0.6,
                 products={"Widget": {"price": 100 + (i * 10), "quality": 5 + i}},
                 supply_chain_config={"suppliers": []}
             )
             # Calculate initial margins based on arbitrary starting values
-            company.gross_margin = company.revenue - company.cogs
-            company.net_profit = company.gross_margin * 0.8 # arbitrary 20% operating expense
+            company.gross_margin = (company.revenue - company.cogs) / company.revenue * 100
+            company.net_profit = (company.revenue - company.cogs) * 0.8
             db.add(company)
 
     db.add(Round(session_id=session_id, number=1, status=RoundStatus.PLANNING))
 
-    db.commit()
+    if commit:
+        db.commit()

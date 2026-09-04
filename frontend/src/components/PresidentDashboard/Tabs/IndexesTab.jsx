@@ -17,11 +17,12 @@ export default function IndexesTab({ setBudget }) {
   const [tariff, setTariff] = useState(15);
   const [immigration, setImmigration] = useState(1);
 
+  const history = (session?.rounds || []).filter((round) => round.results?.nations?.some((item) => item.nation_id === nation?.id));
   const macroData = {
-    labels: ['Round 1', 'Round 2', 'Round 3 (Current)'],
+    labels: history.length ? history.map((round) => `Round ${round.number}`) : [`Round ${session?.current_round || 1}`],
     datasets: [{
       label: 'GDP ($ Trillions)',
-      data: [Number(nation?.gdp || 0)],
+      data: history.length ? history.map((round) => round.results.nations.find((item) => item.nation_id === nation.id)?.gdp || 0) : [Number(nation?.gdp || 0)],
       borderColor: '#10b981',
       backgroundColor: 'rgba(16, 185, 129, 0.2)', // Simplified gradient
       borderWidth: 3,
@@ -109,37 +110,14 @@ export default function IndexesTab({ setBudget }) {
           {message && <p className="text-muted" style={{ marginTop: 8 }}>{message}</p>}
       </div>
 
-      {/* NEW: CPI Breakdown */}
       <div className="card col-4">
         <div className="card-header">
           <h3 className="card-title"><FileText /> CPI Breakdown (Inflation)</h3>
         </div>
-        <div className="data-list">
-          <div className="data-item">
-            <div className="data-item-info">
-              <h4>Energy Sector</h4>
-            </div>
-            <div className="data-item-value text-red">+12.4%</div>
-          </div>
-          <div className="data-item">
-            <div className="data-item-info">
-              <h4>Food & Agriculture</h4>
-            </div>
-            <div className="data-item-value text-yellow">+4.2%</div>
-          </div>
-          <div className="data-item">
-            <div className="data-item-info">
-              <h4>Technology</h4>
-            </div>
-            <div className="data-item-value text-green">-1.5%</div>
-          </div>
-          <div className="data-item">
-            <div className="data-item-info">
-              <h4>Labor/Services</h4>
-            </div>
-            <div className="data-item-value">+2.1%</div>
-          </div>
-        </div>
+        <div className="data-list">{(nation?.resources || []).map((resource) => <div className="data-item" key={resource.id}>
+          <div className="data-item-info"><h4>{resource.type}</h4><p>Production {Number(resource.production_rate || 0).toFixed(1)} / round</p></div>
+          <div className="data-item-value">{Number(resource.stockpile || 0).toFixed(1)} available</div>
+        </div>)}</div>
       </div>
 
       <div className="card col-8">

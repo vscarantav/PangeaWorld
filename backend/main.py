@@ -5,7 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
 
 try:
-    from .database import engine, Base, get_db
+    from .database import engine, Base, get_db, ensure_schema
     from .models.domain import GameSession, PhaseEnum
     from .seed_data import seed_game_session
     from .routes.sessions import router as sessions_router
@@ -14,7 +14,7 @@ try:
     from .routes.decisions import router as decisions_router
     from .routes.market import router as market_router
 except ImportError:  # Allows `uvicorn main:app` from inside backend.
-    from database import engine, Base, get_db
+    from database import engine, Base, get_db, ensure_schema
     from models.domain import GameSession, PhaseEnum
     from seed_data import seed_game_session
     from routes.sessions import router as sessions_router
@@ -25,6 +25,7 @@ except ImportError:  # Allows `uvicorn main:app` from inside backend.
 
 # Create tables
 Base.metadata.create_all(bind=engine)
+ensure_schema()
 
 app = FastAPI(title="PangeaWorld API")
 app.include_router(sessions_router)

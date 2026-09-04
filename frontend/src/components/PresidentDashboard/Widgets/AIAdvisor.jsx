@@ -64,7 +64,7 @@ export default function AIAdvisor() {
           
           <div style={{ background: 'rgba(59, 130, 246, 0.1)', border: '1px solid rgba(59, 130, 246, 0.3)', padding: '1rem', borderRadius: '8px', alignSelf: 'flex-start', maxWidth: '90%' }}>
             <p style={{ fontSize: '0.9rem', lineHeight: '1.5' }}>
-              Greetings, Mr. President. Based on the latest Pangea Times reports, Drakmoor forces have been spotted near the Korvath border. Given our current trade dependencies with Korvath for steel, I strongly advise maintaining high readiness. 
+              The Gemini Advisor is planned for Phase 4. It is not connected to this Phase 1 session or its event ledger yet.
             </p>
           </div>
 
@@ -74,7 +74,7 @@ export default function AIAdvisor() {
 
           <div style={{ background: 'rgba(59, 130, 246, 0.1)', border: '1px solid rgba(59, 130, 246, 0.3)', padding: '1rem', borderRadius: '8px', alignSelf: 'flex-start', maxWidth: '90%' }}>
             <p style={{ fontSize: '0.9rem', lineHeight: '1.5' }}>
-              Your current FMI Debt Ratio is 42%. You have room to borrow an additional <strong>$500M</strong> through an Emergency Credit line, though this will incur a 9% interest rate over the next two rounds. Alternatively, you can increase your FMI Quota now to unlock better rates next round.
+              No AI-generated borrowing advice is available until the FMI and advisor systems are connected.
             </p>
           </div>
 

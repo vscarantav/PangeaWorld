@@ -2,10 +2,13 @@ import React, { useState } from 'react';
 import { Target, UserCheck, Skull, Expand, MapPin } from 'lucide-react';
 import { Chart as ChartJS, RadialLinearScale, PointElement, LineElement, Filler, Tooltip, Legend } from 'chart.js';
 import { Radar } from 'react-chartjs-2';
+import GameMap from '../../GameMap';
+import { useGame } from '../../../context/GameContext';
 
 ChartJS.register(RadialLinearScale, PointElement, LineElement, Filler, Tooltip, Legend);
 
 export default function IntelTab({ setBudget, onOpenProjectModal }) {
+  const { nation, nations, session, saveMapSnapshot } = useGame();
   const [troopBudget, setTroopBudget] = useState(300);
   const [intelBudget, setIntelBudget] = useState(150);
   const [covertBudget, setCovertBudget] = useState(50);
@@ -15,7 +18,7 @@ export default function IntelTab({ setBudget, onOpenProjectModal }) {
     datasets: [
       {
         label: 'Valdoria (Us)',
-        data: [8, 6, 7, 5, 8, 4],
+        data: [nation?.military_atk || 0, nation?.military_def || 0, nation?.military_def || 0, 0, nation?.military_def || 0, 0],
         backgroundColor: 'rgba(59, 130, 246, 0.2)',
         borderColor: '#3b82f6',
         pointBackgroundColor: '#3b82f6',
@@ -23,7 +26,7 @@ export default function IntelTab({ setBudget, onOpenProjectModal }) {
       },
       {
         label: 'Drakmoor (AI)',
-        data: [9, 8, 5, 7, 6, 8],
+        data: [nations.find((item) => item.name === 'Drakmoor')?.military_atk || 0, nations.find((item) => item.name === 'Drakmoor')?.military_def || 0, 0, 0, 0, 0],
         backgroundColor: 'rgba(239, 68, 68, 0.2)',
         borderColor: '#ef4444',
         pointBackgroundColor: '#ef4444',
@@ -63,29 +66,7 @@ export default function IntelTab({ setBudget, onOpenProjectModal }) {
         <div className="card-header">
           <h3 className="card-title"><UserCheck /> Intelligence Reports</h3>
         </div>
-        <div className="data-list">
-          <div className="data-item">
-            <div className="data-item-info">
-              <h4 className="text-red">Drakmoor Troop Movements</h4>
-              <p>Heavy armor detected near Korvath border. Probability of invasion: High.</p>
-            </div>
-            <div className="data-item-value">CONFIDENTIAL</div>
-          </div>
-          <div className="data-item">
-            <div className="data-item-info">
-              <h4 className="text-blue">Solhaven Trade Leak</h4>
-              <p>Intercepted corporate chatter suggests tech subsidies ending.</p>
-            </div>
-            <div className="data-item-value">VERIFIED</div>
-          </div>
-          <div className="data-item" style={{ borderLeft: '3px solid var(--accent-warning)' }}>
-            <div className="data-item-info">
-              <h4 className="text-yellow">Suspected Sabotage</h4>
-              <p>Recent rail disruption in Northern Sector linked to foreign operatives.</p>
-            </div>
-            <div className="data-item-value">INVESTIGATING</div>
-          </div>
-        </div>
+        <div className="data-list">{(nations || []).filter((item) => item.id !== nation?.id).map((item) => <div className="data-item" key={item.id}><div className="data-item-info"><h4>{item.name}</h4><p>Public military indices: ATK {item.military_atk} · DEF {item.military_def}</p></div><div className="data-item-value">PUBLIC</div></div>)}</div>
       </div>
 
       {/* NEW: Military Map Integration */}
@@ -94,11 +75,7 @@ export default function IntelTab({ setBudget, onOpenProjectModal }) {
           <h3 className="card-title"><MapPin /> Deployment & Ops Map</h3>
         </div>
         <div className="map-widget" style={{ height: '350px' }}>
-          <div className="map-overlay" onClick={() => window.open('/map_prototype.html', '_blank')}>
-            <Expand />
-            <span>Open Tactical View</span>
-          </div>
-          <iframe src="/map_prototype.html" className="map-iframe" scrolling="no" tabIndex="-1"></iframe>
+          {session && <GameMap seed={session.seed} mapSnapshot={session.map_snapshot} onSnapshotChange={saveMapSnapshot} />}
         </div>
       </div>
       

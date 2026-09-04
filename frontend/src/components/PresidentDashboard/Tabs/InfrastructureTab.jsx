@@ -1,18 +1,18 @@
-import React, { useState, useEffect } from 'react';
-import { Truck, Pickaxe, MapPin, Expand, Plus } from 'lucide-react';
+import React, { useState } from 'react';
+import { Truck, Pickaxe, MapPin, Plus } from 'lucide-react';
 import { Chart as ChartJS, CategoryScale, LinearScale, BarElement, ArcElement, Title, Tooltip, Legend } from 'chart.js';
 import { Bar, Doughnut } from 'react-chartjs-2';
+import GameMap from '../../GameMap';
+import { useGame } from '../../../context/GameContext';
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, ArcElement, Title, Tooltip, Legend);
 
 export default function InfrastructureTab({ setBudget, onOpenProjectModal }) {
+  const { session, saveMapSnapshot } = useGame();
   const [railBudget, setRailBudget] = useState(450);
   const [portBudget, setPortBudget] = useState(200);
-
-  useEffect(() => {
-    // Notify parent to adjust global budget when these change
-    // This is a simplified mockup logic
-  }, [railBudget, portBudget]);
+  const railroadCount = session?.map_snapshot?.edges?.filter((edge) => edge.has_railroad).length || 0;
+  const portCount = session?.map_snapshot?.cities?.filter((city) => city.is_port).length || 0;
 
   const logisticsData = {
     labels: ['Sea Freight', 'Rail', 'Air'],
@@ -76,25 +76,8 @@ export default function InfrastructureTab({ setBudget, onOpenProjectModal }) {
         <div className="card-header">
           <h3 className="card-title"><Pickaxe /> Active Projects</h3>
         </div>
-        <div className="data-list">
-          <div className="data-item">
-            <div className="data-item-info">
-              <h4>Northern Railway Exp.</h4>
-              <p>Est. Completion: Round 4</p>
-            </div>
-            <div className="data-item-value text-yellow">60%</div>
-          </div>
-          <div className="data-item">
-            <div className="data-item-info">
-              <h4>Valdoria Port Upgrade</h4>
-              <p>Est. Completion: Round 3</p>
-            </div>
-            <div className="data-item-value text-green">95%</div>
-          </div>
-        </div>
-        <button className="btn" style={{ marginTop: '1.5rem' }} onClick={onOpenProjectModal}>
-          <Plus size={16} /> Propose New Project
-        </button>
+        <div className="data-list"><div className="data-item"><span>Railroad segments built</span><span className="data-item-value text-blue">{railroadCount}</span></div><div className="data-item"><span>Ports in map snapshot</span><span className="data-item-value text-green">{portCount}</span></div></div>
+        <button className="btn" style={{ marginTop: '1.5rem' }} onClick={onOpenProjectModal}><Plus size={16} /> Propose New Project</button>
       </div>
 
       {/* Infrastructure Budget */}
@@ -133,11 +116,7 @@ export default function InfrastructureTab({ setBudget, onOpenProjectModal }) {
           <h3 className="card-title"><MapPin /> Territory Map</h3>
         </div>
         <div className="map-widget">
-          <div className="map-overlay" onClick={() => window.open('/map_prototype.html', '_blank')}>
-            <Expand />
-            <span>See Map</span>
-          </div>
-          <iframe src="/map_prototype.html" className="map-iframe" scrolling="no" tabIndex="-1"></iframe>
+          {session && <GameMap seed={session.seed} mapSnapshot={session.map_snapshot} onSnapshotChange={saveMapSnapshot} />}
         </div>
       </div>
     </section>

@@ -6,7 +6,7 @@ import './index.css';
 import { GameProvider, useGame } from './context/GameContext';
 
 function GameShell() {
-  const { loading, error, session, nation, company, advance } = useGame();
+  const { loading, error, session, nation, company, advance, saveMapSnapshot } = useGame();
 
   const [role, setRole] = useState('executive');
   const [isPlanningMode, setIsPlanningMode] = useState(false);
@@ -56,7 +56,7 @@ function GameShell() {
       {role === 'executive' && <ExecutiveDashboard />}
       {role === 'map' && (
           <div style={{ width: '100vw', height: '100vh', display: 'flex', justifyContent: 'center', alignItems: 'center', backgroundColor: '#1e1e1e' }}>
-              <GameMap seed={session.seed} isPlanningMode={isPlanningMode} />
+              <GameMap seed={session.seed} mapSnapshot={session.map_snapshot} onSnapshotChange={saveMapSnapshot} isPlanningMode={isPlanningMode} />
           </div>
       )}
     </>

@@ -1,5 +1,5 @@
 import React from 'react';
-import { Truck, Shield, LineChart, Landmark, Globe, ArrowLeft } from 'lucide-react';
+import { Truck, Shield, LineChart, Landmark, Globe } from 'lucide-react';
 import { useGame } from '../../context/GameContext';
 
 export default function Sidebar({ activeTab, setActiveTab }) {
@@ -38,9 +38,7 @@ export default function Sidebar({ activeTab, setActiveTab }) {
       </nav>
 
       <div className="sidebar-footer">
-        <a href="/map_prototype.html" className="back-btn">
-          <ArrowLeft size={16} /> Back to World Map
-        </a>
+        <span className="back-btn">Use Map View in the top navigation</span>
       </div>
     </aside>
   );

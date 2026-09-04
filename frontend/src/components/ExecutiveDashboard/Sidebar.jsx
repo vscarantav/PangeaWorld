@@ -38,10 +38,7 @@ export default function Sidebar({ activeTab, setActiveTab }) {
       </nav>
 
       <div className="sidebar-footer">
-        <a href="#" className="back-btn">
-          <i className="fa-solid fa-arrow-right-from-bracket"></i>
-          Logout
-        </a>
+        <span className="back-btn">Session controls are in the top navigation</span>
       </div>
     </aside>
   );

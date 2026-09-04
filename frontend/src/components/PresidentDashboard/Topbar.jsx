@@ -1,16 +1,13 @@
 import React, { useState } from 'react';
-import { Mail, Briefcase, AlertCircle } from 'lucide-react';
+import { Mail } from 'lucide-react';
 import { useGame } from '../../context/GameContext';
 
 export default function Topbar({ budget }) {
   const { nation, session } = useGame();
   const [showInbox, setShowInbox] = useState(false);
 
-  // Mock lobbying requests
-  const requests = [
-    { id: 1, company: "Valdoria Heavy Industries", request: "We urgently request a new railroad connection to the Northern Sector to reduce steel transport costs.", type: "urgent" },
-    { id: 2, company: "Global Agritech", request: "Please consider lowering corporate tax rates. Our margins are shrinking due to inflation.", type: "normal" }
-  ];
+  const requests = [];
+  const availableBudget = Number(nation?.treasury ?? budget ?? 0);
 
   return (
     <header className="topbar">
@@ -35,6 +32,7 @@ export default function Topbar({ budget }) {
             <div style={{ position: 'absolute', top: '100%', right: 0, width: '350px', background: 'var(--bg-panel)', border: '1px solid var(--border-light)', borderRadius: '8px', padding: '1rem', marginTop: '1rem', zIndex: 50, backdropFilter: 'var(--glass-blur)' }}>
               <h3 style={{ marginBottom: '1rem', fontSize: '1rem', borderBottom: '1px solid var(--border-light)', paddingBottom: '0.5rem' }}>Lobbying Requests</h3>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                {requests.length === 0 && <p className="text-muted">No lobbying requests recorded for this session.</p>}
                 {requests.map(req => (
                   <div key={req.id} style={{ background: 'rgba(0,0,0,0.3)', padding: '0.75rem', borderRadius: '6px' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.5rem' }}>
@@ -56,7 +54,7 @@ export default function Topbar({ budget }) {
         <div className="kpi">
           <span className="kpi-label">Available Budget</span>
           <span className={`kpi-value ${budget >= 0 ? 'text-green' : 'text-red'}`}>
-            ${budget.toLocaleString()}M
+            ${availableBudget.toLocaleString()}M
           </span>
         </div>
         <div className="kpi">
@@ -69,11 +67,11 @@ export default function Topbar({ budget }) {
         </div>
         <div className="kpi">
           <span className="kpi-label">Approval Rating</span>
-          <span className="kpi-value">68%</span>
+          <span className="kpi-value">Not tracked</span>
         </div>
         <div className="kpi">
           <span className="kpi-label">FMI Debt Ratio</span>
-          <span className="kpi-value text-yellow">42%</span>
+          <span className="kpi-value text-yellow">Not tracked</span>
         </div>
       </div>
     </header>

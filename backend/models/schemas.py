@@ -1,4 +1,4 @@
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field, NonNegativeFloat
 from typing import List, Dict, Any, Optional
 from pydantic import Field
 from datetime import datetime
@@ -71,6 +71,29 @@ class DecisionBase(BaseModel):
 
 class DecisionCreate(DecisionBase):
     pass
+
+
+class PresidentDecisionData(BaseModel):
+    """The supported Phase 1 presidential controls."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    government_spending: float = Field(default=0.0, ge=0.0)
+    tax_rate: Optional[float] = Field(default=None, ge=0.0, le=1.0)
+    income_tax: Optional[float] = Field(default=None, ge=0.0, le=1.0)
+    tariffs: Optional[float] = Field(default=None, ge=0.0, le=1.0)
+    immigration: Optional[float] = Field(default=None, ge=-0.05, le=0.05)
+    resource_consumption: Dict[str, float] = Field(default_factory=dict)
+
+
+class CompanyDecisionData(BaseModel):
+    """The supported Phase 1 company controls."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    price: Optional[float] = Field(default=None, gt=0.0)
+    headcount: int = Field(default=0, ge=0, le=1000000)
+    production_units: NonNegativeFloat = Field(default=1.0, le=1000000)
 
 class Decision(DecisionBase):
     id: int

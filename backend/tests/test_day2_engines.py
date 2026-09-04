@@ -27,7 +27,7 @@ def nation_fixture():
 def test_economy_formulas_are_deterministic():
     nation = nation_fixture()
     assert calculate_gdp(nation, government_spending=10) == 185.0
-    assert calculate_cpi(nation, {"Energy": 60}) == 50.0
+    assert calculate_cpi(nation, {"Energy": 60}) == 150.0
     assert calculate_inflation(105, 100) == 5.0
     assert calculate_unemployment(75, 100) == 25.0
     assert calculate_trade_balance([100, 25], [40]) == 85.0
@@ -113,3 +113,37 @@ def test_three_round_single_nation_walkthrough():
         advance_phase(db, session)
     assert session.current_round == 4
     assert len([round_ for round_ in session.rounds if round_.number <= 3 and round_.events]) == 3
+    assert all(round_.results["nations"] for round_ in session.rounds if round_.number <= 3)
+
+
+def test_decisions_change_company_state_and_policy_state():
+    engine = create_engine("sqlite:///:memory:")
+    Base.metadata.create_all(engine)
+    db = sessionmaker(bind=engine)()
+    session = GameSession(seed="decision-seed", phase=PhaseEnum.PLANNING)
+    db.add(session); db.commit(); seed_game_session(db, session.id)
+    nation = db.query(Nation).filter_by(session_id=session.id).first()
+    company = nation.companies[0]
+    starting_revenue = company.revenue
+    advance_phase(db, session)
+    submit_decision(db, session, "president", nation.id, {"government_spending": 10, "tax_rate": 0.3})
+    advance_phase(db, session)
+    submit_decision(db, session, "company", company.id, {"price": 150, "headcount": 20, "production_units": 1.1})
+    advance_phase(db, session); advance_phase(db, session)
+    db.refresh(nation); db.refresh(company)
+    assert nation.policies["tax_rate"] == 0.3
+    assert company.products["Widget"]["price"] == 150
+    assert company.revenue != starting_revenue
+    assert company.market_share > 0
+
+
+def test_overspending_is_rejected():
+    engine = create_engine("sqlite:///:memory:")
+    Base.metadata.create_all(engine)
+    db = sessionmaker(bind=engine)()
+    session = GameSession(seed="budget-seed", phase=PhaseEnum.PLANNING)
+    db.add(session); db.commit(); seed_game_session(db, session.id)
+    nation = db.query(Nation).filter_by(session_id=session.id).first()
+    advance_phase(db, session)
+    with pytest.raises(ValueError, match="treasury"):
+        submit_decision(db, session, "president", nation.id, {"government_spending": nation.treasury + 1})
