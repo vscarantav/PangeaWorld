@@ -802,13 +802,179 @@ graph TB
 
 ---
 
-## Immediate Next Steps
+## Phase 1 Implementation Sprint (Sep 4–8, 2026)
 
-Once you've reviewed this plan and answered the open questions above, I recommend we:
+> **Goal:** Complete Phase 1 ("Foundation & World Building — MVP") — a playable single-nation prototype with a core economy loop, connected dashboards, and a functioning backend.
 
-1. **Finalize nation designs** — flesh out each nation's complete resource profile, geography description, and starting companies
-2. **Define the economy model** — nail down the exact formulas for CPI, GDP, trade, and company financials
-3. **Build Phase 1 MVP** — start with the data model and a single company dashboard to validate the core loop
-4. **Design the world map** — create the fictional geography that students will interact with
+### Phase 0 Completion Status
 
-I'm ready to start building as soon as you give the green light! 🌍
+| Component | Status | Key Files |
+|:---|:---|:---|
+| **Procedural Map Generator** | ✅ Complete | `frontend/src/utils/MapGenerator.js` (829 lines) |
+| **React Canvas Map Renderer** | ✅ Complete | `frontend/src/components/GameMap.jsx` (634 lines) |
+| **Seeded Map Invariant Tests** | ✅ Complete | `frontend/src/utils/MapGenerator.test.js` |
+| **President Dashboard Shell** | ✅ Visual prototype | 5 tabs (Diplomacy, Financing, Indexes, Infrastructure, Intel) + AI Advisor + Project Modal |
+| **Executive Dashboard Shell** | ✅ Visual prototype | 4 tabs (Decisions, Financials, Market, Sourcing) + AI Advisor + News Feed + Supply Chain Map |
+| **Standalone Map Prototype** | ✅ Development preview | `frontend/public/map_prototype.html` |
+| **FastAPI Backend** | ✅ Day 1 foundation | `backend/main.py`, `backend/database.py`, `backend/models/`, `backend/seed_data.py` |
+| **Role Switching UI** | ✅ Working | `frontend/src/App.jsx` — President / Executive / Map toggle |
+
+### Phase 1 Gap Analysis
+
+| Requirement | Status | Priority |
+|:---|:---|:---|
+| **Data schema / models** (Nations, Companies, Resources, Rounds) | ✅ Day 1 complete | 🔴 Critical |
+| **Economy Engine** (GDP, CPI, inflation, trade balances) | ✅ Day 2 foundation | 🔴 Critical |
+| **Resource Engine** (production, consumption, trade flows, scarcity) | ✅ Day 2 foundation | 🔴 Critical |
+| **Round Manager** (state transitions: planning → submission → processing → results) | ✅ Day 2 foundation | 🔴 Critical |
+| **Event Engine** (world events: weather, crises, market shocks) | ❌ Not started | 🟡 Important |
+| **Nation design data** (8 nations with full resource profiles) | ✅ Day 1 complete | 🔴 Critical |
+| **Logistics cost model** (landed cost = base + freight + tariffs + insurance) | ✅ Day 2 foundation | 🟡 Important |
+| **API endpoints** (CRUD for game state, decisions, snapshots) | ✅ Day 2 foundation | 🔴 Critical |
+| **Dashboard ↔ API integration** (live data replaces mock data) | ❌ Not started | 🔴 Critical |
+| **Database setup** (persistent game state) | ✅ Day 1 complete | 🔴 Critical |
+| **Map snapshot persistence** (seed → validate → store → reload) | ❌ Not started | 🟡 Important |
+
+### Day 1 (Sep 4) — Data Models & Database Foundation
+
+**Theme:** _"Build the skeleton — every entity in the game gets a Python model and a database table."_
+
+#### [NEW] `backend/models/` — SQLAlchemy / Pydantic models
+
+Full data schema from the architecture (lines 294–342):
+
+- `Nation` — id, name, archetype, gdp, cpi, inflation, unemployment, trade_balance, military_atk, military_def, policies (tax, tariffs, subsidies), treasury
+- `Company` — id, nation_id, name, revenue, cogs, gross_margin, net_profit, cash, market_share, products, supply_chain_config
+- `Resource` — id, type (Energy/Minerals/Agriculture/Technology/Labor/Capital), nation_id, production_rate, stockpile, depletion_rate
+- `Round` — id, game_session_id, number (1–7), status (planning/submitted/processing/complete), events, presidential_decisions, company_decisions
+- `GameSession` — id, seed, map_snapshot, current_round, created_at, status
+- `MapSnapshot` — id, session_id, validated_map_json (entire generated map stored after invariant validation)
+- `Decision` — id, round_id, player_type (president/company), entity_id, decision_data (JSON), submitted_at
+
+#### [NEW] `backend/database.py` — Database connection & session management
+- SQLite for local development (swap to PostgreSQL for deployment later)
+- Async SQLAlchemy engine with FastAPI dependency injection
+
+#### [NEW] `backend/seed_data.py` — Nation starting profiles
+- All 8 nations with resource profiles, starting GDP, military indices, and geographic data
+- Starting resource allocations per nation (asymmetric by design)
+- Starting company templates (10–15 per nation)
+
+### Day 2 (Sep 5) — Economy & Resource Engines
+
+**Theme:** _"The math that makes the simulation feel real."_
+
+#### [NEW] `backend/engines/economy.py` — GDP, CPI, Inflation Engine
+- `calculate_gdp(nation)` — sum of all company revenues + government spending + net exports
+- `calculate_cpi(nation, round)` — weighted basket of 6 resource categories; CPI changes based on supply/demand
+- `calculate_inflation(nation)` — (CPI_current / CPI_previous - 1) × 100
+- `calculate_unemployment(nation)` — based on company headcount vs. labor pool
+- `calculate_trade_balance(nation)` — total exports value - total imports value
+
+#### [NEW] `backend/engines/resources.py` — Resource Production & Trade
+- `produce_resources(nation, round)` — each nation produces based on rates; apply depletion
+- `calculate_scarcity(resource_type)` — global supply vs. demand → price multiplier
+- `process_trade(exporter, importer, resource, quantity, route)` — apply landed cost formula
+
+#### [NEW] `backend/engines/logistics.py` — Landed Cost Calculator
+- Implements the landed cost formula: `Landed Cost = Base Price + (Freight × Distance × Mode Multiplier) + Tariffs + Insurance + Port Fees`
+- Mode multipliers: Sea ($2/unit), River ($5/unit), Rail ($12/unit), Air ($30/unit)
+- Distance calculation from map grid (100km per edge)
+
+#### [NEW] `backend/engines/round_manager.py` — Round Lifecycle
+- `advance_phase(session)` — planning → presidential → company → processing → results
+- `process_round(session)` — orchestrates all engines after both deadlines pass
+- `apply_auto_decisions(entity)` — suboptimal defaults for missed submissions
+- `generate_round_results(session)` — snapshots for all nations/companies
+
+### Day 3 (Sep 6) — API Layer & Game Session Endpoints
+
+**Theme:** _"Everything the frontend needs to talk to."_
+
+#### [NEW] `backend/routes/sessions.py` — Game session management
+- `POST /api/sessions` — create new game (generates seed, runs map generation, validates invariants, persists snapshot)
+- `GET /api/sessions/{id}` — get session state (current round, phase, map)
+- `POST /api/sessions/{id}/advance` — advance to next phase (triggers round processing)
+
+#### [NEW] `backend/routes/nations.py` — Nation data & presidential actions
+- `GET /api/sessions/{id}/nations` — all nations with current stats
+- `GET /api/sessions/{id}/nations/{nation_id}` — detailed nation view (GDP, CPI, resources, military)
+- `POST /api/sessions/{id}/nations/{nation_id}/decisions` — submit presidential decisions
+
+#### [NEW] `backend/routes/companies.py` — Company data & executive actions
+- `GET /api/sessions/{id}/companies` — all companies
+- `GET /api/sessions/{id}/companies/{company_id}` — detailed company view (financials, supply chain)
+- `POST /api/sessions/{id}/companies/{company_id}/decisions` — submit executive decisions
+
+#### [NEW] `backend/routes/market.py` — Global market data
+- `GET /api/sessions/{id}/market` — commodity prices, exchange rates, shipping index
+- `GET /api/sessions/{id}/market/resources/{type}` — available suppliers with landed cost estimates
+
+#### [MODIFY] `backend/main.py` — Wire up all routers
+
+### Day 4 (Sep 7) — Frontend ↔ Backend Integration
+
+**Theme:** _"Mock data out, live API data in."_
+
+#### [NEW] `frontend/src/api/client.js` — API client
+- Base URL config, fetch wrappers, error handling
+- Functions: `createSession()`, `getSession()`, `getNations()`, `getNation()`, `getCompanies()`, `getCompany()`, `submitDecision()`, `getMarket()`, `advanceRound()`
+
+#### [NEW] `frontend/src/context/GameContext.jsx` — React context for game state
+- Holds current session, nation, company, round, and phase
+- Auto-refreshes on round transitions
+- Provides `useGame()` hook for all components
+
+#### [MODIFY] President Dashboard tabs — replace mock data with API calls
+- **IndexesTab**: Live GDP, CPI, inflation, unemployment, trade balance
+- **InfrastructureTab**: Real infrastructure data from map snapshot + nation state
+- **FinancingTab**: Live treasury, FMI debt status, budget allocation
+- **DiplomacyTab**: Active treaties and proposals (simplified for Phase 1)
+- **IntelTab**: Public data for other nations
+
+#### [MODIFY] Executive Dashboard tabs — replace mock data with API calls
+- **FinancialsTab**: Live revenue, COGS, margin, profit, cash
+- **SourcingTab**: Real resource marketplace with landed cost estimates
+- **MarketTab**: Live market share, competitor pricing, demand curves
+- **DecisionsTab**: Functional form that submits to API
+
+### Day 5 (Sep 8) — Event Engine, Polish & End-to-End Verification
+
+**Theme:** _"Play through a full 3-round single-nation game and fix everything that breaks."_
+
+#### [NEW] `backend/engines/events.py` — World event system
+- Event categories: Natural disasters, political crises, market shocks, health emergencies, tech breakthroughs
+- `generate_round_events(session, round)` — randomly inject 1–2 minor events per round
+- Events modify resource production, prices, infrastructure, and approval ratings
+
+#### [MODIFY] `frontend/src/components/ExecutiveDashboard/Widgets/NewsFeed.jsx`
+- Wire to `GET /api/sessions/{id}/news` endpoint
+- Display system-generated event articles and round results
+
+#### [NEW] `backend/tests/` — Backend test suite
+- `test_economy.py` — CPI calculation, GDP computation, inflation math
+- `test_resources.py` — production, depletion, trade flows
+- `test_round_manager.py` — phase transitions, auto-decisions
+- `test_api.py` — endpoint integration tests
+
+#### End-to-End Verification
+1. Create a new game session → verify map invariants pass
+2. Submit presidential and company decisions for Rounds 1–3
+3. Advance rounds → verify economy engine produces sane outputs
+4. Verify dashboards reflect updated state after each round
+5. Confirm resource depletion, scarcity effects, and event injection work
+
+### Sprint Verification Commands
+```bash
+# Frontend map invariants (existing)
+cd frontend && npm test
+
+# Backend engine tests (new)
+cd backend && python -m pytest tests/ -v
+
+# API integration tests
+cd backend && python -m pytest tests/test_api.py -v
+```
+
+> [!WARNING]
+> Day 2 (Economy Engine) is the highest-risk day. The math needs to produce "realistic-feeling" results. Start with simplified formulas and tune iteratively rather than aiming for full fidelity on day one.
