@@ -1,9 +1,14 @@
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
-from database import get_db
-from engines.logistics import calculate_landed_cost
-from models.domain import Resource, ResourceType
+try:
+    from ..database import get_db
+    from ..engines.logistics import calculate_landed_cost
+    from ..models.domain import Resource, ResourceType
+except ImportError:
+    from database import get_db
+    from engines.logistics import calculate_landed_cost
+    from models.domain import Resource, ResourceType
 from .helpers import get_session_or_404
 
 router = APIRouter(prefix="/api/sessions/{session_id}/market", tags=["market"])

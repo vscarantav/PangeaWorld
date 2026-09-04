@@ -1,6 +1,8 @@
 import React from 'react';
+import { useGame } from '../../context/GameContext';
 
 export default function Sidebar({ activeTab, setActiveTab }) {
+  const { company, nation } = useGame();
   const tabs = [
     { id: 'financials', icon: 'fa-solid fa-chart-line', label: 'Financials' },
     { id: 'sourcing', icon: 'fa-solid fa-truck-fast', label: 'Sourcing' },
@@ -16,8 +18,8 @@ export default function Sidebar({ activeTab, setActiveTab }) {
             ZI
           </div>
           <div className="nation-info">
-            <h2>Zephyr Ind.</h2>
-            <p>Zephyria</p>
+            <h2>{company?.name || 'Loading company'}</h2>
+            <p>{nation?.name || 'Loading nation'}</p>
           </div>
         </div>
       </div>

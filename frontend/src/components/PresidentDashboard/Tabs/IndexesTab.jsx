@@ -2,10 +2,13 @@ import React, { useState } from 'react';
 import { LineChart, Gavel, FileText } from 'lucide-react';
 import { Chart as ChartJS, CategoryScale, LinearScale, PointElement, LineElement, Title, Tooltip, Legend, Filler } from 'chart.js';
 import { Line } from 'react-chartjs-2';
+import { useGame } from '../../../context/GameContext';
 
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Title, Tooltip, Legend, Filler);
 
 export default function IndexesTab({ setBudget }) {
+  const { nation, session, submitNation } = useGame();
+  const [message, setMessage] = useState('');
   const [socialBudget, setSocialBudget] = useState(400);
   const [subsidyBudget, setSubsidyBudget] = useState(250);
 
@@ -18,7 +21,7 @@ export default function IndexesTab({ setBudget }) {
     labels: ['Round 1', 'Round 2', 'Round 3 (Current)'],
     datasets: [{
       label: 'GDP ($ Trillions)',
-      data: [1.10, 1.18, 1.24],
+      data: [Number(nation?.gdp || 0)],
       borderColor: '#10b981',
       backgroundColor: 'rgba(16, 185, 129, 0.2)', // Simplified gradient
       borderWidth: 3,
@@ -99,7 +102,11 @@ export default function IndexesTab({ setBudget }) {
             <span className="range-value">{immigration > 0 ? '+' : ''}{immigration}%</span>
           </div>
         </div>
-        <button className="btn" style={{ marginTop: '1rem' }}>Apply Policies</button>
+          <button className="btn" style={{ marginTop: '1rem' }} disabled={session?.phase !== 'presidential'} onClick={async () => {
+            try { await submitNation({ government_spending: socialBudget + subsidyBudget, tax_rate: corpTax / 100, income_tax: incTax / 100, tariffs: tariff / 100 }); setMessage('Presidential decision saved.'); }
+            catch (err) { setMessage(err.message); }
+          }}>Apply Policies</button>
+          {message && <p className="text-muted" style={{ marginTop: 8 }}>{message}</p>}
       </div>
 
       {/* NEW: CPI Breakdown */}

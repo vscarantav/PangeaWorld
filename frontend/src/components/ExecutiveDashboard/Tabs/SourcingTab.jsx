@@ -1,7 +1,10 @@
 import React from 'react';
 import SupplyChainMap from '../Widgets/SupplyChainMap';
+import { useGame } from '../../../context/GameContext';
 
 export default function SourcingTab() {
+  const { market } = useGame();
+  const resources = market?.resources || {};
   return (
     <div className="tab-content">
       <div className="dashboard-grid">
@@ -23,10 +26,7 @@ export default function SourcingTab() {
           <div className="input-group">
             <label>Required Resource</label>
             <select style={{ width: '100%', padding: '0.75rem', background: 'rgba(255,255,255,0.1)', border: '1px solid var(--border-light)', color: 'white', borderRadius: '8px' }}>
-              <option>Steel (Korvath)</option>
-              <option>Oil (Valdoria)</option>
-              <option>Timber (Nordvik)</option>
-              <option>Grain (Terranova)</option>
+              {Object.keys(resources).map((resource) => <option key={resource}>{resource}</option>)}
             </select>
           </div>
           

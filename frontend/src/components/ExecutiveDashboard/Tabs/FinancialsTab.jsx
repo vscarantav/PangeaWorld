@@ -1,6 +1,8 @@
 import React from 'react';
+import { useGame } from '../../../context/GameContext';
 
 export default function FinancialsTab() {
+  const { company } = useGame();
   return (
     <div className="tab-content">
       <div className="dashboard-grid">
@@ -26,14 +28,14 @@ export default function FinancialsTab() {
               <div className="data-item-info">
                 <h4>Gross Revenue</h4>
               </div>
-              <span className="data-item-value text-blue">$450,200,000</span>
+                <span className="data-item-value text-blue">${Number(company?.revenue || 0).toLocaleString()}</span>
             </div>
             <div className="data-item">
               <div className="data-item-info">
                 <h4>Cost of Goods Sold (COGS)</h4>
                 <p>Includes raw materials and production costs</p>
               </div>
-              <span className="data-item-value text-red">-$280,000,000</span>
+              <span className="data-item-value text-red">-${Number(company?.cogs || 0).toLocaleString()}</span>
             </div>
             <div className="data-item">
               <div className="data-item-info">
@@ -46,7 +48,7 @@ export default function FinancialsTab() {
               <div className="data-item-info">
                 <h4>Gross Margin</h4>
               </div>
-              <span className="data-item-value positive">26.1%</span>
+              <span className="data-item-value positive">{Number(company?.gross_margin || 0).toFixed(1)}%</span>
             </div>
           </div>
         </div>
@@ -88,7 +90,7 @@ export default function FinancialsTab() {
               <div className="data-item-info">
                 <h4>Net Profit</h4>
               </div>
-              <span className="data-item-value positive">$42,500,000</span>
+              <span className="data-item-value positive">${Number(company?.net_profit || 0).toLocaleString()}</span>
             </div>
           </div>
         </div>

@@ -1,7 +1,10 @@
 from fastapi import HTTPException
 from sqlalchemy.orm import Session
 
-from models.domain import GameSession
+try:
+    from ..models.domain import GameSession
+except ImportError:
+    from models.domain import GameSession
 
 
 def get_session_or_404(db: Session, session_id: int) -> GameSession:

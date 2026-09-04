@@ -827,13 +827,13 @@ graph TB
 | **Economy Engine** (GDP, CPI, inflation, trade balances) | ✅ Day 2 foundation | 🔴 Critical |
 | **Resource Engine** (production, consumption, trade flows, scarcity) | ✅ Day 2 foundation | 🔴 Critical |
 | **Round Manager** (state transitions: planning → submission → processing → results) | ✅ Day 2 foundation | 🔴 Critical |
-| **Event Engine** (world events: weather, crises, market shocks) | ❌ Not started | 🟡 Important |
+| **Event Engine** (world events: weather, crises, market shocks) | ✅ Day 5 foundation | 🟡 Important |
 | **Nation design data** (8 nations with full resource profiles) | ✅ Day 1 complete | 🔴 Critical |
 | **Logistics cost model** (landed cost = base + freight + tariffs + insurance) | ✅ Day 2 foundation | 🟡 Important |
 | **API endpoints** (CRUD for game state, decisions, snapshots) | ✅ Day 2 foundation | 🔴 Critical |
-| **Dashboard ↔ API integration** (live data replaces mock data) | ❌ Not started | 🔴 Critical |
+| **Dashboard ↔ API integration** (live data replaces mock data) | ✅ Day 4 foundation | 🔴 Critical |
 | **Database setup** (persistent game state) | ✅ Day 1 complete | 🔴 Critical |
-| **Map snapshot persistence** (seed → validate → store → reload) | ❌ Not started | 🟡 Important |
+| **Map snapshot persistence** (seed → validate → store → reload) | ✅ Phase 1 foundation | 🟡 Important |
 
 ### Day 1 (Sep 4) — Data Models & Database Foundation
 

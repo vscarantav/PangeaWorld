@@ -2,7 +2,10 @@ from sqlalchemy import Column, Integer, String, Float, ForeignKey, JSON, DateTim
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 import enum
-from database import Base
+try:
+    from ..database import Base
+except ImportError:
+    from database import Base
 
 class PhaseEnum(str, enum.Enum):
     PLANNING = "planning"

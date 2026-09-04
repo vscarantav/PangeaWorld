@@ -1,5 +1,8 @@
 from sqlalchemy.orm import Session
-from models.domain import Nation, Company, Resource, ResourceType, Round, RoundStatus
+try:
+    from .models.domain import Nation, Company, Resource, ResourceType, Round, RoundStatus
+except ImportError:
+    from models.domain import Nation, Company, Resource, ResourceType, Round, RoundStatus
 
 NATIONS_DATA = [
     {

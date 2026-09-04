@@ -2,10 +2,12 @@ import React, { useState } from 'react';
 import { Landmark, Globe } from 'lucide-react';
 import { Chart as ChartJS, CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend } from 'chart.js';
 import { Bar } from 'react-chartjs-2';
+import { useGame } from '../../../context/GameContext';
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend);
 
 export default function FinancingTab({ setBudget }) {
+  const { nation } = useGame();
   const [debtBudget, setDebtBudget] = useState(150);
   const [quotaBudget, setQuotaBudget] = useState(50);
 
@@ -60,7 +62,7 @@ export default function FinancingTab({ setBudget }) {
       <div className="card col-6">
         <div className="card-header">
           <h3 className="card-title"><Globe /> FMI Portal</h3>
-          <span className="text-green">Credit Rating: AA-</span>
+          <span className="text-green">Treasury: ${Number(nation?.treasury || 0).toLocaleString()}M</span>
         </div>
         <div className="data-list">
           <div className="data-item">

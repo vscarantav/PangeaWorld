@@ -2,9 +2,13 @@
 
 from sqlalchemy.orm import Session
 
-from models.domain import Company, Decision, GameSession, Nation, PhaseEnum, Round, RoundStatus
+try:
+    from ..models.domain import Company, Decision, GameSession, Nation, PhaseEnum, Round, RoundStatus
+except ImportError:
+    from models.domain import Company, Decision, GameSession, Nation, PhaseEnum, Round, RoundStatus
 from .economy import calculate_cpi, calculate_gdp, calculate_inflation, calculate_unemployment
 from .resources import produce_resources
+from .events import event_effects, generate_round_events
 
 
 def _current_round(session: GameSession) -> Round:
@@ -44,20 +48,23 @@ def process_round(db: Session, session: GameSession) -> dict:
     if session.phase != PhaseEnum.PROCESSING:
         raise ValueError("round can only be processed from the processing phase")
     decisions = {(d.player_type, d.entity_id): (d.decision_data or {}) for d in current_round.decisions}
+    current_round.events = generate_round_events(session, current_round)
     results = []
     for nation in session.nations:
         presidential = decisions.get(("president", nation.id), {})
         government_spending = max(0.0, float(presidential.get("government_spending", 0.0)))
         previous_cpi = float(nation.cpi or 100.0)
-        resource_result = produce_resources(nation, current_round.number, presidential.get("resource_consumption"))
+        multipliers, cpi_delta = event_effects(current_round.events or [], nation.id)
+        resource_result = produce_resources(nation, current_round.number, presidential.get("resource_consumption"), multipliers)
         nation.gdp = round(calculate_gdp(nation, government_spending), 4)
-        nation.cpi = round(calculate_cpi(nation), 4)
+        nation.cpi = round(calculate_cpi(nation) + cpi_delta, 4)
         nation.inflation = calculate_inflation(nation.cpi, previous_cpi)
         labor_pool = sum(float(r.stockpile) for r in nation.resources if getattr(r.type, "value", r.type) == "Labor")
         headcount = sum(int((decisions.get(("company", company.id), {}).get("headcount", 0))) for company in nation.companies)
         nation.unemployment = calculate_unemployment(headcount, int(labor_pool)) if labor_pool else float(nation.unemployment or 0.0)
         nation.treasury = round(nation.treasury - government_spending, 4)
-        results.append({"nation_id": nation.id, "gdp": nation.gdp, "cpi": nation.cpi, "inflation": nation.inflation, "resources": resource_result})
+        results.append({"nation_id": nation.id, "gdp": nation.gdp, "cpi": nation.cpi, "inflation": nation.inflation, "resources": resource_result,
+                        "events": [event for event in current_round.events if event.get("nation_id") == nation.id]})
     current_round.status = RoundStatus.COMPLETE
     completed_number = current_round.number
     if completed_number < 7:

@@ -3,16 +3,17 @@
 from .logistics import calculate_landed_cost
 
 
-def produce_resources(nation, round_number: int = 1, consumption: dict[str, float] | None = None) -> list[dict]:
+def produce_resources(nation, round_number: int = 1, consumption: dict[str, float] | None = None, production_multipliers: dict[str, float] | None = None) -> list[dict]:
     """Apply one round of production, depletion, and optional consumption."""
     if round_number < 1:
         raise ValueError("round_number must be positive")
     consumption = consumption or {}
+    production_multipliers = production_multipliers or {}
     results = []
     for resource in nation.resources:
         name = getattr(resource.type, "value", resource.type)
         before = float(resource.stockpile or 0.0)
-        produced = max(0.0, float(resource.production_rate or 0.0))
+        produced = max(0.0, float(resource.production_rate or 0.0) * float(production_multipliers.get(name, 1.0)))
         depleted = min(produced, max(0.0, float(resource.depletion_rate or 0.0)))
         consumed = min(before + produced - depleted, max(0.0, float(consumption.get(name, 0.0))))
         resource.stockpile = round(max(0.0, before + produced - depleted - consumed), 4)

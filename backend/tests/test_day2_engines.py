@@ -12,6 +12,7 @@ from database import Base
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from seed_data import seed_game_session
+from engines.events import generate_round_events
 
 
 def nation_fixture():
@@ -83,3 +84,32 @@ def test_round_manager_processes_decisions_and_advances():
     assert db.get(Nation, nation.id).treasury < 5000.0
     assert session.current_round == 2
     assert session.phase == PhaseEnum.PLANNING
+
+
+def test_events_are_seeded_and_repeatable():
+    session = SimpleNamespace(seed="same-seed", nations=[SimpleNamespace(id=1), SimpleNamespace(id=2)])
+    round_ = SimpleNamespace(number=1)
+    first = generate_round_events(session, round_)
+    second = generate_round_events(session, round_)
+    assert first == second
+    assert 1 <= len(first) <= 2
+    assert all(event["nation_id"] in {1, 2} for event in first)
+
+
+def test_three_round_single_nation_walkthrough():
+    engine = create_engine("sqlite:///:memory:")
+    Base.metadata.create_all(engine)
+    db = sessionmaker(bind=engine)()
+    session = GameSession(seed="three-round-seed", phase=PhaseEnum.PLANNING)
+    db.add(session); db.commit(); seed_game_session(db, session.id)
+    nation = db.query(Nation).filter_by(session_id=session.id).first()
+    company = nation.companies[0]
+    for _ in range(3):
+        advance_phase(db, session)
+        submit_decision(db, session, "president", nation.id, {"government_spending": 10})
+        advance_phase(db, session)
+        submit_decision(db, session, "company", company.id, {"headcount": 20})
+        advance_phase(db, session)
+        advance_phase(db, session)
+    assert session.current_round == 4
+    assert len([round_ for round_ in session.rounds if round_.number <= 3 and round_.events]) == 3

@@ -2,8 +2,12 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
-from database import get_db
-from engines.round_manager import submit_decision
+try:
+    from ..database import get_db
+    from ..engines.round_manager import submit_decision
+except ImportError:
+    from database import get_db
+    from engines.round_manager import submit_decision
 from .helpers import get_session_or_404
 
 router = APIRouter(prefix="/api/sessions/{session_id}", tags=["decisions"])

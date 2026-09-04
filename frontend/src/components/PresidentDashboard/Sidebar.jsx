@@ -1,7 +1,9 @@
 import React from 'react';
 import { Truck, Shield, LineChart, Landmark, Globe, ArrowLeft } from 'lucide-react';
+import { useGame } from '../../context/GameContext';
 
 export default function Sidebar({ activeTab, setActiveTab }) {
+  const { nation } = useGame();
   const tabs = [
     { id: 'infrastructure', label: 'Infrastructure', icon: <Truck size={20} /> },
     { id: 'intel', label: 'Intel & Military', icon: <Shield size={20} /> },
@@ -16,8 +18,8 @@ export default function Sidebar({ activeTab, setActiveTab }) {
         <div className="nation-brand">
           <div className="flag-icon">V</div>
           <div className="nation-info">
-            <h2>Valdoria</h2>
-            <p>The Republic</p>
+            <h2>{nation?.name || 'Loading nation'}</h2>
+            <p>{nation?.archetype || 'National government'}</p>
           </div>
         </div>
       </div>

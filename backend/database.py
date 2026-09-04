@@ -1,7 +1,10 @@
+from pathlib import Path
+
 from sqlalchemy import create_engine
 from sqlalchemy.orm import declarative_base, sessionmaker
 
-SQLALCHEMY_DATABASE_URL = "sqlite:///./pangeaworld.db"
+DATABASE_PATH = Path(__file__).resolve().with_name("pangeaworld.db")
+SQLALCHEMY_DATABASE_URL = f"sqlite:///{DATABASE_PATH.as_posix()}"
 
 # Setting check_same_thread=False is needed for SQLite when used with FastAPI
 engine = create_engine(

@@ -1,8 +1,12 @@
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
-from database import get_db
-from models.domain import Company, Nation
+try:
+    from ..database import get_db
+    from ..models.domain import Company, Nation
+except ImportError:
+    from database import get_db
+    from models.domain import Company, Nation
 from .helpers import get_session_or_404, serialize_company
 
 router = APIRouter(prefix="/api/sessions/{session_id}/companies", tags=["companies"])

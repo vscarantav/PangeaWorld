@@ -1,7 +1,9 @@
 import React, { useState } from 'react';
 import { Mail, Briefcase, AlertCircle } from 'lucide-react';
+import { useGame } from '../../context/GameContext';
 
 export default function Topbar({ budget }) {
+  const { nation, session } = useGame();
   const [showInbox, setShowInbox] = useState(false);
 
   // Mock lobbying requests
@@ -13,7 +15,7 @@ export default function Topbar({ budget }) {
   return (
     <header className="topbar">
       <div className="topbar-title">
-        <h1>Presidential Terminal <span style={{ color: 'var(--text-muted)', fontSize: '1rem', fontWeight: 'normal', marginLeft: '10px' }}>Round 3 (Year 2029)</span></h1>
+        <h1>Presidential Terminal <span style={{ color: 'var(--text-muted)', fontSize: '1rem', fontWeight: 'normal', marginLeft: '10px' }}>Round {session?.current_round}</span></h1>
       </div>
       <div className="kpi-container">
         
@@ -59,11 +61,11 @@ export default function Topbar({ budget }) {
         </div>
         <div className="kpi">
           <span className="kpi-label">Trade Balance</span>
-          <span className="kpi-value text-green">+$420M</span>
+          <span className="kpi-value text-green">${Number(nation?.trade_balance || 0).toLocaleString()}M</span>
         </div>
         <div className="kpi">
           <span className="kpi-label">National GDP</span>
-          <span className="kpi-value text-green">$1.24 Trillion</span>
+          <span className="kpi-value text-green">${Number(nation?.gdp || 0).toLocaleString()}M</span>
         </div>
         <div className="kpi">
           <span className="kpi-label">Approval Rating</span>

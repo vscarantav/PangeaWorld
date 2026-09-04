@@ -4,14 +4,24 @@ from fastapi import FastAPI, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
 
-from database import engine, Base, get_db
-from models.domain import GameSession, PhaseEnum
-from seed_data import seed_game_session
-from routes.sessions import router as sessions_router
-from routes.nations import router as nations_router
-from routes.companies import router as companies_router
-from routes.decisions import router as decisions_router
-from routes.market import router as market_router
+try:
+    from .database import engine, Base, get_db
+    from .models.domain import GameSession, PhaseEnum
+    from .seed_data import seed_game_session
+    from .routes.sessions import router as sessions_router
+    from .routes.nations import router as nations_router
+    from .routes.companies import router as companies_router
+    from .routes.decisions import router as decisions_router
+    from .routes.market import router as market_router
+except ImportError:  # Allows `uvicorn main:app` from inside backend.
+    from database import engine, Base, get_db
+    from models.domain import GameSession, PhaseEnum
+    from seed_data import seed_game_session
+    from routes.sessions import router as sessions_router
+    from routes.nations import router as nations_router
+    from routes.companies import router as companies_router
+    from routes.decisions import router as decisions_router
+    from routes.market import router as market_router
 
 # Create tables
 Base.metadata.create_all(bind=engine)

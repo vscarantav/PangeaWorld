@@ -1,6 +1,9 @@
 import React from 'react';
+import { useGame } from '../../../context/GameContext';
 
 export default function MarketTab() {
+  const { market, company } = useGame();
+  const widgetPrice = company?.products?.Widget?.price || 0;
   return (
     <div className="tab-content">
       <div className="dashboard-grid">
@@ -27,7 +30,7 @@ export default function MarketTab() {
                 <h4>Zephyr Ind. (You)</h4>
                 <p>Quality: High | Brand: Strong</p>
               </div>
-              <span className="data-item-value">$299.00</span>
+              <span className="data-item-value">${Number(widgetPrice).toFixed(2)}</span>
             </div>
             <div className="data-item">
               <div className="data-item-info">
@@ -47,7 +50,7 @@ export default function MarketTab() {
               <div className="data-item-info">
                 <h4>Global Average</h4>
               </div>
-              <span className="data-item-value text-blue">$349.00</span>
+              <span className="data-item-value text-blue">{market ? 'Live market' : 'Loading'}</span>
             </div>
           </div>
         </div>
