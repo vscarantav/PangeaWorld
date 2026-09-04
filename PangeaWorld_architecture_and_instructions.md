@@ -6,58 +6,73 @@ The current structure of the PangeaWorld repository:
 
 ```
 PangeaWorld/
-├── PangeaWorld_Implementation_Plan.html / .md (Design & Planning Docs)
-├── PangeaWorld_Stakeholder_Presentation.pptx  (Pitch Deck)
+├── PangeaWorld_architecture_and_instructions.md (Canonical architecture and roadmap)
 ├── backend/
 │   └── main.py                                (Initial FastAPI backend setup)
 └── frontend/
     ├── package.json / vite.config.js          (Vite tooling configuration)
     ├── index.html                             (Vite entry point)
-    ├── src/                                   (React source code directory)
+    ├── src/
+    │   ├── components/GameMap.jsx             (React Canvas renderer and interactions)
+    │   └── utils/MapGenerator.js              (Canonical seeded map generator)
+    ├── src/utils/MapGenerator.test.js         (Seeded map-invariant regression suite)
     └── public/
         ├── favicon.svg / icons.svg
-        └── map_prototype.html                 (Monolithic HTML/JS/CSS Canvas Map Prototype)
+        └── map_prototype.html                 (Standalone Canvas map kept behaviorally aligned)
 ```
 
 ## Tools Used
 - **Map Prototype**: Built entirely with Vanilla JavaScript, HTML5 `<canvas>`, and CSS.
 - **Procedural Generation**: Utilizes pure math (composite sine/cosine waves, Voronoi partitioning, and distance calculations) instead of external noise libraries (like Perlin) to generate natural shapes and borders.
-- **Frontend Framework**: Scaffolded using Vite and React (for the future application dashboards).
+- **Frontend Framework**: React single-page application built and served with Vite.
+- **Map Renderer**: HTML5 Canvas hosted inside React. D3.js, Mapbox, and a Next.js migration are not part of the canonical architecture.
 - **Backend Framework**: Scaffolded using Python FastAPI.
 
 ## Expected Behaviors
-- **Organic Procedural Generation**: The `map_prototype.html` generates a uniquely shaped continent upon every reload. The continent shape is calculated using complex sine waves.
+- **Preview Map Generation**: The standalone `map_prototype.html` is a non-authoritative preview. It may generate a new transient layout when reloaded, and its changes are discarded when the page closes.
+- **Game-Session Map Generation**: A real game receives one server-issued seed when the session is created. The generated map must pass all invariants, be persisted as a snapshot, and be reloaded from that snapshot for the full game; refreshing a client must never regenerate it.
 - **Natural Borders**: The 8 countries are divided using a Voronoi diagram based on fixed capital anchor points, enhanced with 2D noise to create squiggly, organic borders.
-- **Map Adjustments**: Zephyria is positioned on the main continent between Nordvik and Drakmoor, reducing Terranova's coastline. Lunara has a small land connection (strait) to the mainland.
+- **Map Adjustments**: Zephyria is positioned on the main continent between Nordvik and Drakmoor, reducing Terranova's coastline. Zephyria is landlocked with no sea access; its core challenge is securing resources and negotiating road access through neighboring nations, and its main resource is cheap labor for other nations opening new cities. Lunara has a small land connection (strait) to the mainland.
+- **Canonical Starting Settlement Counts**: Every nation starts with **exactly 8 cities total**. Port cities are included in this total rather than added on top of it.
+- **Canonical Starting Port Counts**: Nordvik and Lunara each start with **exactly 2 ports**. Drakmoor starts with **exactly 1 port**; it is coastal but has deliberately constrained sea access, not a landlocked nation. All other nations (Valdoria, Terranova, Korvath, Solhaven, and Zephyria) start with **0 ports**. Zephyria is fully landlocked with no sea access.
 - **Interactive Grid**: The map renders an equilateral triangle grid. Players can hover over the edges (which highlight in green/yellow) and click to permanently build railroads.
 - **Dynamic Labels**: The country labels (e.g. "Terranova") dynamically position themselves deep within their respective borders based on the procedural shape formula.
 - **Zoom Controls**: The sidebar features a "Map Controls" panel with a slider to zoom the canvas in and out, preserving interaction accuracy.
 
 ## Architectural Constraints
-- **Procedural Generation Freeze**: The mathematical algorithms governing the procedural generation of the map (including the logic for rivers, mountains, coastlines, country boundaries, and cities) are explicitly **locked and finalized**. Do not modify or update these generation algorithms, nor alter the triangle grid rules dictating where railroads can or cannot be built. The map must continue to randomly generate different layouts on each load using the current formulas, but the underlying terrain logic itself must remain untouched.
+- **Procedural Generation Contract**: The procedural map remains seed-driven and may generate different layouts for different games, but every generated map must satisfy the locked gameplay invariants below. Corrective changes to generation or validation logic are permitted when required to enforce those invariants; changes must be covered by deterministic seed-based tests and must not silently change unrelated terrain rules.
+- **Canonical Frontend Contract**: React + Vite is the only application frontend. HTML Canvas is the canonical map renderer. The standalone HTML map remains a development preview, not a second game client.
+- **Server Authority Contract**: FastAPI owns authoritative game state, decision validation, round transitions, economy calculations, random seeds, and persisted results. React renders server state and submits commands; client calculations may be previews only and cannot determine official outcomes.
+- **Deterministic Simulation Contract**: A stored ruleset version, session seed, starting snapshot, and ordered decision ledger must reproduce the same round results. Authoritative randomness is seeded and executed on the server.
 
 ## Game Rules (As implemented in prototype)
 - **Railroad Construction**: Building a standard railroad costs **$1M** per segment.
 - **Bridges**: Railroads built over river edges cost **$3M** per segment.
-- **Mountain Railroads**: Railroads built on the passible sides of mountains cost **$1.5M** per segment.
+- **Mountain Railroads**: Railroads built on the passable sides of mountains cost **$1.5M** per segment.
 - **Impassable Ocean**: Edges touching ocean triangles cannot be built upon.
-- **Mountain Mazes**: Mountain generation creates clustered mountain ranges. Crucially, every mountain triangle has **exactly 1 passible edge** (with the other 2 being impassable). This forces players to navigate winding valleys and find specific "passes" through mountain ranges, making logistics a strategic challenge.
+- **Mountain Mazes**: Mountain generation creates clustered mountain ranges. Crucially, every mountain triangle has **exactly 1 passable edge** (with the other 2 being impassable). This forces players to navigate winding valleys and find specific "passes" through mountain ranges, making logistics a strategic challenge.
+- **Starting Cities**: Every nation starts with **exactly 8 cities**. A port is a capability assigned to an eligible coastal city and does not increase its nation's settlement count.
+- **Starting Ports**: Nordvik and Lunara each start with **exactly 2 port cities**. Drakmoor starts with **exactly 1 port city**. All other nations (Valdoria, Terranova, Korvath, Solhaven, and Zephyria) start with **0 port cities**. Zephyria is landlocked with no sea access — its strategic challenge is negotiating overland trade routes through neighbors, and its main resource is cheap labor. Port placement may not fall back to a non-coastal tile or create a buildable edge that touches ocean.
 - **Dynamic Cost Calculation**: The UI updates the "Total Project Cost" automatically as railroads are placed.
 - **River Quotas**: Rivers are generated such that Terranova receives approximately 45% of all river tiles, while all other nations receive at least 5% each.
 
 ## Applied vs. Not Yet Applied Planned Features
 
-### ✅ Applied Features (Phase 1 Map Foundations)
+### ✅ Phase 0 — Map & UI Prototype (Current Work)
 - **Grid-Based Construction**: The map is successfully divided into a fine grid where presidents "trace the route" line-by-line.
-- **Distance & Terrain Costs**: Baseline edge traversal costs are implemented (railroads vs. bridges vs. impassable mountains).
+- **Distance & Terrain Costs**: Baseline edge traversal costs and edge restrictions are implemented (railroads vs. bridges, exactly one passable edge per mountain triangle, and no passable edge touching ocean).
 - **8 Nations Geography**: The 8 nations are fully defined and geographically distributed based on the updated positioning logic.
-- **Mountain Ranges**: Distinct, restrictive mountain barriers are implemented.
+- **Mountain Ranges**: Distinct, restrictive mountain barriers are implemented with the one-passable-edge invariant enforced per mountain triangle.
+- **Starting Settlements & Ports**: Start-state allocation enforces exactly 8 cities per nation, exactly 2 ports for Nordvik and Lunara, exactly 1 port for Drakmoor, and 0 ports for all other nations (Valdoria, Terranova, Korvath, Solhaven, and Zephyria). Zephyria is landlocked with no sea access.
+- **React UI Shells**: President and Company Executive dashboard shells, local role switching, charts, forms, and AI/news placeholders exist with mock data. They are visual prototypes, not connected game systems.
+- **Prototype Boundary**: Map edits and dashboard values currently live only in browser memory. Phase 0 contains no authoritative game server, persistence, authentication, multiplayer, or economy processing.
 
-### ⏳ Not Yet Applied Planned Features (Pending Future Phases)
+### ⏳ Not Yet Applied (Phase 1 and Later)
 - **Multiplayer Turn System**: The 48-hour staggered round system (Presidential vs. Company phases) is not yet built.
 - **Macro/Micro Economy Engine**: GDP, CPI, inflation, pricing, and company profitability loops are not yet implemented.
 - **AI Agent Integration**: The embedded Gemini AI Advisor and the Drakmoor AI antagonist bot are not yet wired up.
-- **Dashboards**: The President dashboard, Company Executive dashboard, FMI portal, and UN Assembly chat are pending React implementation.
+- **Dashboard Integration**: Existing dashboard shells still require live API data, validation, submission workflows, error handling, and persisted results.
+- **Future Portals**: The FMI portal and Pangea Assembly remain planned product features.
 - **Military Mechanics**: Attack/Defense indices, troop deployments, and intelligence operations are pending.
 - **Logistics Math**: The complex "Landed Cost" math (shipping rate × distance × mode multiplier) is pending the routing algorithm layer.
 
@@ -399,7 +414,7 @@ The map is the **centerpiece** of PangeaWorld — a fictional continent where al
 
 - Costs scale with **distance** (number of map segments traversed)
 - Sea shipping requires both origin and destination to have **port access**
-- Landlocked nations (like Drakmoor) pay premium railroad costs unless they negotiate port access through neighbors
+- Drakmoor has constrained sea access through its single starting port; if that port is blockaded or unavailable, it must use premium railroad routes or negotiate access through a neighbor's ports
 - Rivers are only available along specific geographic features — not every nation pair has a river connection
 
 ##### [NEW] Logistics cost model
@@ -407,7 +422,7 @@ Shipping cost is factored into every trade and sourcing decision, heavily relyin
 
 - **Distance Scale**:
   - Every tile edge (triangle side), whether land or ocean, represents **100 kilometers**.
-  - International waters for freight and transportation are represented by **3-4 connected ocean triangles** (currently, ocean triangles are pending implementation on the map).
+  - International waters for freight and transportation are represented by connected ocean triangles. Ocean-touching edges are always impassable to railroad construction.
 - **Distance Calculation**:
   - **By Plane (Air Freight)**: Calculated as a straight line from origin point to destination point.
   - **By Rail and Sea**: Calculated by tracing the actual path taken along existing route traffic (railroad networks or international sea lanes).
@@ -436,11 +451,12 @@ Landed Cost = Base Commodity Price
 - **Mountain Ranges**: The map features impassable or highly restrictive mountain ranges. These natural barriers make railroad-building incredibly difficult, forcing presidents to either build long, expensive routes *around* the mountains or rely on premium air freight infrastructure.
 - **River Crossings (Bridges)**: If a traced railroad crosses a river tile, a bridge must be built. Bridges cost **3x the price** of a normal railroad segment.
 - **Airports & Hubs**: Airports are located exclusively in the largest cities (cities spanning 2 triangles). These large cities serve as the major logistics hubs for their respective countries.
-- **Port City Placement**: Each country starts with two port cities located on their coastline. To optimize distribution and strategic viability, ports are automatically placed at the 1/3 and 2/3 marks along the coastline between the country's borders. Ports are strictly forbidden from spawning within 2 triangles of another country's border, within 3 triangles of an impassable mountain range, or on tiles entirely enclosed by mountains. (Lunara is an exception, having a dedicated 2-3 triangle thick mountain range on its southern coast, and its ports clustered specifically on the Strait of Lunara).
+- **Starting City Allocation**: Each nation starts with exactly **8 cities total**. Large cities, small cities, and port cities all count toward the same total of 8; ports are not extra settlements.
+- **Port City Placement**: Nordvik and Lunara each start with exactly **2 port cities**. Drakmoor starts with exactly **1 port city**, reflecting limited coastal access rather than complete landlock. All other nations (Valdoria, Terranova, Korvath, Solhaven, and Zephyria) start with **0 port cities**. Zephyria is fully landlocked with no coastal access. Where coastline length permits, a nation's two ports are distributed near the 1/3 and 2/3 marks of its eligible coastline. Ports are strictly forbidden from spawning within 2 triangles of another country's border, within 3 triangles of an impassable mountain range, or on tiles entirely enclosed by mountains. Lunara remains an exception to the distribution pattern: its two ports may cluster on the Strait of Lunara because of its dedicated 2-3-triangle-thick southern mountain range. If preferred positions are invalid, deterministic fallback selection must find other eligible coastal cities without changing the required count.
 - **Starting Railroad Networks**: At the start of the game, every small city (1-triangle) is automatically connected to its nearest large city/airport hub via pre-built railroad networks. The paths are algorithmically plotted to avoid impassable terrain and minimize the number of expensive river crossings.
 - **Destructible Assets**: War can destroy infrastructure. Enemies can bomb bridges (severing vital railroad connections), blockade ports, and mine sea lanes.
 - **Strategic Chokepoints**: Straits and canals can be blockaded by naval forces, disrupting trade for multiple nations simultaneously.
-- **Zephyria's Advantage**: Positioned as a crossroads with flat terrain and access to multiple routes, making it a natural trade hub (but also a prime military target).
+- **Zephyria's Challenge**: Positioned as a landlocked crossroads between Nordvik and Drakmoor with no sea access. Its core strategic challenge is negotiating overland road access through neighboring nations to reach resources. Its primary asset is **cheap labor** — when other nations open new cities, Zephyria's workforce is the most affordable option, creating natural diplomatic leverage. However, its lack of ports makes it entirely dependent on land routes and vulnerable to being squeezed by neighbors controlling transit.
 
 ---
 
@@ -457,8 +473,8 @@ Each nation is designed to mirror real-world archetypes without mapping 1:1 to a
 | **Korvath** | Industrial manufacturing hub | Steel, chemicals, labor | Export-driven manufacturing, trade surplus |
 | **Solhaven** | Financial & services center | Capital, banking, insurance | Financial hub, **Headquarters of the IMF**, low resources, high GDP per capita |
 | **Nordvik** | Northern resource frontier | Rare earth minerals, timber, oil | Rich resources, harsh climate, small population |
-| **Zephyria** | Emerging market crossroads | Mixed moderate resources, strategic location | Trade route hub, land shared between Nordvik and Drakmoor, rapid urbanization |
-| **Drakmoor** 🤖 | Marginalized military state (AI-controlled) | Iron, coal, weapons manufacturing | Sanctioned economy, strong military, isolated, desperate |
+| **Zephyria** | Landlocked emerging market | **Cheap labor** (primary), limited local resources | Landlocked crossroads between Nordvik and Drakmoor, no sea access, must negotiate road access through neighbors, rapid urbanization fueled by labor exports |
+| **Drakmoor** 🤖 | Marginalized military state (AI-controlled) | Iron, coal, weapons manufacturing | Sanctioned economy, strong military, isolated, with one strategically vulnerable starting port |
 
 > [!NOTE]
 > Each nation is intentionally designed with **asymmetric advantages and vulnerabilities** to force trade and diplomacy. No nation can be self-sufficient — this is a core design principle that teaches interdependence.
@@ -484,6 +500,7 @@ Drakmoor is the **8th nation**, fully controlled by an AI agent (not played by s
 **Backstory & Context:**
 - Drakmoor was once a prosperous industrial power but has been **marginalized by international sanctions** due to authoritarian governance and aggressive posturing
 - Its economy is suffering — limited access to global markets, rising unemployment, crumbling infrastructure
+- Its coastline supports exactly **one starting port**, creating a vulnerable maritime chokepoint without making the nation fully landlocked
 - However, it has maintained a **disproportionately strong military** (spending 40%+ of GDP on defense)
 - Its AI-driven leadership grows increasingly desperate and nationalistic as sanctions bite harder each round
 
@@ -536,7 +553,7 @@ At the start of each new game, Drakmoor's AI agent rolls a **randomized profile*
 - Team formation and nation assignment
 - **Customization (Round 1):** Users have the option to change their assigned Nation's name or Company's name during the first round to increase team identity and ownership. **Strict content moderation filters** will block offensive, profane, or blasphemous names to maintain a professional educational environment.
 - **Independent Game Sessions:** The architecture supports multiple concurrent game sessions that run completely independently. 
-- **Session-Locked Map Generation:** When a new session is started, a random seed is generated to procedurally create the map (rivers, mountains, cities, borders). After this initial creation, the map generation is locked for that session. The map will only get updates and upgrades based on users' decisions (like building roads) across the 7 rounds.
+- **Session-Locked Map Generation:** When a new session is started, a random seed is generated to procedurally create the map (rivers, mountains, cities, borders). Before persistence, the generated start state must pass all map invariants, including exactly 8 cities per nation, exactly 2 ports for Nordvik and Lunara, exactly 1 port for Drakmoor, 0 ports for all other nations, exactly 1 passable edge per mountain triangle, and zero passable edges touching ocean. After this initial validated creation, the map is locked for that session. The map will only get updates and upgrades based on users' decisions (like building roads) across the 7 rounds.
 
 ##### [NEW] AI bot backfill system
 If there aren't enough students to fill all roles, **AI bots automatically fill empty slots** so the game world always runs at full capacity:
@@ -753,11 +770,12 @@ graph TB
 ## Verification Plan
 
 ### Automated Tests
+- Seeded map invariant tests across a broad seed corpus: exactly 8 cities per nation; exactly 2 ports for Nordvik and Lunara, exactly 1 port for Drakmoor, 0 ports for all other nations; all ports assigned to eligible coastal cities; exactly 1 passable edge per mountain triangle; and zero passable edges touching ocean
 - Unit tests for economy engine (CPI calculation, GDP computation, trade balance)
 - Unit tests for military resolution algorithm
 - Integration tests for round lifecycle (planning → submission → processing → results)
 - API endpoint tests for all CRUD operations
-- `npm run test` — Jest + React Testing Library
+- `npm test` — runs the implemented deterministic map-invariant suite; component tests will use React Testing Library when dashboard behavior is connected to live game state
 
 ### Manual Verification
 - **Phase 1**: Single-player walkthrough — create a nation, run 3 rounds, verify economy math

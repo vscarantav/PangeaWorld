@@ -44,6 +44,9 @@ function getVoronoiCountry(x, y) {
     countriesDef.forEach(c => {
         let noise = Math.sin(x * 0.05) * Math.cos(y * 0.05) * 40; 
         let d = Math.sqrt(Math.pow(c.x - x, 2) + Math.pow(c.y - y, 2)) + noise;
+        if (c.id === 'ZEPHYRIA' && y < 240) {
+            d += (240 - y) * 2;
+        }
         if (d < minDist) {
             minDist = d;
             closest = c;
@@ -223,7 +226,8 @@ export function generateMapData(seedStr = 'default', width = 800, height = 600) 
                 center: {
                     x: cx,
                     y: cy
-                }
+                },
+
             };
             triangles.push(tri);
             
@@ -243,6 +247,26 @@ export function generateMapData(seedStr = 'default', width = 800, height = 600) 
             e.triangles[1].neighbors.push(e.triangles[0]);
         }
     });
+
+    // Guarantee Zephyria has NO coastal triangles (100% landlocked)
+    let zephyriaReassigned = true;
+    while (zephyriaReassigned) {
+        zephyriaReassigned = false;
+        for (let t of triangles) {
+            if (t.terrain === TERRAIN.ZEPHYRIA) {
+                let isCoastal = t.neighbors.length < 3 || t.neighbors.some(n => n.terrain === TERRAIN.OCEAN);
+                if (isCoastal) {
+                    let neighborLand = t.neighbors.find(n => n.terrain !== TERRAIN.OCEAN && n.terrain !== TERRAIN.ZEPHYRIA && n.terrain !== TERRAIN.MOUNTAIN);
+                    if (neighborLand) {
+                        t.terrain = neighborLand.terrain;
+                    } else {
+                        t.terrain = t.center.x < 420 ? TERRAIN.NORDVIK : TERRAIN.DRAKMOOR;
+                    }
+                    zephyriaReassigned = true;
+                }
+            }
+        }
+    }
 
     // Generate rivers flowing outwards, capped at 8% of landmass
     let maxRiverTriangles = triangles.length * 0.08;
@@ -328,7 +352,7 @@ export function generateMapData(seedStr = 'default', width = 800, height = 600) 
         }
     });
 
-    // 3. Mountains: every mountain should have exactly 1 passible edge to create mazes
+    // 3. Mountains: every mountain has exactly one passable, non-ocean edge.
     edges.forEach(e => {
         if (e.triangles.some(t => t.terrain === TERRAIN.MOUNTAIN)) {
             e.isImpassable = true;
@@ -336,33 +360,115 @@ export function generateMapData(seedStr = 'default', width = 800, height = 600) 
     });
 
     let mountains = triangles.filter(t => t.terrain === TERRAIN.MOUNTAIN);
-    mountains.sort(() => rnd() - 0.5); // Shuffle for random maze generation
+    const mountainEdgesById = new Map(mountains.map(m => [m.id, []]));
+    const landExitEdgesById = new Map(mountains.map(m => [m.id, []]));
 
-    mountains.forEach(m => {
-        let mEdges = edges.filter(e => e.triangles.includes(m));
-        let passibleEdges = mEdges.filter(e => !e.isImpassable);
-        
-        if (passibleEdges.length === 0) {
-            let validEdges = mEdges.filter(e => {
-                let other = e.triangles.find(t => t !== m);
-                if (!other) return true; 
-                if (other.terrain !== TERRAIN.MOUNTAIN) return true; 
-                
-                let otherPassible = edges.filter(oe => oe.triangles.includes(other) && !oe.isImpassable).length;
-                return otherPassible === 0;
-            });
+    edges.forEach(edge => {
+        if (edge.triangles.length !== 2 || edge.triangles.some(t => t.terrain === TERRAIN.OCEAN)) return;
 
-            let edgeToMakePassible;
-            if (validEdges.length > 0) {
-                edgeToMakePassible = validEdges[Math.floor(rnd() * validEdges.length)];
-            } else {
-                edgeToMakePassible = mEdges[Math.floor(rnd() * mEdges.length)];
-            }
-            
-            if (edgeToMakePassible) {
-                edgeToMakePassible.isImpassable = false;
+        const edgeMountains = edge.triangles.filter(t => t.terrain === TERRAIN.MOUNTAIN);
+        if (edgeMountains.length === 2) {
+            const [a, b] = edgeMountains;
+            const rankedEdge = { edge, rank: rnd() };
+            mountainEdgesById.get(a.id).push({ ...rankedEdge, otherId: b.id });
+            mountainEdgesById.get(b.id).push({ ...rankedEdge, otherId: a.id });
+        } else if (edgeMountains.length === 1) {
+            landExitEdgesById.get(edgeMountains[0].id).push({ edge, rank: rnd() });
+        }
+    });
+
+    mountainEdgesById.forEach(links => links.sort((a, b) => a.rank - b.rank || a.edge.id.localeCompare(b.edge.id)));
+    landExitEdgesById.forEach(links => links.sort((a, b) => a.rank - b.rank || a.edge.id.localeCompare(b.edge.id)));
+
+    // Triangle adjacency is bipartite (up-pointing versus down-pointing). First
+    // cover every mountain that has no direct land exit on the left partition,
+    // then use alternating paths to cover the corresponding required mountains
+    // on the right. Boundary mountains left unmatched use their own land edge.
+    const leftMountains = mountains.filter(m => {
+        const [row, col] = m.id.split('-').map(Number);
+        return (row + col) % 2 === 0;
+    });
+    const leftMountainIds = new Set(leftMountains.map(m => m.id));
+    const requiredLeftIds = new Set(leftMountains.filter(m => landExitEdgesById.get(m.id).length === 0).map(m => m.id));
+    const requiredRightIds = new Set(mountains.filter(m => !leftMountainIds.has(m.id) && landExitEdgesById.get(m.id).length === 0).map(m => m.id));
+    const matchByLeft = new Map();
+    const matchByRight = new Map();
+
+    function setMountainMatch(leftId, rightId, edge) {
+        const oldRight = matchByLeft.get(leftId);
+        if (oldRight && matchByRight.get(oldRight.rightId)?.leftId === leftId) {
+            matchByRight.delete(oldRight.rightId);
+        }
+
+        const oldLeft = matchByRight.get(rightId);
+        if (oldLeft && matchByLeft.get(oldLeft.leftId)?.rightId === rightId) {
+            matchByLeft.delete(oldLeft.leftId);
+        }
+
+        matchByLeft.set(leftId, { rightId, edge });
+        matchByRight.set(rightId, { leftId, edge });
+    }
+
+    function matchRequiredLeft(leftId, visitedRightIds) {
+        for (const link of mountainEdgesById.get(leftId)) {
+            const rightId = link.otherId;
+            if (visitedRightIds.has(rightId)) continue;
+            visitedRightIds.add(rightId);
+
+            const existing = matchByRight.get(rightId);
+            if (!existing || matchRequiredLeft(existing.leftId, visitedRightIds)) {
+                setMountainMatch(leftId, rightId, link.edge);
+                return true;
             }
         }
+        return false;
+    }
+
+    for (const leftId of requiredLeftIds) {
+        if (!matchRequiredLeft(leftId, new Set())) {
+            throw new Error(`Unable to give mountain ${leftId} exactly one land-safe pass`);
+        }
+    }
+
+    function coverRequiredRight(rightId, visitedRightIds, visitedLeftIds) {
+        visitedRightIds.add(rightId);
+        for (const link of mountainEdgesById.get(rightId)) {
+            const leftId = link.otherId;
+            if (visitedLeftIds.has(leftId)) continue;
+            if (matchByRight.get(rightId)?.leftId === leftId) continue;
+            visitedLeftIds.add(leftId);
+
+            const displaced = matchByLeft.get(leftId);
+            if (!displaced || !requiredRightIds.has(displaced.rightId)) {
+                setMountainMatch(leftId, rightId, link.edge);
+                return true;
+            }
+
+            if (!visitedRightIds.has(displaced.rightId) && coverRequiredRight(displaced.rightId, visitedRightIds, visitedLeftIds)) {
+                setMountainMatch(leftId, rightId, link.edge);
+                return true;
+            }
+        }
+        return false;
+    }
+
+    for (const rightId of requiredRightIds) {
+        if (!matchByRight.has(rightId) && !coverRequiredRight(rightId, new Set(), new Set())) {
+            throw new Error(`Unable to give mountain ${rightId} exactly one land-safe pass`);
+        }
+    }
+
+    matchByLeft.forEach(match => {
+        match.edge.isImpassable = false;
+    });
+
+    mountains.forEach(mountain => {
+        if (matchByLeft.has(mountain.id) || matchByRight.has(mountain.id)) return;
+        const exit = landExitEdgesById.get(mountain.id)[0];
+        if (!exit) {
+            throw new Error(`Mountain ${mountain.id} has no land-safe pass`);
+        }
+        exit.edge.isImpassable = false;
     });
 
     function getDist(startTri, conditionFn, maxD) {
@@ -400,11 +506,13 @@ export function generateMapData(seedStr = 'default', width = 800, height = 600) 
         return count < minSize;
     }
 
-    // 4. City placement (1 city for each company, 12 companies per country)
-    // Positions are static within countries, distributed evenly
+    // 4. City placement (one anchor for each of the 8 starting companies)
+    // Positions are static within countries and distributed as evenly as the
+    // available terrain permits. A second big-city triangle is decoration, not
+    // another company/city anchor.
     countriesDef.forEach((country) => {
-        let validTris = triangles.filter(t => {
-            if (t.terrain !== country.terrain) return false;
+        const allCountryTris = triangles.filter(t => t.terrain === country.terrain);
+        let validTris = allCountryTris.filter(t => {
             if (!t.neighbors.some(n => n.terrain !== TERRAIN.RIVER)) return false; // Rivers should not surround them completely
             if (t.neighbors.filter(n => n.terrain === TERRAIN.MOUNTAIN).length === 3) return false; // Shouldn't be fully enclosed by mountains
             if (isTrapped(t, 25)) return false; // Must not be trapped in a tiny pocket of land
@@ -415,47 +523,59 @@ export function generateMapData(seedStr = 'default', width = 800, height = 600) 
         validTris.sort((a, b) => {
             let distA = Math.pow(a.center.x - country.x, 2) + Math.pow(a.center.y - country.y, 2);
             let distB = Math.pow(b.center.x - country.x, 2) + Math.pow(b.center.y - country.y, 2);
-            return distA - distB;
+            return distA - distB || a.id.localeCompare(b.id);
         });
         
-        let numCompanies = 12;
+        const numCompanies = 8;
+        // Only Nordvik (2), Lunara (2), and Drakmoor (1) start with ports.
+        // All other nations (Valdoria, Terranova, Korvath, Solhaven, Zephyria) have 0 ports.
+        const portTarget = (country.id === 'NORDVIK' || country.id === 'LUNARA') ? 2
+            : country.id === 'DRAKMOOR' ? 1
+            : 0;
         let cities = [];
-        let minCityDist = 35; // Minimum pixel distance to spread cities out
+        const cityIds = new Set();
+        const minCityDist = 35;
         
-        let allCoastalTris = validTris.filter(t => t.neighbors.length < 3 || t.neighbors.some(n => n.terrain === TERRAIN.OCEAN));
-        
-        // Filter ports based on rules
-        let coastalTris = allCoastalTris.filter(t => {
-            if (country.id !== 'LUNARA') {
-                let distToBorder = getDist(t, n => n.terrain !== country.terrain && n.terrain !== TERRAIN.OCEAN && n.terrain !== TERRAIN.MOUNTAIN && n.terrain !== TERRAIN.RIVER, 2);
-                if (distToBorder <= 2) return false;
-            }
+        const selectedPorts = [];
+
+        // --- Port placement (only for nations with ports) ---
+        if (portTarget > 0) {
+            let allCoastalTris = validTris.filter(t => t.neighbors.length < 3 || t.neighbors.some(n => n.terrain === TERRAIN.OCEAN));
             
-            let distToMountain = getDist(t, n => n.terrain === TERRAIN.MOUNTAIN, 3);
-            if (distToMountain <= 3) return false;
-            
-            return true;
-        });
-        
-        // Fallback to less strict rules if not enough coastal triangles
-        if (coastalTris.length < 2) {
-            coastalTris = allCoastalTris.filter(t => {
+            // Filter ports based on rules
+            let coastalTris = allCoastalTris.filter(t => {
                 if (country.id !== 'LUNARA') {
-                    let distToBorder = getDist(t, n => n.terrain !== country.terrain && n.terrain !== TERRAIN.OCEAN && n.terrain !== TERRAIN.MOUNTAIN && n.terrain !== TERRAIN.RIVER, 1);
-                    if (distToBorder <= 1) return false;
+                    let distToBorder = getDist(t, n => n.terrain !== country.terrain && n.terrain !== TERRAIN.OCEAN && n.terrain !== TERRAIN.MOUNTAIN && n.terrain !== TERRAIN.RIVER, 2);
+                    if (distToBorder <= 2) return false;
                 }
-                let distToMountain = getDist(t, n => n.terrain === TERRAIN.MOUNTAIN, 2);
-                if (distToMountain <= 2) return false;
+                
+                let distToMountain = getDist(t, n => n.terrain === TERRAIN.MOUNTAIN, 3);
+                if (distToMountain <= 3) return false;
+                
                 return true;
             });
-        }
-        // Ultimate fallback
-        if (coastalTris.length < 2) {
-            coastalTris = allCoastalTris;
-        }
+            
+            // Fallback to less strict rules if not enough coastal triangles
+            if (coastalTris.length < portTarget) {
+                coastalTris = allCoastalTris.filter(t => {
+                    if (country.id !== 'LUNARA') {
+                        let distToBorder = getDist(t, n => n.terrain !== country.terrain && n.terrain !== TERRAIN.OCEAN && n.terrain !== TERRAIN.MOUNTAIN && n.terrain !== TERRAIN.RIVER, 1);
+                        if (distToBorder <= 1) return false;
+                    }
+                    let distToMountain = getDist(t, n => n.terrain === TERRAIN.MOUNTAIN, 2);
+                    if (distToMountain <= 2) return false;
+                    return true;
+                });
+            }
+            // Ultimate fallback
+            if (coastalTris.length < portTarget) {
+                coastalTris = allCoastalTris;
+            }
 
-        let port1, port2;
-        if (coastalTris.length >= 2) {
+            if (coastalTris.length < portTarget) {
+                throw new Error(`${country.name} has ${coastalTris.length} coastal city sites, but requires ${portTarget} ports`);
+            }
+
             if (country.id === 'LUNARA') {
                 let lunaraValid = coastalTris.filter(t => {
                     let parts = t.id.split('-');
@@ -463,65 +583,107 @@ export function generateMapData(seedStr = 'default', width = 800, height = 600) 
                     let c = parseInt(parts[1]);
                     return r >= 65 && r <= 71 && c >= 40 && c <= 60;
                 });
-                
-                // Fallback just in case generation shifts
-                if (lunaraValid.length < 2) lunaraValid = coastalTris;
-                
-                let mx = 480, my = 320;
-                lunaraValid.sort((a,b) => ( (a.center.x-mx)**2 + (a.center.y-my)**2 ) - ( (b.center.x-mx)**2 + (b.center.y-my)**2 ));
-                port1 = lunaraValid[0];
-                for(let i=1; i<lunaraValid.length; i++) {
-                    let cand = lunaraValid[i];
-                    if ( Math.sqrt((cand.center.x-port1.center.x)**2 + (cand.center.y-port1.center.y)**2) >= minCityDist ) {
-                        port2 = cand;
-                        break;
-                    }
+
+                if (lunaraValid.length < portTarget) lunaraValid = coastalTris;
+
+                const mainlandX = 480;
+                const mainlandY = 320;
+                lunaraValid.sort((a, b) => {
+                    const distA = (a.center.x - mainlandX) ** 2 + (a.center.y - mainlandY) ** 2;
+                    const distB = (b.center.x - mainlandX) ** 2 + (b.center.y - mainlandY) ** 2;
+                    return distA - distB || a.id.localeCompare(b.id);
+                });
+
+                selectedPorts.push(lunaraValid[0]);
+                while (selectedPorts.length < portTarget) {
+                    const remaining = lunaraValid.filter(t => !selectedPorts.includes(t));
+                    const separated = remaining.filter(t => selectedPorts.every(port => {
+                        const dx = t.center.x - port.center.x;
+                        const dy = t.center.y - port.center.y;
+                        return Math.sqrt(dx * dx + dy * dy) >= minCityDist;
+                    }));
+                    selectedPorts.push((separated.length > 0 ? separated : remaining)[0]);
                 }
             } else {
-                // Find borders (the furthest apart points on the full coast)
+                // Find the furthest-apart points on the full coast, then distribute
+                // the requested number of ports between those endpoints.
                 let maxD = -1;
-                let b1, b2;
-                for(let i=0; i<allCoastalTris.length; i++) {
-                    for(let j=i+1; j<allCoastalTris.length; j++) {
-                        let d = (allCoastalTris[i].center.x-allCoastalTris[j].center.x)**2 + (allCoastalTris[i].center.y-allCoastalTris[j].center.y)**2;
-                        if (d > maxD) { maxD = d; b1 = allCoastalTris[i]; b2 = allCoastalTris[j]; }
+                let coastStart = allCoastalTris[0];
+                let coastEnd = allCoastalTris[0];
+                for (let i = 0; i < allCoastalTris.length; i++) {
+                    for (let j = i + 1; j < allCoastalTris.length; j++) {
+                        const d = (allCoastalTris[i].center.x - allCoastalTris[j].center.x) ** 2
+                            + (allCoastalTris[i].center.y - allCoastalTris[j].center.y) ** 2;
+                        if (d > maxD) {
+                            maxD = d;
+                            coastStart = allCoastalTris[i];
+                            coastEnd = allCoastalTris[j];
+                        }
                     }
                 }
-                
-                if (b1 && b2) {
-                    let t1x = b1.center.x + (b2.center.x - b1.center.x) / 3;
-                    let t1y = b1.center.y + (b2.center.y - b1.center.y) / 3;
-                    
-                    let t2x = b1.center.x + (b2.center.x - b1.center.x) * 2 / 3;
-                    let t2y = b1.center.y + (b2.center.y - b1.center.y) * 2 / 3;
-                    
-                    let minD1 = Infinity, minD2 = Infinity;
-                    for(let cand of coastalTris) {
-                        let d1 = (cand.center.x - t1x)**2 + (cand.center.y - t1y)**2;
-                        if (d1 < minD1) { minD1 = d1; port1 = cand; }
-                    }
-                    
-                    for(let cand of coastalTris) {
-                        if (cand === port1) continue;
-                        let d2 = (cand.center.x - t2x)**2 + (cand.center.y - t2y)**2;
-                        if (d2 < minD2) { minD2 = d2; port2 = cand; }
-                    }
+
+                for (let index = 1; index <= portTarget; index++) {
+                    const fraction = index / (portTarget + 1);
+                    const targetX = coastStart.center.x + (coastEnd.center.x - coastStart.center.x) * fraction;
+                    const targetY = coastStart.center.y + (coastEnd.center.y - coastStart.center.y) * fraction;
+                    const remaining = coastalTris.filter(t => !selectedPorts.includes(t));
+                    remaining.sort((a, b) => {
+                        const distA = (a.center.x - targetX) ** 2 + (a.center.y - targetY) ** 2;
+                        const distB = (b.center.x - targetX) ** 2 + (b.center.y - targetY) ** 2;
+                        return distA - distB || a.id.localeCompare(b.id);
+                    });
+                    selectedPorts.push(remaining[0]);
                 }
+            }
+
+            if (selectedPorts.length !== portTarget) {
+                throw new Error(`${country.name} has ${selectedPorts.length} ports, but requires ${portTarget}`);
             }
         }
 
-        let candidatesToProcess = [];
-        if (port1) { port1.isPort = true; candidatesToProcess.push(port1); }
-        if (port2) { port2.isPort = true; candidatesToProcess.push(port2); }
-        
-        candidatesToProcess.forEach(candidate => {
+        function addCityAnchor(candidate) {
+            if (!candidate || cityIds.has(candidate.id)) return;
             candidate.terrain = TERRAIN.CITY;
             candidate.country = country;
             cities.push(candidate);
-            
+            cityIds.add(candidate.id);
+        }
+
+        selectedPorts.forEach(port => {
+            port.isPort = true;
+            addCityAnchor(port);
+        });
+
+        function addSpacedCities(candidatePool, minimumDistance) {
+            for (const candidate of candidatePool) {
+                if (cities.length >= numCompanies) return;
+                if (candidate.terrain !== country.terrain || cityIds.has(candidate.id)) continue;
+
+                const tooClose = cities.some(city => {
+                    const dx = candidate.center.x - city.center.x;
+                    const dy = candidate.center.y - city.center.y;
+                    return Math.sqrt(dx * dx + dy * dy) < minimumDistance;
+                });
+                if (!tooClose) addCityAnchor(candidate);
+            }
+        }
+
+        // Keep the original spacing where possible, then relax it in small steps
+        // for compact countries such as Nordvik and Drakmoor. The final unspaced
+        // pass makes the count an invariant rather than a best-effort target.
+        [minCityDist, 28, 21, 14, 0].forEach(distance => addSpacedCities(validTris, distance));
+        addSpacedCities(allCountryTris, 0);
+
+        if (cities.length !== numCompanies) {
+            throw new Error(`${country.name} has ${cities.length} city anchors, but requires ${numCompanies}`);
+        }
+
+        // Decide city size after all anchors are reserved so a big-city footprint
+        // can never consume a future anchor and reduce the starting-company count.
+        cities.forEach(candidate => {
             let madeBig = false;
             if (rnd() > 0.75) {
-                let validNeighbor = candidate.neighbors.find(n => n.terrain === country.terrain);
+                const validNeighbor = candidate.neighbors.find(n => n.terrain === country.terrain);
                 if (validNeighbor) {
                     validNeighbor.terrain = TERRAIN.CITY;
                     validNeighbor.country = country;
@@ -530,54 +692,10 @@ export function generateMapData(seedStr = 'default', width = 800, height = 600) 
                 }
             }
 
-            if (madeBig) {
-                candidate.isBigCity = true;
-                candidate.hasAirport = true;
-            } else {
-                candidate.isSmallCity = true;
-            }
+            candidate.isBigCity = madeBig;
+            candidate.isSmallCity = !madeBig;
+            candidate.hasAirport = madeBig;
         });
-        
-        for (let i = 0; i < validTris.length; i++) {
-            if (cities.length >= numCompanies) break;
-            
-            let candidate = validTris[i];
-            if (candidate.terrain === TERRAIN.CITY) continue;
-
-            let tooClose = false;
-            for (let city of cities) {
-                let dx = candidate.center.x - city.center.x;
-                let dy = candidate.center.y - city.center.y;
-                if (Math.sqrt(dx * dx + dy * dy) < minCityDist) {
-                    tooClose = true;
-                    break;
-                }
-            }
-            
-            if (!tooClose) {
-                candidate.terrain = TERRAIN.CITY;
-                candidate.country = country;
-                cities.push(candidate);
-                
-                let madeBig = false;
-                if (rnd() > 0.75) {
-                    let validNeighbor = candidate.neighbors.find(n => n.terrain === country.terrain);
-                    if (validNeighbor) {
-                        validNeighbor.terrain = TERRAIN.CITY;
-                        validNeighbor.country = country;
-                        validNeighbor.isBigCityPart = true;
-                        madeBig = true;
-                    }
-                }
-
-                if (madeBig) {
-                    candidate.isBigCity = true;
-                    candidate.hasAirport = true;
-                } else {
-                    candidate.isSmallCity = true;
-                }
-            }
-        }
 
         if (!cities.some(c => c.isBigCity)) {
             for (let c of cities) {

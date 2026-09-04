@@ -1,43 +1,12 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>PangeaWorld - Map Prototype</title>
-    <style>
-        body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background-color: #1e1e1e;
-            color: #f0f0f0;
-            margin: 0;
-            padding: 0;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            height: 100vh;
-        }
-        .canvas-container {
-            background-color: #2c3e50; /* Fallback */
-            background-image: url('ocean-color.jpg');
-            background-size: cover;
-            border: 2px solid #333;
-            border-radius: 8px;
-            overflow: hidden;
-            box-shadow: 0 4px 15px rgba(0,0,0,0.5);
-        }
-        canvas {
-            display: block;
-            cursor: crosshair;
-        }
-    </style>
-</head>
-<body>
 
-    <div class="canvas-container">
-        <canvas id="mapCanvas" width="800" height="600"></canvas>
-    </div>
+const mockCtx = new Proxy({}, { get: () => () => {} });
+const mockCanvas = { width: 800, height: 600, addEventListener: () => {}, getContext: () => mockCtx };
+const window = { addEventListener: () => {} };
+const document = {
+    getElementById: () => mockCanvas,
+    addEventListener: () => {}
+};
 
-    <script>
         const canvas = document.getElementById('mapCanvas');
         const ctx = canvas.getContext('2d');
         
@@ -1052,6 +1021,15 @@
         initGrid();
         render();
 
-    </script>
-</body>
-</html>
+    
+try {
+    initGrid();
+    console.log('SUCCESS! Triangles count:', triangles.length);
+    let ports = triangles.filter(t => t.isPort);
+    console.log('Ports count:', ports.length);
+    let zephyriaCoastal = triangles.filter(t => t.terrain === TERRAIN.ZEPHYRIA && (t.neighbors.length < 3 || t.neighbors.some(n => n.terrain === TERRAIN.OCEAN)));
+    console.log('Zephyria coastal triangles count:', zephyriaCoastal.length);
+} catch(err) {
+    console.error('Runtime error in initGrid:', err);
+    process.exit(1);
+}
