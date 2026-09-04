@@ -3,6 +3,16 @@
 from .logistics import calculate_landed_cost
 
 
+BASE_PRICES = {
+    "Energy": 40.0,
+    "Minerals": 60.0,
+    "Agriculture": 30.0,
+    "Technology": 100.0,
+    "Labor": 25.0,
+    "Capital": 80.0,
+}
+
+
 def produce_resources(nation, round_number: int = 1, consumption: dict[str, float] | None = None, production_multipliers: dict[str, float] | None = None) -> list[dict]:
     """Apply one round of production, depletion, and optional consumption."""
     if round_number < 1:

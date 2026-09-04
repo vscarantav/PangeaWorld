@@ -27,6 +27,10 @@ def ensure_schema():
     if "results" not in columns:
         with engine.begin() as connection:
             connection.execute(text("ALTER TABLE rounds ADD COLUMN results JSON"))
+    nation_columns = {column["name"] for column in inspect(engine).get_columns("nations")}
+    if "approval_rating" not in nation_columns:
+        with engine.begin() as connection:
+            connection.execute(text("ALTER TABLE nations ADD COLUMN approval_rating FLOAT DEFAULT 60.0"))
 
 def get_db():
     db = SessionLocal()

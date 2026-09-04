@@ -65,6 +65,7 @@ class Nation(Base):
     cpi = Column(Float, default=100.0)
     inflation = Column(Float, default=0.0)
     unemployment = Column(Float, default=5.0)
+    approval_rating = Column(Float, default=60.0)
     trade_balance = Column(Float, default=0.0)
     treasury = Column(Float, default=1000.0) # Starting capital
     

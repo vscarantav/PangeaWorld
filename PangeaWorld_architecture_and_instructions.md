@@ -45,7 +45,7 @@ PangeaWorld/
 - **Server Authority Contract**: FastAPI owns authoritative game state, decision validation, round transitions, economy calculations, random seeds, and persisted results. React renders server state and submits commands; client calculations may be previews only and cannot determine official outcomes.
 - **Deterministic Simulation Contract**: A stored ruleset version, session seed, starting snapshot, and ordered decision ledger must reproduce the same round results. Authoritative randomness is seeded and executed on the server.
 
-## Game Rules (As implemented in prototype)
+## Game Rules (As implemented)
 - **Railroad Construction**: Building a standard railroad costs **$1M** per segment.
 - **Bridges**: Railroads built over river edges cost **$3M** per segment.
 - **Mountain Railroads**: Railroads built on the passable sides of mountains cost **$1.5M** per segment.
@@ -58,23 +58,24 @@ PangeaWorld/
 
 ## Applied vs. Not Yet Applied Planned Features
 
-### ✅ Phase 0 — Map & UI Prototype (Current Work)
+### ✅ Phase 0 and Phase 1 MVP — Complete
 - **Grid-Based Construction**: The map is successfully divided into a fine grid where presidents "trace the route" line-by-line.
 - **Distance & Terrain Costs**: Baseline edge traversal costs and edge restrictions are implemented (railroads vs. bridges, exactly one passable edge per mountain triangle, and no passable edge touching ocean).
 - **8 Nations Geography**: The 8 nations are fully defined and geographically distributed based on the updated positioning logic.
 - **Mountain Ranges**: Distinct, restrictive mountain barriers are implemented with the one-passable-edge invariant enforced per mountain triangle.
 - **Starting Settlements & Ports**: Start-state allocation enforces exactly 8 cities per nation, exactly 2 ports for Nordvik and Lunara, exactly 1 port for Drakmoor, and 0 ports for all other nations (Valdoria, Terranova, Korvath, Solhaven, and Zephyria). Zephyria is landlocked with no sea access.
-- **React UI Shells**: President and Company Executive dashboard shells, local role switching, charts, forms, and AI/news placeholders exist with mock data. They are visual prototypes, not connected game systems.
-- **Prototype Boundary**: Map edits and dashboard values currently live only in browser memory. Phase 0 contains no authoritative game server, persistence, authentication, multiplayer, or economy processing.
+- **Authoritative Game Sessions**: FastAPI and SQLite persist sessions, validated map snapshots, seven-round phase state, decisions, events, and immutable round results.
+- **Macro/Micro Economy Engine**: GDP, CPI, inflation, unemployment, pricing, production, R&D, company financials, market share, and policy decisions process on the server.
+- **Resources and Logistics**: Production, depletion, scarcity pricing, supplier selection, map-distance routing previews, shipping modes, tariffs, insurance, stock transfers, COGS, and trade balances are connected to round processing.
+- **Connected Dashboards**: President and Company Executive dashboards load live API data, submit authoritative decisions, display results/history/news, and distinguish local drafts from server-confirmed submissions.
+- **Event Engine**: Seeded events modify production, CPI, approval, and eligible persisted railroad infrastructure.
 
-### ⏳ Not Yet Applied (Phase 1 and Later)
-- **Multiplayer Turn System**: The 48-hour staggered round system (Presidential vs. Company phases) is not yet built.
-- **Macro/Micro Economy Engine**: GDP, CPI, inflation, pricing, and company profitability loops are not yet implemented.
+### ⏳ Not Yet Applied (Phase 2 and Later)
+- **Multiplayer & Authentication**: Accounts, role assignment, real-time synchronization, and enforced 48-hour deadlines are not yet built; Phase 1 provides the local authoritative phase loop.
 - **AI Agent Integration**: The embedded Gemini AI Advisor and the Drakmoor AI antagonist bot are not yet wired up.
-- **Dashboard Integration**: Existing dashboard shells still require live API data, validation, submission workflows, error handling, and persisted results.
 - **Future Portals**: The FMI portal and Pangea Assembly remain planned product features.
 - **Military Mechanics**: Attack/Defense indices, troop deployments, and intelligence operations are pending.
-- **Logistics Math**: The complex "Landed Cost" math (shipping rate × distance × mode multiplier) is pending the routing algorithm layer.
+- **Advanced Logistics Construction**: Dedicated sea-lane/airway path records, chokepoint blockades, project approval/lobbying, construction timeframes, and wartime destruction are later-phase systems.
 
 
 ---
@@ -806,6 +807,8 @@ graph TB
 
 > **Goal:** Complete Phase 1 ("Foundation & World Building — MVP") — a playable single-nation prototype with a core economy loop, connected dashboards, and a functioning backend.
 
+> **Completion status (Sep 4, 2026): ✅ COMPLETE.** The playable Phase 1 scope is implemented and covered by a three-round acceptance test. Advanced multiplayer, Drakmoor AI, Gemini advisors, FMI, military, intelligence, sanctions, and full route-construction systems remain assigned to their later roadmap phases.
+
 ### Phase 0 Completion Status
 
 | Component | Status | Key Files |
@@ -824,16 +827,16 @@ graph TB
 | Requirement | Status | Priority |
 |:---|:---|:---|
 | **Data schema / models** (Nations, Companies, Resources, Rounds) | ✅ Day 1 complete | 🔴 Critical |
-| **Economy Engine** (GDP, CPI, inflation, trade balances) | ✅ Day 2 foundation | 🔴 Critical |
-| **Resource Engine** (production, consumption, trade flows, scarcity) | ✅ Day 2 foundation | 🔴 Critical |
-| **Round Manager** (state transitions: planning → submission → processing → results) | ✅ Day 2 foundation | 🔴 Critical |
-| **Event Engine** (world events: weather, crises, market shocks) | ✅ Day 5 foundation | 🟡 Important |
+| **Economy Engine** (GDP, CPI, inflation, trade balances) | ✅ Complete | 🔴 Critical |
+| **Resource Engine** (production, consumption, trade flows, scarcity) | ✅ Complete | 🔴 Critical |
+| **Round Manager** (state transitions: planning → submission → processing → results) | ✅ Complete | 🔴 Critical |
+| **Event Engine** (world events: weather, crises, market shocks) | ✅ Complete | 🟡 Important |
 | **Nation design data** (8 nations with full resource profiles) | ✅ Day 1 complete | 🔴 Critical |
-| **Logistics cost model** (landed cost = base + freight + tariffs + insurance) | ✅ Day 2 foundation | 🟡 Important |
-| **API endpoints** (CRUD for game state, decisions, snapshots) | ✅ Day 2 foundation | 🔴 Critical |
-| **Dashboard ↔ API integration** (live data replaces mock data) | ✅ Day 4 foundation | 🔴 Critical |
+| **Logistics cost model** (landed cost = base + freight + tariffs + insurance) | ✅ Complete | 🟡 Important |
+| **API endpoints** (CRUD for game state, decisions, snapshots) | ✅ Complete | 🔴 Critical |
+| **Dashboard ↔ API integration** (live data replaces mock data) | ✅ Complete | 🔴 Critical |
 | **Database setup** (persistent game state) | ✅ Day 1 complete | 🔴 Critical |
-| **Map snapshot persistence** (seed → validate → store → reload) | ✅ Phase 1 foundation | 🟡 Important |
+| **Map snapshot persistence** (seed → validate → store → reload) | ✅ Complete | 🟡 Important |
 
 ### Day 1 (Sep 4) — Data Models & Database Foundation
 
@@ -853,7 +856,7 @@ Full data schema from the architecture (lines 294–342):
 
 #### [NEW] `backend/database.py` — Database connection & session management
 - SQLite for local development (swap to PostgreSQL for deployment later)
-- Async SQLAlchemy engine with FastAPI dependency injection
+- Synchronous SQLAlchemy engine with FastAPI dependency injection for the local SQLite MVP (async/PostgreSQL migration deferred to deployment work)
 
 #### [NEW] `backend/seed_data.py` — Nation starting profiles
 - All 8 nations with resource profiles, starting GDP, military indices, and geographic data
@@ -937,6 +940,8 @@ Full data schema from the architecture (lines 294–342):
 - **SourcingTab**: Real resource marketplace with landed cost estimates
 - **MarketTab**: Live market share, competitor pricing, demand curves
 - **DecisionsTab**: Functional form that submits to API
+  - Pricing, hiring, production volume, R&D investment, and sourcing supplier/route decisions
+  - Separate local draft save and server-confirmed submission states
 
 ### Day 5 (Sep 8) — Event Engine, Polish & End-to-End Verification
 
@@ -945,17 +950,16 @@ Full data schema from the architecture (lines 294–342):
 #### [NEW] `backend/engines/events.py` — World event system
 - Event categories: Natural disasters, political crises, market shocks, health emergencies, tech breakthroughs
 - `generate_round_events(session, round)` — randomly inject 1–2 minor events per round
-- Events modify resource production, prices, infrastructure, and approval ratings
+- Events modify resource production, prices, persisted railroad infrastructure, and approval ratings
 
 #### [MODIFY] `frontend/src/components/ExecutiveDashboard/Widgets/NewsFeed.jsx`
 - Wire to `GET /api/sessions/{id}/news` endpoint
 - Display system-generated event articles and round results
 
 #### [NEW] `backend/tests/` — Backend test suite
-- `test_economy.py` — CPI calculation, GDP computation, inflation math
-- `test_resources.py` — production, depletion, trade flows
-- `test_round_manager.py` — phase transitions, auto-decisions
-- `test_api.py` — endpoint integration tests
+- `test_day1_foundation.py` — schema and seed-data invariants
+- `test_day2_engines.py` — economy, resources, logistics, events, phase transitions, auto-decisions, and three-round acceptance
+- `test_api.py` — session, map, decision, sourcing/trade, results, and news endpoint integration
 
 #### End-to-End Verification
 1. Create a new game session → verify map invariants pass
@@ -963,6 +967,10 @@ Full data schema from the architecture (lines 294–342):
 3. Advance rounds → verify economy engine produces sane outputs
 4. Verify dashboards reflect updated state after each round
 5. Confirm resource depletion, scarcity effects, and event injection work
+
+**Verified:** all five acceptance steps are automated. Company sourcing moves authoritative stockpiles, uses map-based distance and landed cost, updates COGS/shipping costs and trade balances, and persists the selected supply chain in round results.
+
+**Phase 1 verification baseline:** 16 backend tests passing, 2 deterministic frontend map tests passing, frontend lint completing without errors, and the Vite production build succeeding.
 
 ### Sprint Verification Commands
 ```bash

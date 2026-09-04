@@ -6,7 +6,7 @@ import { useGame } from '../../../context/GameContext';
 
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Title, Tooltip, Legend, Filler);
 
-export default function IndexesTab({ setBudget }) {
+export default function IndexesTab() {
   const { nation, session, submitNation } = useGame();
   const [message, setMessage] = useState('');
   const [socialBudget, setSocialBudget] = useState(400);
@@ -104,7 +104,7 @@ export default function IndexesTab({ setBudget }) {
           </div>
         </div>
           <button className="btn" style={{ marginTop: '1rem' }} disabled={session?.phase !== 'presidential'} onClick={async () => {
-            try { await submitNation({ government_spending: socialBudget + subsidyBudget, tax_rate: corpTax / 100, income_tax: incTax / 100, tariffs: tariff / 100 }); setMessage('Presidential decision saved.'); }
+            try { const receipt = await submitNation({ government_spending: socialBudget + subsidyBudget, tax_rate: corpTax / 100, income_tax: incTax / 100, tariffs: tariff / 100, immigration: immigration / 100 }); setMessage(`Presidential decision submitted to the server (#${receipt.id}).`); }
             catch (err) { setMessage(err.message); }
           }}>Apply Policies</button>
           {message && <p className="text-muted" style={{ marginTop: 8 }}>{message}</p>}

@@ -78,8 +78,8 @@ export function GameProvider({ children }) {
     setSession((current) => ({ ...current, map_snapshot: result.map_snapshot }));
     return result;
   };
-  const loadResourceMarket = async (resourceType) => {
-    const result = await api.getResourceMarket(session.id, resourceType);
+  const loadResourceMarket = async (resourceType, buyerNationId = null) => {
+    const result = await api.getResourceMarket(session.id, resourceType, buyerNationId);
     setResourceMarket(result);
     return result;
   };

@@ -17,7 +17,7 @@ export const getNation = (sessionId, nationId) => request(`/api/sessions/${sessi
 export const getCompanies = (id) => request(`/api/sessions/${id}/companies`);
 export const getCompany = (sessionId, companyId) => request(`/api/sessions/${sessionId}/companies/${companyId}`);
 export const getMarket = (id) => request(`/api/sessions/${id}/market`);
-export const getResourceMarket = (id, resourceType) => request(`/api/sessions/${id}/market/resources/${encodeURIComponent(resourceType)}`);
+export const getResourceMarket = (id, resourceType, buyerNationId = null) => request(`/api/sessions/${id}/market/resources/${encodeURIComponent(resourceType)}${buyerNationId ? `?buyer_nation_id=${buyerNationId}` : ''}`);
 export const getNews = (id) => request(`/api/sessions/${id}/news`);
 export const updateMap = (id, mapSnapshot) => request(`/api/sessions/${id}/map`, { method: 'PUT', body: JSON.stringify({ map_snapshot: mapSnapshot }) });
 export const submitNationDecision = (sessionId, nationId, decisionData) => request(`/api/sessions/${sessionId}/nations/${nationId}/decisions`, { method: 'POST', body: JSON.stringify({ decision_data: decisionData }) });

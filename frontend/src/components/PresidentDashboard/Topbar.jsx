@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Mail } from 'lucide-react';
+import { AlertCircle, Briefcase, Mail } from 'lucide-react';
 import { useGame } from '../../context/GameContext';
 
 export default function Topbar({ budget }) {
@@ -53,7 +53,7 @@ export default function Topbar({ budget }) {
 
         <div className="kpi">
           <span className="kpi-label">Available Budget</span>
-          <span className={`kpi-value ${budget >= 0 ? 'text-green' : 'text-red'}`}>
+          <span className={`kpi-value ${availableBudget >= 0 ? 'text-green' : 'text-red'}`}>
             ${availableBudget.toLocaleString()}M
           </span>
         </div>
@@ -67,7 +67,7 @@ export default function Topbar({ budget }) {
         </div>
         <div className="kpi">
           <span className="kpi-label">Approval Rating</span>
-          <span className="kpi-value">Not tracked</span>
+          <span className="kpi-value">{Number(nation?.approval_rating ?? 60).toFixed(0)}%</span>
         </div>
         <div className="kpi">
           <span className="kpi-label">FMI Debt Ratio</span>

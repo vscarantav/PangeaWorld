@@ -85,6 +85,7 @@ def advance_session(session_id: int, db: Session = Depends(get_db)):
     try:
         return advance_phase(db, session)
     except ValueError as exc:
+        db.rollback()
         raise HTTPException(status_code=409, detail=str(exc)) from exc
 
 @router.get("/{session_id}/news")

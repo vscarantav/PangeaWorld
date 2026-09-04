@@ -1,5 +1,5 @@
 from pydantic import BaseModel, ConfigDict, Field, NonNegativeFloat
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any, Optional, Literal
 from pydantic import Field
 from datetime import datetime
 from .domain import PhaseEnum, RoundStatus, ResourceType
@@ -53,6 +53,7 @@ class Nation(NationBase):
     cpi: float
     inflation: float
     unemployment: float
+    approval_rating: float
     trade_balance: float
     treasury: float
     military_atk: int
@@ -86,6 +87,17 @@ class PresidentDecisionData(BaseModel):
     resource_consumption: Dict[str, float] = Field(default_factory=dict)
 
 
+class SourcingDecisionData(BaseModel):
+    """One authoritative resource order submitted by a company."""
+
+    model_config = ConfigDict(extra="forbid", use_enum_values=True)
+
+    resource_type: ResourceType
+    supplier_nation_id: int = Field(gt=0)
+    quantity: float = Field(gt=0.0, le=1000000)
+    mode: Literal["sea", "river", "rail", "air"] = "rail"
+
+
 class CompanyDecisionData(BaseModel):
     """The supported Phase 1 company controls."""
 
@@ -94,6 +106,8 @@ class CompanyDecisionData(BaseModel):
     price: Optional[float] = Field(default=None, gt=0.0)
     headcount: int = Field(default=0, ge=0, le=1000000)
     production_units: NonNegativeFloat = Field(default=1.0, le=1000000)
+    rnd_investment: NonNegativeFloat = Field(default=0.0, le=1000000)
+    sourcing: List[SourcingDecisionData] = Field(default_factory=list, max_length=6)
 
 class Decision(DecisionBase):
     id: int

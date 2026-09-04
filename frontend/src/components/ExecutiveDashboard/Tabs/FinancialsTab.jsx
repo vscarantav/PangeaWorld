@@ -9,6 +9,7 @@ export default function FinancialsTab() {
   const history = (session?.rounds || [])
     .filter((round) => round.results?.companies?.some((item) => item.company_id === company?.id))
     .map((round) => round.results.companies.find((item) => item.company_id === company.id));
+  const latestResult = history.at(-1);
 
   return (
     <div className="tab-content">
@@ -31,7 +32,7 @@ export default function FinancialsTab() {
           <div className="data-list">
             <div className="data-item"><span>Gross Revenue</span><span className="data-item-value text-blue">{money(company?.revenue)}</span></div>
             <div className="data-item"><span>Cost of Goods Sold</span><span className="data-item-value text-red">-{money(company?.cogs)}</span></div>
-            <div className="data-item"><span>Shipping Costs Recorded</span><span className="data-item-value text-red">-{money(0)}</span></div>
+            <div className="data-item"><span>Shipping Costs Recorded</span><span className="data-item-value text-red">-{money(latestResult?.shipping_cost)}</span></div>
             <div className="data-item"><span>Gross Margin</span><span className="data-item-value positive">{Number(company?.gross_margin || 0).toFixed(1)}%</span></div>
           </div>
         </div>
@@ -40,7 +41,7 @@ export default function FinancialsTab() {
           <div className="card-header"><h3 className="card-title"><i className="fa-solid fa-money-bill-wave"></i> Operating Summary</h3></div>
           <div className="data-list">
             <div className="data-item"><span>Gross Profit</span><span className="data-item-value positive">{money(grossProfit)}</span></div>
-            <div className="data-item"><span>R&D Investment</span><span className="data-item-value text-red">-{money(0)}</span></div>
+            <div className="data-item"><span>R&amp;D Investment</span><span className="data-item-value text-red">-{money(latestResult?.rnd_investment)}</span></div>
             <div className="data-item"><span>Corporate Tax Rate</span><span className="data-item-value">{Number((nation?.policies?.tax_rate || 0.15) * 100).toFixed(1)}%</span></div>
             <div className="data-item"><span>Net Profit</span><span className="data-item-value positive">{money(company?.net_profit)}</span></div>
             <div className="data-item"><span>Cash</span><span className="data-item-value text-blue">{money(company?.cash)}</span></div>

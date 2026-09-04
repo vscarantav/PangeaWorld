@@ -24,6 +24,7 @@ def serialize_company(company) -> dict:
 def serialize_nation(nation, include_companies: bool = True) -> dict:
     data = {"id": nation.id, "session_id": nation.session_id, "name": nation.name, "archetype": nation.archetype,
             "gdp": nation.gdp, "cpi": nation.cpi, "inflation": nation.inflation, "unemployment": nation.unemployment,
+            "approval_rating": nation.approval_rating,
             "trade_balance": nation.trade_balance, "treasury": nation.treasury, "military_atk": nation.military_atk,
             "military_def": nation.military_def, "policies": nation.policies or {},
             "resources": [{"id": r.id, "type": getattr(r.type, "value", r.type), "production_rate": r.production_rate,
