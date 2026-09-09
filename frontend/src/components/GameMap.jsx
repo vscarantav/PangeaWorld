@@ -192,6 +192,11 @@ export default function GameMap({ seed = 'PangeaGameSeed123', mapSnapshot = null
     useEffect(() => {
         const data = generateMapData(seed, width, height);
         const savedEdges = new Map((mapSnapshot?.edges || []).map((edge) => [edge.id, edge]));
+        const savedCountries = new Map((mapSnapshot?.countries || []).map((country) => [String(country.id), country]));
+        data.countries.forEach((country) => {
+            const saved = savedCountries.get(String(country.id));
+            if (saved?.name) country.name = saved.name;
+        });
         data.edges.forEach((edge) => {
             const saved = savedEdges.get(edge.id);
             if (saved) edge.hasRailroad = Boolean(saved.has_railroad);

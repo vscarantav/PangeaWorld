@@ -22,6 +22,7 @@ def test_session_and_decision_api_flow():
     app.dependency_overrides[get_db] = override_get_db
     try:
         client = TestClient(app)
+        assert client.post("/api/auth/register", json={"email": "api-instructor@example.com", "password": "a safe password"}).status_code == 201
         map_snapshot = {
             "seed": "api-seed",
             "triangles": [{"id": 1, "terrain": "Ocean"}, {"id": 2, "terrain": "Plains"}],
@@ -29,11 +30,11 @@ def test_session_and_decision_api_flow():
             "countries": [{"id": str(index), "name": name, "x": index * 7, "y": 0} for index, name in enumerate(["Terranova", "Solhaven", "Korvath", "Valdoria", "Nordvik", "Zephyria", "Drakmoor", "Lunara"])],
             "cities": [{"id": index, "triangle_id": 2, "country_id": str(index // 8), "is_port": index in {32, 33, 48, 56, 57}} for index in range(64)],
         }
-        created = client.post("/api/sessions", json={"seed": "api-seed", "map_snapshot": map_snapshot})
+        created = client.post("/api/sessions", json={})
         assert created.status_code == 200
         session = created.json()
         session_id = session["id"]
-        assert session["map_snapshot"]["seed"] == "api-seed"
+        map_snapshot["seed"] = session["seed"]
         updated_map = client.put(f"/api/sessions/{session_id}/map", json={"map_snapshot": map_snapshot})
         assert updated_map.status_code == 200
         assert len(client.get(f"/api/sessions/{session_id}/nations").json()) == 8
@@ -48,12 +49,22 @@ def test_session_and_decision_api_flow():
         assert supplier_market.status_code == 200
         valdoria_offer = next(offer for offer in supplier_market.json()["suppliers"] if offer["nation_id"] == supplier_id)
         assert any(route["mode"] == "rail" and route["distance_edges"] == 3 for route in valdoria_offer["routes"])
+        lobby = client.get(f"/api/sessions/{session_id}/lobby").json()
+        president = TestClient(app)
+        president_user = president.post("/api/auth/register", json={"email": "api-president@example.com", "password": "a safe password"}).json()["user"]
+        president.post("/api/sessions/lobby/join", json={"join_code": lobby["join_code"]})
+        executive = TestClient(app)
+        executive_user = executive.post("/api/auth/register", json={"email": "api-executive@example.com", "password": "a safe password"}).json()["user"]
+        executive.post("/api/sessions/lobby/join", json={"join_code": lobby["join_code"]})
+        company_id = client.get(f"/api/sessions/{session_id}/companies").json()[0]["id"]
+        assert client.post(f"/api/sessions/{session_id}/lobby/assign", json={"user_id": president_user["id"], "role": "president", "entity_id": nation_id}).status_code == 200
+        assert client.post(f"/api/sessions/{session_id}/lobby/assign", json={"user_id": executive_user["id"], "role": "executive", "entity_id": company_id}).status_code == 200
+        assert client.post(f"/api/sessions/{session_id}/lobby/start").status_code == 200
         assert client.post(f"/api/sessions/{session_id}/advance").json()["phase"] == "presidential"
-        assert client.post(f"/api/sessions/{session_id}/nations/{nation_id}/decisions",
+        assert president.post(f"/api/sessions/{session_id}/nations/{nation_id}/decisions",
                            json={"decision_data": {"government_spending": 25}}).status_code == 200
         assert client.post(f"/api/sessions/{session_id}/advance").json()["phase"] == "company"
-        company_id = client.get(f"/api/sessions/{session_id}/companies").json()[0]["id"]
-        assert client.post(f"/api/sessions/{session_id}/companies/{company_id}/decisions",
+        assert executive.post(f"/api/sessions/{session_id}/companies/{company_id}/decisions",
                            json={"decision_data": {"price": 150, "headcount": 20, "production_units": 1.1, "rnd_investment": 100,
                                                     "sourcing": [{"resource_type": "Energy", "supplier_nation_id": supplier_id,
                                                                   "quantity": 2, "mode": "rail"}]}}).status_code == 200

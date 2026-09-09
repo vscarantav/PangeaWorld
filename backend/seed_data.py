@@ -1,3 +1,4 @@
+# pyrefly: ignore [missing-import]
 from sqlalchemy.orm import Session
 try:
     from .models.domain import Nation, Company, Resource, ResourceType, Round, RoundStatus
@@ -137,9 +138,6 @@ def seed_game_session(db: Session, session_id: int, commit: bool = True):
         db.add(nation)
         db.flush() # To get nation.id
 
-        # Add a complete six-category profile. Zero-rate rows preserve the
-        # schema for future trade/production decisions while keeping each
-        # nation's starting asymmetry in the non-zero values.
         configured_resources = {r_data["type"]: r_data for r_data in n_data["resources"]}
         for resource_type in ResourceType:
             r_data = configured_resources.get(resource_type, {"type": resource_type, "production_rate": 0.0, "stockpile": 0.0})
@@ -152,9 +150,7 @@ def seed_game_session(db: Session, session_id: int, commit: bool = True):
             )
             db.add(resource)
 
-        # Phase 1 starts each nation with ten company templates whose revenue
-        # totals the nation's starting GDP. This keeps the first simulation
-        # round stable instead of multiplying GDP by the template index sum.
+        # Keep starting company revenue equal to its nation's baseline GDP.
         for i in range(10):
             company = Company(
                 nation_id=nation.id,

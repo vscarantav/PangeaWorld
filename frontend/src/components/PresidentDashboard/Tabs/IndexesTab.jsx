@@ -78,28 +78,28 @@ export default function IndexesTab() {
         <div className="input-group">
           <label>Corporate Tax Rate (%)</label>
           <div className="range-slider-container">
-            <input type="range" min="10" max="40" value={corpTax} onChange={e => setCorpTax(Number(e.target.value))} />
+            <input disabled={session?.phase !== 'presidential'} type="range" min="10" max="40" value={corpTax} onChange={e => setCorpTax(Number(e.target.value))} />
             <span className="range-value">{corpTax}%</span>
           </div>
         </div>
         <div className="input-group">
           <label>Income Tax Rate (%)</label>
           <div className="range-slider-container">
-            <input type="range" min="10" max="50" value={incTax} onChange={e => setIncTax(Number(e.target.value))} />
+            <input disabled={session?.phase !== 'presidential'} type="range" min="10" max="50" value={incTax} onChange={e => setIncTax(Number(e.target.value))} />
             <span className="range-value">{incTax}%</span>
           </div>
         </div>
         <div className="input-group">
           <label>Import Tariffs (Avg %)</label>
           <div className="range-slider-container">
-            <input type="range" min="0" max="50" value={tariff} onChange={e => setTariff(Number(e.target.value))} />
+            <input disabled={session?.phase !== 'presidential'} type="range" min="0" max="50" value={tariff} onChange={e => setTariff(Number(e.target.value))} />
             <span className="range-value">{tariff}%</span>
           </div>
         </div>
         <div className="input-group">
           <label>Immigration Quota (Target Net %)</label>
           <div className="range-slider-container">
-            <input type="range" min="-5" max="5" value={immigration} onChange={e => setImmigration(Number(e.target.value))} />
+            <input disabled={session?.phase !== 'presidential'} type="range" min="-5" max="5" value={immigration} onChange={e => setImmigration(Number(e.target.value))} />
             <span className="range-value">{immigration > 0 ? '+' : ''}{immigration}%</span>
           </div>
         </div>
@@ -129,7 +129,7 @@ export default function IndexesTab() {
             <div className="input-group">
               <label>Healthcare & Education ($ Millions)</label>
               <div className="range-slider-container">
-                <input type="range" min="0" max="1000" value={socialBudget} onChange={e => setSocialBudget(Number(e.target.value))} />
+                <input disabled={session?.phase !== 'presidential'} type="range" min="0" max="1000" value={socialBudget} onChange={e => setSocialBudget(Number(e.target.value))} />
                 <span className="range-value">${socialBudget}M</span>
               </div>
             </div>
@@ -138,7 +138,7 @@ export default function IndexesTab() {
             <div className="input-group">
               <label>Corporate Subsidies ($ Millions)</label>
               <div className="range-slider-container">
-                <input type="range" min="0" max="1000" value={subsidyBudget} onChange={e => setSubsidyBudget(Number(e.target.value))} />
+                <input disabled={session?.phase !== 'presidential'} type="range" min="0" max="1000" value={subsidyBudget} onChange={e => setSubsidyBudget(Number(e.target.value))} />
                 <span className="range-value">${subsidyBudget}M</span>
               </div>
             </div>

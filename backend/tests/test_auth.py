@@ -8,6 +8,7 @@ from sqlalchemy.pool import StaticPool
 from database import Base, get_db
 from main import app
 from models.domain import AuthSession, GameMembership, User
+from auth import SESSION_COOKIE
 
 
 def make_client():
@@ -75,6 +76,16 @@ def test_invalid_credentials_and_expired_sessions_are_rejected():
     db.commit()
     db.close()
     assert client.get("/api/auth/me").status_code == 401
+
+
+def test_login_revokes_the_previous_session_token():
+    client, _, _ = make_client()
+    assert client.post("/api/auth/register", json={"email": "rotation@example.com", "password": "valid password"}).status_code == 201
+    old_token = client.cookies.get(SESSION_COOKIE)
+    assert client.post("/api/auth/login", json={"email": "rotation@example.com", "password": "valid password"}).status_code == 200
+    old_client = TestClient(app)
+    old_client.cookies.set(SESSION_COOKIE, old_token)
+    assert old_client.get("/api/auth/me").status_code == 401
 
 
 def test_phase1_schema_and_new_auth_tables_are_created_together():

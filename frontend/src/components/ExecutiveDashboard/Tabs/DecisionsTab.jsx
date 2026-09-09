@@ -8,7 +8,7 @@ const controlStyle = {
 };
 
 export default function DecisionsTab() {
-  const { company, session, market, resourceMarket, loadResourceMarket, submitCompany } = useGame();
+  const { company, session, market, resourceMarket, loadResourceMarket, saveCompanyDraft, submitCompany } = useGame();
   const resources = Object.keys(market?.resources || {});
   const [price, setPrice] = useState(Number(company?.products?.Widget?.price || 299));
   const [headcount, setHeadcount] = useState(20);
@@ -105,10 +105,15 @@ export default function DecisionsTab() {
   const isSaved = savedDecision != null && JSON.stringify(savedDecision) === currentSignature;
   const isSubmitted = isSaved && submittedSignature === currentSignature;
 
-  const saveDecisions = () => {
+  const saveDecisions = async () => {
     if (decisionKey) window.localStorage.setItem(decisionKey, currentSignature);
-    setSavedDecision(currentDecision);
-    setMessage('Draft saved on this device. It is not submitted yet.');
+    try {
+      await saveCompanyDraft(currentDecision);
+      setSavedDecision(currentDecision);
+      setMessage('Draft saved on the server. It is not submitted yet.');
+    } catch (error) {
+      setMessage(error.message);
+    }
   };
 
   const submitDecisions = async () => {
@@ -132,6 +137,7 @@ export default function DecisionsTab() {
               {session?.phase === 'company' ? 'Company phase' : `Server phase: ${session?.phase}`}
             </span>
           </div>
+          <fieldset disabled={session?.phase !== 'company'} style={{ border: 0, padding: 0, margin: 0, minWidth: 0 }}>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
             <div className="input-group">
               <label>Product price ($)</label>
@@ -190,6 +196,7 @@ export default function DecisionsTab() {
             {session?.phase === 'company' && !isSaved && <p className="text-muted">Save your changes before submitting.</p>}
             {message && <p className="text-muted">{message}</p>}
           </div>
+          </fieldset>
         </div>
         <div className="card col-4"><NewsFeed /></div>
       </div>

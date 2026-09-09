@@ -62,7 +62,9 @@ def _as_utc(value: datetime) -> datetime:
     return value.replace(tzinfo=timezone.utc) if value.tzinfo is None else value
 
 
-def create_auth_session(db: Session, user: User, response: Response) -> AuthSession:
+def create_auth_session(db: Session, user: User, response: Response, revoke_existing: bool = False) -> AuthSession:
+    if revoke_existing:
+        db.query(AuthSession).filter_by(user_id=user.id, revoked_at=None).update({"revoked_at": _utc_now()})
     raw_token = secrets.token_urlsafe(32)
     expires_at = _utc_now() + timedelta(days=SESSION_DAYS)
     session = AuthSession(user_id=user.id, token_hash=_token_hash(raw_token), expires_at=expires_at)

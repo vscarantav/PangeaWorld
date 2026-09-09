@@ -31,6 +31,23 @@ def ensure_schema():
     if "approval_rating" not in nation_columns:
         with engine.begin() as connection:
             connection.execute(text("ALTER TABLE nations ADD COLUMN approval_rating FLOAT DEFAULT 60.0"))
+    session_columns = {column["name"] for column in inspect(engine).get_columns("game_sessions")}
+    with engine.begin() as connection:
+        if "lobby_join_code" not in session_columns:
+            connection.execute(text("ALTER TABLE game_sessions ADD COLUMN lobby_join_code VARCHAR"))
+        if "lobby_code_revoked" not in session_columns:
+            connection.execute(text("ALTER TABLE game_sessions ADD COLUMN lobby_code_revoked INTEGER DEFAULT 0"))
+        connection.execute(text("CREATE UNIQUE INDEX IF NOT EXISTS ix_game_sessions_lobby_join_code ON game_sessions (lobby_join_code)"))
+    user_columns = {column["name"] for column in inspect(engine).get_columns("users")}
+    if "is_instructor" not in user_columns:
+        with engine.begin() as connection:
+            connection.execute(text("ALTER TABLE users ADD COLUMN is_instructor INTEGER DEFAULT 0"))
+    # Preserve local Day 1 installations: when accounts predate the instructor
+    # flag, promote the earliest account once so it can recover old sessions.
+    with engine.begin() as connection:
+        has_instructor = connection.execute(text("SELECT 1 FROM users WHERE is_instructor = 1 LIMIT 1")).first()
+        if has_instructor is None:
+            connection.execute(text("UPDATE users SET is_instructor = 1 WHERE id = (SELECT MIN(id) FROM users)"))
 
 def get_db():
     db = SessionLocal()

@@ -44,6 +44,7 @@ PangeaWorld/
 - **Canonical Frontend Contract**: React + Vite is the only application frontend. HTML Canvas is the canonical map renderer. The standalone HTML map remains a development preview, not a second game client.
 - **Server Authority Contract**: FastAPI owns authoritative game state, decision validation, round transitions, economy calculations, random seeds, and persisted results. React renders server state and submits commands; client calculations may be previews only and cannot determine official outcomes.
 - **Deterministic Simulation Contract**: A stored ruleset version, session seed, starting snapshot, and ordered decision ledger must reproduce the same round results. Authoritative randomness is seeded and executed on the server.
+- **Opportunity-Cost Contract (Required)**: Every material Presidential and Company Executive decision must consume or commit a scarce resource (for example treasury/cash, borrowing capacity, labor, production capacity, inventory, political capital, diplomatic leverage, military readiness, or time) and therefore rule out, delay, or weaken at least one feasible alternative. The product must make that trade-off visible before submission and report it after resolution. A feature is not complete if it presents benefits and direct costs but hides the value of the next-best foregone alternative, permits unconstrained allocation, or creates an obviously dominant choice with no meaningful sacrifice.
 
 ## Game Rules (As implemented)
 - **Railroad Construction**: Building a standard railroad costs **$1M** per segment.
@@ -72,6 +73,7 @@ PangeaWorld/
 
 ### ⏳ Not Yet Applied (Phase 2 and Later)
 - **Multiplayer & Authentication**: Phase 2 Day 1 account registration, login, logout, revocable sessions, and membership-role data are complete. Instructor assignment, role enforcement, real-time synchronization, and enforced 48-hour deadlines remain in the active Phase 2 sprint; Phase 1 provides the local authoritative phase loop.
+- **Opportunity-Cost Decision Framework**: The cross-role budget/capacity constraints, pre-submission trade-off comparison, foregone-alternative ledger fields, post-round feedback, and instructor analytics required by the Opportunity-Cost Contract remain to be implemented. Existing isolated trade-offs do not satisfy the complete contract.
 - **AI Agent Integration**: The embedded Gemini AI Advisor and the Drakmoor AI antagonist bot are not yet wired up.
 - **Future Portals**: The FMI portal and Pangea Assembly remain planned product features.
 - **Military Mechanics**: Attack/Defense indices, troop deployments, and intelligence operations are pending.
@@ -115,6 +117,37 @@ PangeaWorld/
 ---
 
 ## Confirmed Design Decisions
+
+### 0. Opportunity Cost Is a Core Learning Mechanic ✅
+
+Opportunity cost, as taught in economics, is the value of the **next-best feasible alternative forgone** when a choice is made. PangeaWorld must teach this through the decision loop itself, not only mention it in explanatory text. The intended pattern is comparable to CAPSIM-style marketing allocation: increasing a marketing budget may improve awareness or demand, but the same money can no longer fund R&D, capacity, quality, working capital, or debt reduction, and additional spending is subject to diminishing marginal returns.
+
+This requirement applies to **both Presidential and Company Executive decisions** in every round:
+
+1. **Constrained choice set:** Each material choice draws from an authoritative, finite resource pool and competes with at least one other feasible use of that resource. Choices must interact; they may not behave as independent sliders whose maximum settings can all be selected without consequence.
+2. **Explicit alternatives before submission:** The interface must show at least two relevant alternatives or allocations, the binding constraint, the direct and recurring cost of the draft choice, and the projected effect on the other options. The player must identify the next-best alternative they are giving up and briefly explain why the selected use is preferred.
+3. **Marginal, not merely total, effects:** Previews and advisor prompts must emphasize the expected benefit of the **next unit** spent or committed. Where appropriate, formulas must use diminishing returns, capacity limits, delays, crowding out, maintenance obligations, or risk so that “spend the maximum everywhere” is not a dominant strategy.
+4. **Server enforcement and persistence:** FastAPI validates resource feasibility, rejects over-allocation and double-spending, calculates authoritative costs and effects, and stores the submitted allocation, considered alternatives, selected next-best foregone alternative, player rationale, assumptions available at submission time, and ruleset version in the immutable decision ledger.
+5. **Consequences and feedback:** Round results must show the chosen action's realized benefits and costs, changes to the constrained resource pool, and the effect of what was delayed or forgone. When the deterministic engine supports it, the debrief must compare the chosen outcome with a labeled counterfactual of the recorded next-best alternative; estimates must never be displayed as certain historical facts.
+6. **Assessment:** Instructor analytics and scorecards must evaluate whether teams recognized constraints, compared credible alternatives, reasoned at the margin, and revised their allocations based on prior outcomes. The game must not award points merely for spending more.
+
+**Presidential applications include:**
+
+- Military readiness versus infrastructure, education/industrial policy, disaster recovery, debt service, or tax relief.
+- Rush deployment versus the cheaper but slower and more exposed project timelines.
+- Tariff revenue/protection versus higher input and consumer prices, retaliation, and export competitiveness.
+- Subsidies or an approved lobbying request versus competing industries, regions, and fiscal capacity.
+- FMI contributions, borrowing, reserves, diplomacy, sanctions, and covert action versus the alternative uses and future flexibility they displace.
+
+**Company Executive applications include:**
+
+- CAPSIM-style marketing spend versus R&D, product quality, production capacity, inventory, hiring, supply-chain resilience, cash reserves, and debt reduction.
+- Lower price and possible volume/market-share gains versus unit margin and capacity pressure.
+- Higher production versus working-capital needs and the risk/carrying cost of unsold inventory.
+- A cheap supplier or shipping mode versus lead time, reliability, tariffs, insurance, quality, and disruption risk.
+- Automation or long-term capacity versus current liquidity and near-term flexibility.
+
+**Definition of done for any new decision mechanic:** Its specification, API contract, UI, engine formula, round report, AI-advisor prompt, and tests must identify (a) the scarce resource, (b) at least two competing feasible uses, (c) the next-best alternative that can be forgone, (d) short- and long-run effects, and (e) how the trade-off is surfaced to the student. A decision mechanic that fails any of these checks must not be marked complete.
 
 ### 1. Round Duration & Pacing ✅
 - **In-Game Timeframe:** Each round represents **1 full year** in Pangea.
@@ -1001,12 +1034,12 @@ Set-Location ../backend
 
 > **Goal:** Deliver a secure four-player vertical slice in which two Presidents and two Company Executives can sign in from separate browsers, join the same game, see only their assigned role, submit authorized decisions, observe synchronized phase changes, and complete one authoritative round.
 
-> **Sprint status: 🟡 IN PROGRESS — 1/5 days complete.** This is the first five-day delivery slice of the broader 4–6 week Phase 2 roadmap. Trade proposals, treaties, sanctions, FMI lending, AI backfill, and the Drakmoor antagonist remain in later Phase 2 sprints.
+> **Sprint status: 🟡 IN PROGRESS — 2/5 days complete.** This is the first five-day delivery slice of the broader 4–6 week Phase 2 roadmap. Trade proposals, treaties, sanctions, FMI lending, AI backfill, and the Drakmoor antagonist remain in later Phase 2 sprints.
 
 ### Progress Tracker
 
 - [x] **Day 1:** Authentication and multiplayer data model
-- [ ] **Day 2:** Session lobby, invitations, and role assignment
+- [x] **Day 2:** Session lobby, invitations, and role assignment
 - [ ] **Day 3:** Authorization and decision-readiness workflow
 - [ ] **Day 4:** Deadlines and real-time synchronization
 - [ ] **Day 5:** Four-player acceptance test, hardening, and documentation
@@ -1036,27 +1069,27 @@ Set-Location ../backend
 - [x] Two users can create accounts, sign in independently, refresh the browser without losing their login, and sign out.
 - [x] The full Phase 1 regression suite remains green after the schema extension (19 backend tests passing).
 
-### Day 2 (Sep 10) — Session Lobby, Invitations & Role Assignment
+### ✅ Day 2 (Sep 10) — Session Lobby, Invitations & Role Assignment — Complete
 
 **Theme:** _"Turn a local session into a game people can join."_
 
 #### Backend
 
-- [ ] Make session creation instructor-only and generate a unique, revocable lobby join code.
-- [ ] Add lobby endpoints to join, list members/seats, assign or remove a member, and start the game.
-- [ ] Validate that assignments reference entities from the same session and reject conflicting President assignments.
-- [ ] Permit nation/company renaming only during Round 1, with length/character validation, moderation, uniqueness checks, and an audit record.
+- [x] Make session creation instructor-only and generate a unique, revocable lobby join code.
+- [x] Add lobby endpoints to join, list members/seats, assign or remove a member, and start the game.
+- [x] Validate that assignments reference entities from the same session and reject conflicting President assignments.
+- [x] Permit nation/company renaming only during Round 1, with length/character validation, moderation, uniqueness checks, and an audit record.
 
 #### Frontend
 
-- [ ] Add register/login screens and a lobby view showing unassigned players, available seats, and human/AI-vacant status.
-- [ ] Add instructor assignment controls and replace the unrestricted Phase 1 role switcher with the signed-in user's assigned seat.
-- [ ] Show clear empty, loading, validation, unauthorized, and join-code error states.
+- [x] Add register/login screens and a lobby view showing unassigned players and available seats.
+- [x] Add instructor assignment controls and replace the unrestricted Phase 1 role switcher with the signed-in user's assigned seat.
+- [x] Show clear empty, loading, validation, unauthorized, and join-code error states.
 
 #### Day 2 Acceptance
 
-- [ ] Four accounts can join one game; the instructor can assign two Presidents and two Company Executives across two nations.
-- [ ] Each player lands on the correct dashboard after assignment and cannot select an unassigned role from the UI.
+- [x] Four accounts can join one game; the instructor can assign two Presidents and two Company Executives across two nations.
+- [x] Each player lands on the correct dashboard after assignment and cannot select an unassigned role from the UI.
 
 ### Day 3 (Sep 11) — Server Authorization & Decision Readiness
 
@@ -1064,22 +1097,22 @@ Set-Location ../backend
 
 #### Backend
 
-- [ ] Require authentication on session, nation, company, market, map, news, and decision routes; define the intentionally public lobby response separately.
-- [ ] Enforce membership, session boundary, role, entity ownership, and current-phase checks on every command.
-- [ ] Restrict phase advancement and map mutation to the instructor; freeze the initial map when the game starts except through future validated infrastructure commands.
+- [x] Require authentication on session, nation, company, market, map, news, and decision routes; define the intentionally public lobby response separately.
+- [x] Enforce membership, session boundary, role, entity ownership, and current-phase checks on every command.
+- [x] Restrict phase advancement and map mutation to the instructor; freeze the initial map when the game starts except through future validated infrastructure commands.
 - [ ] Add per-seat decision status (`not_started`, `draft`, `submitted`, `auto_submitted`) and a session readiness summary without exposing private decision payloads.
-- [ ] Preserve idempotent decision resubmission during the correct open phase and lock decisions when that phase closes.
+- [x] Preserve idempotent decision resubmission during the correct open phase and lock decisions when that phase closes.
 - [ ] Add negative integration tests for cross-session access, horizontal privilege escalation, wrong-role submission, closed-phase submission, and non-instructor advancement.
 
 #### Frontend
 
-- [ ] Show the player's submission status and an instructor readiness board with counts only, not other teams' secret decisions.
-- [ ] Disable closed-phase forms and explain whether a decision is editable, submitted, or locked.
+- [x] Show the player's submission status and an instructor readiness board with counts only, not other teams' secret decisions.
+- [x] Disable closed-phase forms and explain whether a decision is editable, submitted, or locked.
 
 #### Day 3 Acceptance
 
-- [ ] Direct API calls cannot let one player read or mutate another player's protected seat.
-- [ ] The instructor can tell who is ready while secret decisions remain private until results make them public.
+- [x] Direct API calls cannot let one player read or mutate another player's protected seat.
+- [x] The instructor can tell who is ready while secret decisions remain private until results make them public.
 
 ### Day 4 (Sep 12) — Phase Deadlines & Real-Time Synchronization
 

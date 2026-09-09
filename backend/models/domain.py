@@ -1,5 +1,8 @@
+# pyrefly: ignore [missing-import]
 from sqlalchemy import Column, Integer, String, Float, ForeignKey, JSON, DateTime, Enum, UniqueConstraint
+# pyrefly: ignore [missing-import]
 from sqlalchemy.orm import relationship
+# pyrefly: ignore [missing-import]
 from sqlalchemy.sql import func
 import enum
 try:
@@ -38,6 +41,8 @@ class GameSession(Base):
     phase = Column(Enum(PhaseEnum), default=PhaseEnum.PLANNING)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     status = Column(String, default="active")
+    lobby_join_code = Column(String, nullable=True, unique=True, index=True)
+    lobby_code_revoked = Column(Integer, default=0, nullable=False)
 
     rounds = relationship("Round", back_populates="session")
     nations = relationship("Nation", back_populates="session")
@@ -46,14 +51,13 @@ class GameSession(Base):
 
 
 class User(Base):
-    """A person who can participate in one or more game sessions."""
-
     __tablename__ = "users"
 
     id = Column(Integer, primary_key=True, index=True)
     email = Column(String, nullable=False, unique=True, index=True)
     password_hash = Column(String, nullable=False)
     display_name = Column(String, nullable=True)
+    is_instructor = Column(Integer, default=0, nullable=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
     memberships = relationship("GameMembership", back_populates="user", cascade="all, delete-orphan")
@@ -61,8 +65,6 @@ class User(Base):
 
 
 class AuthSession(Base):
-    """A revocable, hashed bearer session token stored server-side."""
-
     __tablename__ = "auth_sessions"
 
     id = Column(Integer, primary_key=True, index=True)
@@ -76,27 +78,53 @@ class AuthSession(Base):
 
 
 class GameMembership(Base):
-    """A user's seat in a particular game session.
-
-    ``role`` is intentionally a string for this first migration so later role
-    types can be added without an SQLite enum migration. ``entity_id`` points
-    to a Nation for presidents and a Company for executives.
-    """
+    """A player's role and optional assigned entity in one game session."""
 
     __tablename__ = "game_memberships"
 
     id = Column(Integer, primary_key=True, index=True)
     session_id = Column(Integer, ForeignKey("game_sessions.id"), nullable=False, index=True)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
-    role = Column(String, nullable=False)
+    role = Column(String, nullable=False, default="player")
     entity_id = Column(Integer, nullable=True)
     joined_at = Column(DateTime(timezone=True), server_default=func.now())
 
     session = relationship("GameSession", back_populates="memberships")
     user = relationship("User", back_populates="memberships")
 
+    __table_args__ = (UniqueConstraint("session_id", "user_id", name="uq_membership_user_per_session"),)
+
+
+class LobbyAudit(Base):
+    """Append-only record of lobby-era naming and seat administration."""
+
+    __tablename__ = "lobby_audit"
+
+    id = Column(Integer, primary_key=True, index=True)
+    session_id = Column(Integer, ForeignKey("game_sessions.id"), nullable=False, index=True)
+    actor_user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    action = Column(String, nullable=False)
+    entity_type = Column(String, nullable=False)
+    entity_id = Column(Integer, nullable=False)
+    before_value = Column(String, nullable=True)
+    after_value = Column(String, nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+
+class DecisionDraft(Base):
+    """Server-persisted editable draft for one seat in one open round."""
+
+    __tablename__ = "decision_drafts"
+
+    id = Column(Integer, primary_key=True, index=True)
+    round_id = Column(Integer, ForeignKey("rounds.id"), nullable=False)
+    player_type = Column(String, nullable=False)
+    entity_id = Column(Integer, nullable=False)
+    decision_data = Column(JSON, default=dict)
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
     __table_args__ = (
-        UniqueConstraint("session_id", "user_id", name="uq_membership_user_per_session"),
+        UniqueConstraint("round_id", "player_type", "entity_id", name="uq_draft_entity_per_round"),
     )
 
 class MapSnapshot(Base):

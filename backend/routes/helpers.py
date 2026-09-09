@@ -2,9 +2,9 @@ from fastapi import HTTPException
 from sqlalchemy.orm import Session
 
 try:
-    from ..models.domain import GameSession
+    from ..models.domain import Company, GameMembership, GameSession, Nation
 except ImportError:
-    from models.domain import GameSession
+    from models.domain import Company, GameMembership, GameSession, Nation
 
 
 def get_session_or_404(db: Session, session_id: int) -> GameSession:
@@ -12,6 +12,43 @@ def get_session_or_404(db: Session, session_id: int) -> GameSession:
     if not session:
         raise HTTPException(status_code=404, detail="game session not found")
     return session
+
+
+def require_membership(db: Session, session_id: int, user_id: int) -> GameMembership:
+    membership = db.query(GameMembership).filter_by(session_id=session_id, user_id=user_id).first()
+    if membership is None:
+        raise HTTPException(status_code=403, detail="not a member of this game")
+    return membership
+
+
+def require_instructor(db: Session, session_id: int, user_id: int) -> GameMembership:
+    membership = require_membership(db, session_id, user_id)
+    if membership.role != "instructor":
+        raise HTTPException(status_code=403, detail="instructor role required")
+    return membership
+
+
+def require_assigned_membership(db: Session, session_id: int, user_id: int) -> GameMembership:
+    membership = require_membership(db, session_id, user_id)
+    if membership.role not in {"instructor", "president", "executive"}:
+        raise HTTPException(status_code=403, detail="an assigned game seat is required")
+    if membership.role != "instructor" and membership.entity_id is None:
+        raise HTTPException(status_code=403, detail="an assigned game seat is required")
+    return membership
+
+
+def can_read_nation(db: Session, membership: GameMembership, nation_id: int) -> bool:
+    if membership.role in {"instructor", "president"}:
+        return membership.role == "instructor" or membership.entity_id == nation_id
+    company = db.query(Company).filter_by(id=membership.entity_id).first()
+    return membership.role == "executive" and company is not None and company.nation_id == nation_id
+
+
+def can_read_company(db: Session, membership: GameMembership, company_id: int) -> bool:
+    if membership.role == "instructor": return True
+    if membership.role == "executive": return membership.entity_id == company_id
+    company = db.query(Company).filter_by(id=company_id).first()
+    return membership.role == "president" and company is not None and company.nation_id == membership.entity_id
 
 
 def serialize_company(company) -> dict:

@@ -52,12 +52,16 @@ class LoginPayload(BaseModel):
 
 
 def _public_user(user: User) -> dict:
-    return {"id": user.id, "email": user.email, "display_name": user.display_name, "created_at": user.created_at}
+    return {"id": user.id, "email": user.email, "display_name": user.display_name,
+            "is_instructor": bool(user.is_instructor), "created_at": user.created_at}
 
 
 @router.post("/register", status_code=status.HTTP_201_CREATED)
 def register(payload: RegisterPayload, response: Response, db: Session = Depends(get_db)):
-    user = User(email=payload.email, password_hash=hash_password(payload.password), display_name=payload.display_name)
+    # Local MVP bootstrap: the first account is the instructor; later accounts
+    # are players until an instructor assigns a game seat.
+    user = User(email=payload.email, password_hash=hash_password(payload.password), display_name=payload.display_name,
+                is_instructor=1 if db.query(User).count() == 0 else 0)
     db.add(user)
     try:
         db.commit()
@@ -74,7 +78,7 @@ def login(payload: LoginPayload, response: Response, db: Session = Depends(get_d
     user = db.query(User).filter_by(email=payload.email).first()
     if user is None or not verify_password(payload.password, user.password_hash):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="invalid email or password")
-    create_auth_session(db, user, response)
+    create_auth_session(db, user, response, revoke_existing=True)
     return {"user": _public_user(user)}
 
 

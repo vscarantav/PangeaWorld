@@ -1,26 +1,9 @@
 import React, { createContext, useContext, useEffect, useMemo, useState } from 'react';
 import * as api from '../api/client';
-import { generateMapData } from '../utils/MapGenerator';
 
 const GameContext = createContext(null);
 
-function serializeMapSnapshot(map, seed) {
-  return {
-    seed,
-    triangles: map.triangles.map((triangle) => ({ id: triangle.id, terrain: triangle.terrain.name, points: triangle.points })),
-    edges: map.edges.map((edge) => ({ id: edge.id, triangle_ids: edge.triangles.map((triangle) => triangle.id), has_railroad: Boolean(edge.hasRailroad), is_river: Boolean(edge.isRiver), is_impassable: Boolean(edge.isImpassable) })),
-    countries: map.countries.map((country) => ({ id: country.id, name: country.name, x: country.x, y: country.y, labelX: country.labelX, labelY: country.labelY })),
-    cities: map.triangles.filter((triangle) => triangle.isSmallCity || triangle.isBigCity).map((triangle) => ({
-      id: triangle.id,
-      triangle_id: triangle.id,
-      country_id: triangle.country?.id,
-      is_port: Boolean(triangle.isPort),
-      is_big_city: Boolean(triangle.isBigCity),
-    })),
-  };
-}
-
-export function GameProvider({ children }) {
+export function GameProvider({ children, sessionId, membership }) {
   const [session, setSession] = useState(null);
   const [nations, setNations] = useState([]);
   const [companies, setCompanies] = useState([]);
@@ -46,31 +29,18 @@ export function GameProvider({ children }) {
     let active = true;
     (async () => {
       try {
-        const savedId = window.localStorage.getItem('pangeaworld.sessionId');
-        let current = null;
-        if (savedId) {
-          try { current = await api.getSession(savedId); }
-          catch (err) { if (err.message.includes('404')) window.localStorage.removeItem('pangeaworld.sessionId'); else throw err; }
+        if (!sessionId) return;
+        const current = await api.getSession(sessionId);
+        if (active) {
+          await refresh(current.id);
+          if (membership?.role === 'president') setSelectedNationId(membership.entity_id);
+          if (membership?.role === 'executive') setSelectedCompanyId(membership.entity_id);
         }
-        if (!current) {
-          // The backend owns the session seed. The client only generates the
-          // renderer snapshot after receiving that seed, then submits it for
-          // server validation and persistence.
-          current = await api.createSession();
-          const snapshot = serializeMapSnapshot(generateMapData(current.seed), current.seed);
-          await api.updateMap(current.id, snapshot);
-          window.localStorage.setItem('pangeaworld.sessionId', String(current.id));
-        }
-        if (!current.map_snapshot || !Array.isArray(current.map_snapshot.cities)) {
-          const snapshot = serializeMapSnapshot(generateMapData(current.seed), current.seed);
-          await api.updateMap(current.id, snapshot);
-        }
-        if (active) await refresh(current.id);
       } catch (err) { if (active) setError(err.message); }
       finally { if (active) setLoading(false); }
     })();
     return () => { active = false; };
-  }, []);
+  }, [sessionId, membership?.role, membership?.entity_id]);
 
   const advance = async () => { const result = await api.advanceRound(session.id); await refresh(); return result; };
   const saveMapSnapshot = async (snapshot) => {
@@ -85,12 +55,13 @@ export function GameProvider({ children }) {
   };
   const submitNation = (data) => api.submitNationDecision(session.id, selectedNationId, data);
   const submitCompany = (data) => api.submitCompanyDecision(session.id, selectedCompanyId, data);
+  const saveCompanyDraft = (data) => api.saveCompanyDraft(session.id, selectedCompanyId, data);
   const value = useMemo(() => ({ session, nations, companies, market, resourceMarket, news,
     nation: nations.find((item) => item.id === selectedNationId) || null,
     company: companies.find((item) => item.id === selectedCompanyId) || null,
     selectedNationId, setSelectedNationId, selectedCompanyId, setSelectedCompanyId,
-    loading, error, refresh, advance, submitNation, submitCompany, saveMapSnapshot, loadResourceMarket }),
-    [session, nations, companies, market, resourceMarket, news, selectedNationId, selectedCompanyId, loading, error]);
+    membership, loading, error, refresh, advance, submitNation, submitCompany, saveCompanyDraft, saveMapSnapshot, loadResourceMarket }),
+    [session, nations, companies, market, resourceMarket, news, selectedNationId, selectedCompanyId, membership, loading, error]);
   return <GameContext.Provider value={value}>{children}</GameContext.Provider>;
 }
 

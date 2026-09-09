@@ -5,19 +5,22 @@ try:
     from ..database import get_db
     from ..engines.logistics import calculate_landed_cost, estimate_route
     from ..engines.resources import BASE_PRICES, calculate_scarcity
-    from ..models.domain import Nation, Resource, ResourceType
+    from ..models.domain import Company, Nation, Resource, ResourceType, User
+    from ..auth import get_current_user
 except ImportError:
     from database import get_db
     from engines.logistics import calculate_landed_cost, estimate_route
     from engines.resources import BASE_PRICES, calculate_scarcity
-    from models.domain import Nation, Resource, ResourceType
-from .helpers import get_session_or_404
+    from models.domain import Company, Nation, Resource, ResourceType, User
+    from auth import get_current_user
+from .helpers import get_session_or_404, require_assigned_membership
 
 router = APIRouter(prefix="/api/sessions/{session_id}/market", tags=["market"])
 
 @router.get("")
-def get_market(session_id: int, db: Session = Depends(get_db)):
+def get_market(session_id: int, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
     get_session_or_404(db, session_id)
+    require_assigned_membership(db, session_id, user.id)
     rows = db.query(Resource).join(Resource.nation).filter(Resource.nation.has(session_id=session_id)).all()
     resources = {}
     for name, price in BASE_PRICES.items():
@@ -34,8 +37,10 @@ def get_resource_market(
     resource_type: str,
     buyer_nation_id: int | None = Query(default=None),
     db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
 ):
     session = get_session_or_404(db, session_id)
+    membership = require_assigned_membership(db, session_id, user.id)
     if resource_type not in BASE_PRICES:
         raise HTTPException(status_code=404, detail="resource type not found")
     buyer = None
@@ -43,6 +48,12 @@ def get_resource_market(
         buyer = db.query(Nation).filter_by(id=buyer_nation_id, session_id=session_id).first()
         if buyer is None:
             raise HTTPException(status_code=404, detail="buyer nation not found")
+        if membership.role == "president" and membership.entity_id != buyer_nation_id:
+            raise HTTPException(status_code=403, detail="buyer nation must be your assigned nation")
+        if membership.role == "executive":
+            company = db.query(Company).filter_by(id=membership.entity_id).first()
+            if company is None or company.nation_id != buyer_nation_id:
+                raise HTTPException(status_code=403, detail="buyer nation must be your company's nation")
     rows = db.query(Resource).join(Resource.nation).filter(Resource.type == ResourceType(resource_type), Resource.nation.has(session_id=session_id)).all()
     scarcity = calculate_scarcity(resource_type, rows, sum(float(r.production_rate or 0.0) for r in rows))
     current_price = BASE_PRICES[resource_type] * scarcity["price_multiplier"]
