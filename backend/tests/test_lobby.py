@@ -10,8 +10,11 @@ from main import app
 def persist_test_map(client, game):
     snapshot = {
         "seed": game["seed"],
-        "triangles": [{"id": 1, "terrain": "Ocean"}, {"id": 2, "terrain": "Plains"}],
-        "edges": [{"id": 1, "triangle_ids": [1, 2], "is_impassable": True}],
+        "triangles": [
+            {"id": 1, "terrain": "Ocean", "points": [{"x": 0, "y": 0}, {"x": 1, "y": 0}, {"x": 0, "y": 1}]},
+            {"id": 2, "terrain": "Solhaven", "points": [{"x": 1, "y": 0}, {"x": 1, "y": 1}, {"x": 0, "y": 1}]},
+        ],
+        "edges": [{"id": "0.0,0.0-1.0,0.0", "p1": {"x": 0, "y": 0}, "p2": {"x": 1, "y": 0}, "triangle_ids": [1, 2], "is_impassable": True}],
         "countries": [{"id": str(index), "name": name, "x": index * 7, "y": 0} for index, name in enumerate(["Terranova", "Solhaven", "Korvath", "Valdoria", "Nordvik", "Zephyria", "Drakmoor", "Lunara"])],
         "cities": [{"id": index, "triangle_id": 2, "country_id": str(index // 8), "is_port": index in {32, 33, 48, 56, 57}} for index in range(64)],
     }
@@ -121,6 +124,8 @@ def test_round_one_rename_is_unique_authorized_and_audited():
     assert any(country["name"] == "New Terranova" for country in snapshot["countries"])
     assert instructor.put(f"/api/sessions/{game['id']}/nations/{lobby['seats']['nations'][1]['id']}/name", json={"name": "New Terranova"}).status_code == 409
     assert instructor.put(f"/api/sessions/{game['id']}/nations/{nation_id}/name", json={"name": "admin"}).status_code == 422
+    assert instructor.put(f"/api/sessions/{game['id']}/nations/{nation_id}/name", json={"name": "F.u.c.k"}).status_code == 422
+    assert instructor.put(f"/api/sessions/{game['id']}/nations/{nation_id}/name", json={"name": "Shitland"}).status_code == 422
     db = next(app.dependency_overrides[get_db]())
     try:
         from models.domain import LobbyAudit

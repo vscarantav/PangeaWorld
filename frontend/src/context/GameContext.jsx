@@ -1,5 +1,6 @@
-import React, { createContext, useContext, useEffect, useMemo, useState } from 'react';
+import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import * as api from '../api/client';
+import { useSessionEvents } from '../hooks/useSessionEvents';
 
 const GameContext = createContext(null);
 
@@ -15,15 +16,15 @@ export function GameProvider({ children, sessionId, membership }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
-  const refresh = async (sessionId = session?.id) => {
-    if (!sessionId) return;
+  const refresh = useCallback(async (targetSessionId) => {
+    if (!targetSessionId) return;
     const [nextSession, nextNations, nextCompanies, nextMarket, nextNews] = await Promise.all([
-      api.getSession(sessionId), api.getNations(sessionId), api.getCompanies(sessionId), api.getMarket(sessionId), api.getNews(sessionId),
+      api.getSession(targetSessionId), api.getNations(targetSessionId), api.getCompanies(targetSessionId), api.getMarket(targetSessionId), api.getNews(targetSessionId),
     ]);
     setSession(nextSession); setNations(nextNations); setCompanies(nextCompanies); setMarket(nextMarket); setNews(nextNews.articles || []);
     setSelectedNationId((current) => current || nextNations[0]?.id || null);
     setSelectedCompanyId((current) => current || nextCompanies[0]?.id || null);
-  };
+  }, []);
 
   useEffect(() => {
     let active = true;
@@ -40,9 +41,15 @@ export function GameProvider({ children, sessionId, membership }) {
       finally { if (active) setLoading(false); }
     })();
     return () => { active = false; };
-  }, [sessionId, membership?.role, membership?.entity_id]);
+  }, [sessionId, membership?.role, membership?.entity_id, refresh]);
 
-  const advance = async () => { const result = await api.advanceRound(session.id); await refresh(); return result; };
+  const realtimeConnected = useSessionEvents(sessionId, () => {
+    // Refresh on initial connection/reconnect too, closing the race where a
+    // state change occurs while the socket is being established.
+    refresh(sessionId).catch((refreshError) => setError(refreshError.message));
+  });
+
+  const advance = async () => { const result = await api.advanceRound(session.id, session.phase); await refresh(session.id); return result; };
   const saveMapSnapshot = async (snapshot) => {
     const result = await api.updateMap(session.id, snapshot);
     setSession((current) => ({ ...current, map_snapshot: result.map_snapshot }));
@@ -60,8 +67,8 @@ export function GameProvider({ children, sessionId, membership }) {
     nation: nations.find((item) => item.id === selectedNationId) || null,
     company: companies.find((item) => item.id === selectedCompanyId) || null,
     selectedNationId, setSelectedNationId, selectedCompanyId, setSelectedCompanyId,
-    membership, loading, error, refresh, advance, submitNation, submitCompany, saveCompanyDraft, saveMapSnapshot, loadResourceMarket }),
-    [session, nations, companies, market, resourceMarket, news, selectedNationId, selectedCompanyId, membership, loading, error]);
+    membership, loading, error, realtimeConnected, refresh, advance, submitNation, submitCompany, saveCompanyDraft, saveMapSnapshot, loadResourceMarket }),
+    [session, nations, companies, market, resourceMarket, news, selectedNationId, selectedCompanyId, membership, loading, error, realtimeConnected, refresh]);
   return <GameContext.Provider value={value}>{children}</GameContext.Provider>;
 }
 

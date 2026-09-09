@@ -25,8 +25,11 @@ def test_session_and_decision_api_flow():
         assert client.post("/api/auth/register", json={"email": "api-instructor@example.com", "password": "a safe password"}).status_code == 201
         map_snapshot = {
             "seed": "api-seed",
-            "triangles": [{"id": 1, "terrain": "Ocean"}, {"id": 2, "terrain": "Plains"}],
-            "edges": [{"id": 1, "triangle_ids": [1, 2], "is_impassable": True}],
+            "triangles": [
+                {"id": 1, "terrain": "Ocean", "points": [{"x": 0, "y": 0}, {"x": 1, "y": 0}, {"x": 0, "y": 1}]},
+                {"id": 2, "terrain": "Solhaven", "points": [{"x": 1, "y": 0}, {"x": 1, "y": 1}, {"x": 0, "y": 1}]},
+            ],
+            "edges": [{"id": "0.0,0.0-1.0,0.0", "p1": {"x": 0, "y": 0}, "p2": {"x": 1, "y": 0}, "triangle_ids": [1, 2], "is_impassable": True}],
             "countries": [{"id": str(index), "name": name, "x": index * 7, "y": 0} for index, name in enumerate(["Terranova", "Solhaven", "Korvath", "Valdoria", "Nordvik", "Zephyria", "Drakmoor", "Lunara"])],
             "cities": [{"id": index, "triangle_id": 2, "country_id": str(index // 8), "is_port": index in {32, 33, 48, 56, 57}} for index in range(64)],
         }
@@ -60,16 +63,16 @@ def test_session_and_decision_api_flow():
         assert client.post(f"/api/sessions/{session_id}/lobby/assign", json={"user_id": president_user["id"], "role": "president", "entity_id": nation_id}).status_code == 200
         assert client.post(f"/api/sessions/{session_id}/lobby/assign", json={"user_id": executive_user["id"], "role": "executive", "entity_id": company_id}).status_code == 200
         assert client.post(f"/api/sessions/{session_id}/lobby/start").status_code == 200
-        assert client.post(f"/api/sessions/{session_id}/advance").json()["phase"] == "presidential"
+        assert client.post(f"/api/sessions/{session_id}/advance", json={"expected_phase": "planning"}).json()["phase"] == "presidential"
         assert president.post(f"/api/sessions/{session_id}/nations/{nation_id}/decisions",
                            json={"decision_data": {"government_spending": 25}}).status_code == 200
-        assert client.post(f"/api/sessions/{session_id}/advance").json()["phase"] == "company"
+        assert client.post(f"/api/sessions/{session_id}/advance", json={"expected_phase": "presidential"}).json()["phase"] == "company"
         assert executive.post(f"/api/sessions/{session_id}/companies/{company_id}/decisions",
                            json={"decision_data": {"price": 150, "headcount": 20, "production_units": 1.1, "rnd_investment": 100,
                                                     "sourcing": [{"resource_type": "Energy", "supplier_nation_id": supplier_id,
                                                                   "quantity": 2, "mode": "rail"}]}}).status_code == 200
-        assert client.post(f"/api/sessions/{session_id}/advance").json()["phase"] == "processing"
-        processed = client.post(f"/api/sessions/{session_id}/advance")
+        assert client.post(f"/api/sessions/{session_id}/advance", json={"expected_phase": "company"}).json()["phase"] == "processing"
+        processed = client.post(f"/api/sessions/{session_id}/advance", json={"expected_phase": "processing"})
         assert processed.status_code == 200
         assert processed.json()["processed"] is True
         refreshed = client.get(f"/api/sessions/{session_id}").json()

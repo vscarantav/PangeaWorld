@@ -127,6 +127,8 @@ def submit_decision(db: Session, session: GameSession, player_type: str, entity_
         decision = Decision(round_id=current_round.id, player_type=player_type, entity_id=entity_id)
         db.add(decision)
     decision.decision_data = normalized
+    decision.submission_kind = "human"
+    decision.auto_reason = None
     db.commit()
     db.refresh(decision)
     return decision
@@ -283,7 +285,7 @@ def generate_round_results(session: GameSession, nation_results: list[dict], com
     }
 
 
-def process_round(db: Session, session: GameSession) -> dict:
+def process_round(db: Session, session: GameSession, commit: bool = True) -> dict:
     """Run the authoritative economy/resource loop for the active round."""
     current_round = _current_round(session)
     if session.phase != PhaseEnum.PROCESSING:
@@ -384,20 +386,22 @@ def process_round(db: Session, session: GameSession) -> dict:
     else:
         session.phase = PhaseEnum.COMPLETE
         session.status = "complete"
-    db.commit()
+    if commit:
+        db.commit()
     return {"round": completed_number, "status": current_round.status.value, "nations": nation_results, "companies": company_results}
 
 
-def advance_phase(db: Session, session: GameSession) -> dict:
+def advance_phase(db: Session, session: GameSession, commit: bool = True) -> dict:
     """Advance one phase, processing the round after both decision phases."""
     transitions = {PhaseEnum.PLANNING: PhaseEnum.PRESIDENTIAL, PhaseEnum.PRESIDENTIAL: PhaseEnum.COMPANY, PhaseEnum.COMPANY: PhaseEnum.PROCESSING}
     if session.phase in transitions:
         session.phase = transitions[session.phase]
         if session.phase == PhaseEnum.PROCESSING:
             _current_round(session).status = RoundStatus.SUBMITTED
-        db.commit()
+        if commit:
+            db.commit()
         return {"phase": session.phase.value, "round": session.current_round, "processed": False}
     if session.phase == PhaseEnum.PROCESSING:
-        result = process_round(db, session)
+        result = process_round(db, session, commit=commit)
         return {"phase": session.phase.value, "round": session.current_round, "processed": True, "results": result}
     raise ValueError("session has no advanceable phase")

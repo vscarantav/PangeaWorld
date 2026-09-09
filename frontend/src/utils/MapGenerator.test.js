@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 import { countriesDef, generateMapData, TERRAIN } from './MapGenerator.js';
+import { hydrateMapSnapshot, serializeMapSnapshot } from './MapSnapshot.js';
 
 function mapSignature(map) {
     const triangleState = map.triangles.map(triangle => [
@@ -73,6 +74,17 @@ function assertMapInvariants(seed) {
 
 test('map generation is deterministic for a seed', () => {
     assert.equal(mapSignature(generateMapData('determinism-check')), mapSignature(generateMapData('determinism-check')));
+});
+
+test('a persisted map snapshot hydrates without regenerating or losing state', () => {
+    const generated = generateMapData('snapshot-round-trip');
+    const snapshot = serializeMapSnapshot(generated, 'snapshot-round-trip');
+    const hydrated = hydrateMapSnapshot(snapshot);
+
+    assert.deepEqual(serializeMapSnapshot(hydrated, snapshot.seed), snapshot);
+    assert.equal(hydrated.edges[0].p1.x, generated.edges[0].p1.x);
+    assert.equal(hydrated.triangles[0].neighbors.length, generated.triangles[0].neighbors.length);
+    assert.equal(snapshot.version, 2);
 });
 
 test('map invariants hold across representative seeds', () => {

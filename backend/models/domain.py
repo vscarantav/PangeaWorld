@@ -43,6 +43,9 @@ class GameSession(Base):
     status = Column(String, default="active")
     lobby_join_code = Column(String, nullable=True, unique=True, index=True)
     lobby_code_revoked = Column(Integer, default=0, nullable=False)
+    presidential_deadline_at = Column(DateTime(timezone=True), nullable=True)
+    company_deadline_at = Column(DateTime(timezone=True), nullable=True)
+    phase_duration_seconds = Column(Integer, default=172800, nullable=False)
 
     rounds = relationship("Round", back_populates="session")
     nations = relationship("Nation", back_populates="session")
@@ -92,7 +95,10 @@ class GameMembership(Base):
     session = relationship("GameSession", back_populates="memberships")
     user = relationship("User", back_populates="memberships")
 
-    __table_args__ = (UniqueConstraint("session_id", "user_id", name="uq_membership_user_per_session"),)
+    __table_args__ = (
+        UniqueConstraint("session_id", "user_id", name="uq_membership_user_per_session"),
+        UniqueConstraint("session_id", "role", "entity_id", name="uq_membership_seat_per_session"),
+    )
 
 
 class LobbyAudit(Base):
@@ -220,6 +226,8 @@ class Decision(Base):
     entity_id = Column(Integer, nullable=False) # Nation ID or Company ID
     decision_data = Column(JSON, default=dict)
     submitted_at = Column(DateTime(timezone=True), server_default=func.now())
+    submission_kind = Column(String, default="human", nullable=False)
+    auto_reason = Column(String, nullable=True)
 
     round = relationship("Round", back_populates="decisions")
 

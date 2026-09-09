@@ -93,6 +93,8 @@ def test_phase1_schema_and_new_auth_tables_are_created_together():
     tables = set(inspect(engine).get_table_names())
     assert {"game_sessions", "nations", "companies", "rounds", "decisions"}.issubset(tables)
     assert {"users", "auth_sessions", "game_memberships"}.issubset(tables)
+    membership_constraints = {item["name"] for item in inspect(engine).get_unique_constraints("game_memberships")}
+    assert "uq_membership_seat_per_session" in membership_constraints
 
     db = sessionmaker(bind=engine)()
     user = User(email="member@example.com", password_hash="test-hash")

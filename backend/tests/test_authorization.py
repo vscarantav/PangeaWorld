@@ -39,16 +39,20 @@ def test_protected_routes_reject_guests_and_cross_seat_actions():
     guest = TestClient(app)
     assert guest.get(f"/api/sessions/{game_id}").status_code == 401
     assert guest.get(f"/api/sessions/{game_id}/market").status_code == 401
-    assert instructor.post(f"/api/sessions/{game_id}/advance").status_code == 200
+    assert instructor.post(f"/api/sessions/{game_id}/advance", json={"expected_phase": "planning"}).status_code == 200
     assert executive.post(f"/api/sessions/{game_id}/nations/{nation_id}/decisions", json={"decision_data": {}}).status_code == 403
     assert president.post(f"/api/sessions/{game_id}/nations/{nation_id}/decisions", json={"decision_data": {}}).status_code == 200
     assert president.post(f"/api/sessions/{game_id}/companies/{company_id}/decisions", json={"decision_data": {}}).status_code == 403
-    assert president.post(f"/api/sessions/{game_id}/advance").status_code == 403
+    assert president.post(f"/api/sessions/{game_id}/advance", json={"expected_phase": "presidential"}).status_code == 403
     assert instructor.get(f"/api/sessions/{game_id}/readiness").json()["submitted"] == 1
     private_readiness = president.get(f"/api/sessions/{game_id}/readiness")
     assert private_readiness.status_code == 200
-    assert private_readiness.json() == {"round": 1, "phase": "presidential", "my_status": "submitted"}
-    assert instructor.post(f"/api/sessions/{game_id}/advance").status_code == 200
+    private_body = private_readiness.json()
+    assert {key: private_body[key] for key in ("round", "phase", "my_status")} == {
+        "round": 1, "phase": "presidential", "my_status": "submitted"
+    }
+    assert private_body["deadline_at"] and private_body["server_time"]
+    assert instructor.post(f"/api/sessions/{game_id}/advance", json={"expected_phase": "presidential"}).status_code == 200
     assert president.post(f"/api/sessions/{game_id}/nations/{nation_id}/decisions", json={"decision_data": {}}).status_code == 409
     app.dependency_overrides.clear()
 
@@ -84,7 +88,7 @@ def test_unassigned_members_cannot_read_game_data_and_players_cannot_create_game
 
 def test_server_drafts_are_private_and_visible_to_readiness_without_payloads():
     instructor, president, executive, game_id, nation_id, company_id = setup_game()
-    assert instructor.post(f"/api/sessions/{game_id}/advance").status_code == 200
+    assert instructor.post(f"/api/sessions/{game_id}/advance", json={"expected_phase": "planning"}).status_code == 200
     draft = president.put(f"/api/sessions/{game_id}/nations/{nation_id}/draft", json={"decision_data": {"government_spending": 1}})
     assert draft.status_code == 200
     assert instructor.get(f"/api/sessions/{game_id}/readiness").json()["seats"][0]["status"] == "draft"
@@ -101,6 +105,34 @@ def test_legacy_session_can_be_claimed_by_an_instructor():
         legacy_id = legacy.id
     finally:
         db.close()
-    assert instructor.post(f"/api/sessions/{legacy_id}/claim-legacy").status_code == 200
+    recoverable = instructor.get("/api/sessions/legacy/recoverable")
+    assert recoverable.status_code == 200
+    assert any(item["id"] == legacy_id and not item["has_map_snapshot"] for item in recoverable.json())
+    claimed = instructor.post(f"/api/sessions/{legacy_id}/claim-legacy")
+    assert claimed.status_code == 200
+    assert claimed.json()["requires_map_rebuild"] is True
+    assert claimed.json()["session"]["status"] == "lobby"
+    recovered_lobby = instructor.get(f"/api/sessions/{legacy_id}/lobby").json()
+    assert len(recovered_lobby["seats"]["nations"]) == 8
+    assert len(recovered_lobby["seats"]["companies"]) == 80
+    persist_test_map(instructor, claimed.json()["session"])
+    assert instructor.post(f"/api/sessions/{legacy_id}/lobby/start").status_code == 200
     assert instructor.get(f"/api/sessions/{legacy_id}").status_code == 200
+    app.dependency_overrides.clear()
+
+
+def test_cross_session_reads_and_commands_are_rejected():
+    instructor, president, executive, game_id, _, _ = setup_game()
+    other_game = instructor.post("/api/sessions", json={}).json()
+    persist_test_map(instructor, other_game)
+    other_lobby = instructor.get(f"/api/sessions/{other_game['id']}/lobby").json()
+    other_nation_id = other_lobby["seats"]["nations"][0]["id"]
+    other_company_id = other_lobby["seats"]["companies"][0]["id"]
+
+    assert president.get(f"/api/sessions/{other_game['id']}").status_code == 403
+    assert president.get("/api/sessions/legacy/recoverable").status_code == 403
+    assert president.get(f"/api/sessions/{other_game['id']}/nations/{other_nation_id}").status_code == 403
+    assert executive.get(f"/api/sessions/{other_game['id']}/companies/{other_company_id}").status_code == 403
+    assert executive.post(f"/api/sessions/{other_game['id']}/companies/{other_company_id}/decisions", json={"decision_data": {}}).status_code == 403
+    assert president.post(f"/api/sessions/{game_id}/advance", json={"expected_phase": "planning"}).status_code == 403
     app.dependency_overrides.clear()

@@ -1,5 +1,6 @@
 fastapi
 sqlalchemy
 uvicorn
+websockets
 pytest
 httpx

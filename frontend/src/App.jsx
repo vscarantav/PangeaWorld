@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import PresidentDashboard from './components/PresidentDashboard';
 import ExecutiveDashboard from './components/ExecutiveDashboard';
 import GameMap from './components/GameMap';
@@ -6,93 +6,266 @@ import './index.css';
 import { GameProvider, useGame } from './context/GameContext';
 import * as api from './api/client';
 import { generateMapData } from './utils/MapGenerator';
+import { serializeMapSnapshot } from './utils/MapSnapshot';
+import { useSessionEvents } from './hooks/useSessionEvents';
 
-function serializeStartingMap(map, seed) {
-  return {
-    seed,
-    triangles: map.triangles.map((triangle) => ({ id: triangle.id, terrain: triangle.terrain.name, points: triangle.points })),
-    edges: map.edges.map((edge) => ({ id: edge.id, triangle_ids: edge.triangles.map((triangle) => triangle.id), has_railroad: Boolean(edge.hasRailroad), is_river: Boolean(edge.isRiver), is_impassable: Boolean(edge.isImpassable) })),
-    countries: map.countries.map((country) => ({ id: country.id, name: country.name, x: country.x, y: country.y, labelX: country.labelX, labelY: country.labelY })),
-    cities: map.triangles.filter((triangle) => triangle.isSmallCity || triangle.isBigCity).map((triangle) => ({ id: triangle.id, triangle_id: triangle.id, country_id: triangle.country?.id, is_port: Boolean(triangle.isPort), is_big_city: Boolean(triangle.isBigCity) })),
-  };
+function DeadlineCountdown({ deadlineAt, serverTime }) {
+  const [remaining, setRemaining] = useState(null);
+  useEffect(() => {
+    if (!deadlineAt || !serverTime) return undefined;
+    const serverOffset = Date.parse(serverTime) - Date.now();
+    const update = () => setRemaining(Math.max(0, Date.parse(deadlineAt) - (Date.now() + serverOffset)));
+    update();
+    const timer = window.setInterval(update, 1000);
+    return () => window.clearInterval(timer);
+  }, [deadlineAt, serverTime]);
+  if (!deadlineAt || !serverTime || remaining === null) return null;
+  const totalSeconds = Math.ceil(remaining / 1000);
+  const hours = Math.floor(totalSeconds / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const seconds = totalSeconds % 60;
+  return <span> · Deadline: {hours}h {minutes}m {seconds}s</span>;
 }
 
-function GameShell() {
-  const { loading, error, session, nation, company, membership } = useGame();
+function decisionStatusLabel(status) {
+  return status === 'auto_submitted' ? 'automatic (deadline missed)' : status?.replaceAll('_', ' ');
+}
 
-  const [role, setRole] = useState(membership?.role === 'president' ? 'president' : 'executive');
+function GameShell({ onSignOut }) {
+  const { loading, error, session, nation, company, membership, realtimeConnected, refresh } = useGame();
+  const dashboardRole = membership?.role === 'president' ? 'president' : 'executive';
+  const [view, setView] = useState(dashboardRole);
   const [readiness, setReadiness] = useState(null);
-  useEffect(() => { if (!session?.id) return undefined; const load = () => api.getReadiness(session.id).then(setReadiness).catch(() => {}); load(); const timer = window.setInterval(load, 15000); return () => window.clearInterval(timer); }, [session?.id]);
+
+  useEffect(() => {
+    if (!session?.id) return undefined;
+    const load = () => Promise.all([api.getReadiness(session.id).then(setReadiness), refresh(session.id)]).catch(() => {});
+    load();
+    const timer = window.setInterval(load, 15000);
+    return () => window.clearInterval(timer);
+  }, [session?.id, refresh]);
 
   if (loading) return <div style={{ padding: '3rem', color: 'white' }}>Connecting to PangeaWorld server…</div>;
   if (error) return <div style={{ padding: '3rem', color: '#f87171' }}>Unable to connect to the game server: {error}</div>;
   return (
     <>
-      <div style={{ position: 'fixed', top: '10px', left: '50%', transform: 'translateX(-50%)', zIndex: 9999, background: 'rgba(0,0,0,0.8)', padding: '5px 10px', borderRadius: '20px', border: '1px solid var(--border-light)', display: 'flex', gap: '10px', alignItems: 'center' }}>
-        <span style={{ color: 'white', padding: '5px 15px', fontWeight: 'bold' }}>{membership?.role === 'president' ? 'President' : 'Company Executive'}</span>
-        <button 
-          onClick={() => setRole(role === 'map' ? membership?.role === 'president' ? 'president' : 'executive' : 'map')}
-          style={{ background: role === 'map' ? 'var(--accent-primary)' : 'transparent', color: 'white', border: 'none', padding: '5px 15px', borderRadius: '15px', cursor: 'pointer', fontWeight: 'bold' }}
+      <div style={{ position: 'fixed', top: 10, left: '50%', transform: 'translateX(-50%)', zIndex: 9999, background: 'rgba(0,0,0,0.8)', padding: '5px 10px', borderRadius: 20, border: '1px solid var(--border-light)', display: 'flex', gap: 10, alignItems: 'center' }}>
+        <span style={{ color: 'white', padding: '5px 15px', fontWeight: 'bold' }}>{dashboardRole === 'president' ? 'President' : 'Company Executive'}</span>
+        <button
+          onClick={() => setView(view === 'map' ? dashboardRole : 'map')}
+          style={{ background: view === 'map' ? 'var(--accent-primary)' : 'transparent', color: 'white', border: 'none', padding: '5px 15px', borderRadius: 15, cursor: 'pointer', fontWeight: 'bold' }}
         >
-          {role === 'map' ? 'Return to dashboard' : 'Map View'}
+          {view === 'map' ? 'Return to dashboard' : 'Map View'}
         </button>
-        
+        <button onClick={onSignOut}>Sign out</button>
       </div>
-      
-        <div style={{ position: 'fixed', bottom: 16, left: 16, zIndex: 9999, background: 'rgba(15,23,42,.95)', padding: '10px 14px', borderRadius: 8, color: 'white', border: '1px solid var(--border-light)' }}>
-          Round {session.current_round} · {session.phase} · {nation?.name || 'No nation'} · {company?.name || 'No company'}
-          {readiness?.my_status && ` · Decision: ${readiness.my_status}`}
+      <div style={{ position: 'fixed', bottom: 16, left: 16, zIndex: 9999, background: 'rgba(15,23,42,.95)', padding: '10px 14px', borderRadius: 8, color: 'white', border: '1px solid var(--border-light)' }}>
+        Round {session.current_round} · {session.phase} · {nation?.name || 'No nation'} · {company?.name || 'No company'}
+        {readiness?.my_status && ` · Decision: ${decisionStatusLabel(readiness.my_status)}`}
+        {` · ${realtimeConnected ? 'Live' : 'Reconnecting…'}`}
+        <DeadlineCountdown deadlineAt={readiness?.deadline_at} serverTime={readiness?.server_time} />
+      </div>
+      {view === 'president' && <PresidentDashboard />}
+      {view === 'executive' && <ExecutiveDashboard />}
+      {view === 'map' && (
+        <div style={{ width: '100vw', height: '100vh', display: 'flex', justifyContent: 'center', alignItems: 'center', backgroundColor: '#1e1e1e' }}>
+          <GameMap seed={session.seed} mapSnapshot={session.map_snapshot} isPlanningMode={false} />
         </div>
-      {role === 'president' && <PresidentDashboard />}
-      {role === 'executive' && <ExecutiveDashboard />}
-      {role === 'map' && (
-          <div style={{ width: '100vw', height: '100vh', display: 'flex', justifyContent: 'center', alignItems: 'center', backgroundColor: '#1e1e1e' }}>
-              <GameMap seed={session.seed} mapSnapshot={session.map_snapshot} isPlanningMode={false} />
-          </div>
       )}
     </>
   );
 }
 
 function AuthAndLobby() {
-  const [user, setUser] = useState(null); const [email, setEmail] = useState(''); const [password, setPassword] = useState('');
-  const [joinCode, setJoinCode] = useState(''); const [lobby, setLobby] = useState(null); const [error, setError] = useState('');
+  const [user, setUser] = useState(null);
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [joinCode, setJoinCode] = useState('');
+  const [lobby, setLobby] = useState(null);
+  const [recoverable, setRecoverable] = useState([]);
+  const [error, setError] = useState('');
   const [registering, setRegistering] = useState(false);
-  const loadLobby = async (id) => { const next = await api.getLobby(id); setLobby(next); window.localStorage.setItem('pangeaworld.sessionId', id); };
-  useEffect(() => { api.getMe().then(({ user: current }) => { setUser(current); const id = window.localStorage.getItem('pangeaworld.sessionId'); if (id) loadLobby(id).catch(() => window.localStorage.removeItem('pangeaworld.sessionId')); }).catch(() => {}); }, []);
+  const [loadingAuth, setLoadingAuth] = useState(true);
+  const [phaseDurationSeconds, setPhaseDurationSeconds] = useState(172800);
+
+  const loadLobby = useCallback(async (id) => {
+    const next = await api.getLobby(id);
+    setLobby(next);
+    window.localStorage.setItem('pangeaworld.sessionId', id);
+    return next;
+  }, []);
+
+  const loadRecoverable = useCallback(async (currentUser) => {
+    if (!currentUser?.is_instructor) return;
+    setRecoverable(await api.getRecoverableSessions());
+  }, []);
+
+  const restoreLobby = useCallback(async () => {
+    const id = window.localStorage.getItem('pangeaworld.sessionId');
+    if (!id) return false;
+    try {
+      await loadLobby(id);
+      return true;
+    } catch {
+      window.localStorage.removeItem('pangeaworld.sessionId');
+      return false;
+    }
+  }, [loadLobby]);
+
   useEffect(() => {
-    if (!lobby || lobby.status !== 'lobby') return undefined;
-    const timer = window.setInterval(() => api.getLobby(lobby.session_id).then(setLobby).catch(() => {}), 10000);
+    let active = true;
+    api.getMe()
+      .then(async ({ user: current }) => {
+        if (!active) return;
+        setUser(current);
+        const restored = await restoreLobby();
+        if (!restored && active) await loadRecoverable(current);
+      })
+      .catch(() => {})
+      .finally(() => { if (active) setLoadingAuth(false); });
+    return () => { active = false; };
+  }, [loadRecoverable, restoreLobby]);
+
+  useEffect(() => {
+    const sessionId = lobby?.session_id;
+    if (!sessionId || lobby.status !== 'lobby') return undefined;
+    const timer = window.setInterval(() => api.getLobby(sessionId).then(setLobby).catch(() => {}), 10000);
     return () => window.clearInterval(timer);
   }, [lobby?.session_id, lobby?.status]);
-  const authenticate = async (event) => { event.preventDefault(); setError(''); try { const result = registering ? await api.register({ email, password }) : await api.login({ email, password }); setUser(result.user); } catch (err) { setError(err.message); } };
-  const createGame = async () => { try { const game = await api.createSession(); await api.updateMap(game.id, serializeStartingMap(generateMapData(game.seed), game.seed)); await loadLobby(game.id); } catch (err) { setError(err.message); } };
-  const joinGame = async () => { try { const result = await api.joinLobby(joinCode); await loadLobby(result.session_id); } catch (err) { setError(err.message); } };
-  if (!user) return <main className="auth-page"><h1>PangeaWorld</h1><form onSubmit={authenticate}><input placeholder="Email" value={email} onChange={e => setEmail(e.target.value)} /><input type="password" placeholder="Password (8+ characters)" value={password} onChange={e => setPassword(e.target.value)} /><button>{registering ? 'Create account' : 'Sign in'}</button></form><button onClick={() => setRegistering(!registering)}>{registering ? 'Already have an account?' : 'Need an account?'}</button>{error && <p>{error}</p>}</main>;
-  if (!lobby) return <main className="auth-page"><h1>Welcome, {user.display_name || user.email}</h1>{user.is_instructor && <button onClick={createGame}>Create instructor game</button>}<div><input placeholder="Lobby join code" value={joinCode} onChange={e => setJoinCode(e.target.value)} /><button onClick={joinGame}>Join game</button></div>{!user.is_instructor && <p>Ask your instructor for a lobby join code.</p>}{error && <p>{error}</p>}</main>;
+
+  useSessionEvents(lobby?.status === 'lobby' ? lobby.session_id : null, () => {
+    if (lobby?.session_id) loadLobby(lobby.session_id).catch(() => {});
+  });
+
+  const authenticate = async (event) => {
+    event.preventDefault();
+    setError('');
+    try {
+      const result = registering ? await api.register({ email, password }) : await api.login({ email, password });
+      setUser(result.user);
+      const restored = await restoreLobby();
+      if (!restored) await loadRecoverable(result.user);
+    } catch (err) {
+      setError(err.message);
+    }
+  };
+
+  const signOut = async () => {
+    setError('');
+    try {
+      await api.logout();
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setUser(null);
+      setLobby(null);
+      setRecoverable([]);
+    }
+  };
+
+  const createGame = async () => {
+    setError('');
+    try {
+      const game = await api.createSession(phaseDurationSeconds);
+      await generateAndPersistMap(game.id, game.seed);
+      await loadLobby(game.id);
+    } catch (err) {
+      setError(err.message);
+    }
+  };
+
+  const recoverGame = async (legacy) => {
+    setError('');
+    try {
+      const result = await api.claimLegacySession(legacy.id);
+      await loadLobby(result.session.id);
+      if (result.requires_map_rebuild) {
+        await generateAndPersistMap(result.session.id, result.session.seed);
+        await loadLobby(result.session.id);
+      }
+    } catch (err) {
+      setError(err.message);
+    }
+  };
+
+  const generateAndPersistMap = async (sessionId, seed) => {
+    const snapshot = serializeMapSnapshot(generateMapData(seed), seed);
+    return api.updateMap(sessionId, snapshot);
+  };
+
+  const joinGame = async () => {
+    setError('');
+    try {
+      const result = await api.joinLobby(joinCode);
+      await loadLobby(result.session_id);
+    } catch (err) {
+      setError(err.message);
+    }
+  };
+
+  if (loadingAuth) return <main className="auth-page"><h1>PangeaWorld</h1><p>Restoring your secure session…</p></main>;
+  if (!user) return <main className="auth-page"><h1>PangeaWorld</h1><form onSubmit={authenticate}><input placeholder="Email" value={email} onChange={(event) => setEmail(event.target.value)} /><input type="password" placeholder="Password (8+ characters)" value={password} onChange={(event) => setPassword(event.target.value)} /><button>{registering ? 'Create account' : 'Sign in'}</button></form><button onClick={() => setRegistering(!registering)}>{registering ? 'Already have an account?' : 'Need an account?'}</button>{error && <p>{error}</p>}</main>;
+  if (!lobby) return <main className="auth-page"><h1>Welcome, {user.display_name || user.email}</h1>{user.is_instructor && <div><label>Phase deadline <select aria-label="Phase deadline" value={phaseDurationSeconds} onChange={(event) => setPhaseDurationSeconds(Number(event.target.value))}><option value={172800}>48 hours</option><option value={300}>5 minutes (testing)</option><option value={30}>30 seconds (testing)</option></select></label><button onClick={createGame}>Create instructor game</button></div>}{recoverable.map((legacy) => <button key={legacy.id} onClick={() => recoverGame(legacy)}>Recover legacy game #{legacy.id}</button>)}<div><input placeholder="Lobby join code" value={joinCode} onChange={(event) => setJoinCode(event.target.value)} /><button onClick={joinGame}>Join game</button></div>{!user.is_instructor && <p>Ask your instructor for a lobby join code.</p>}<button onClick={signOut}>Sign out</button>{error && <p>{error}</p>}</main>;
+
   const mine = lobby.my_membership;
-  if (lobby.status === 'lobby') return <main className="auth-page"><h1>Game lobby</h1>{mine.role === 'instructor' ? <InstructorLobby lobby={lobby} refresh={() => loadLobby(lobby.session_id)} /> : <p>{mine.entity_id ? `Assigned as ${mine.role}. Waiting for the instructor to start the game.` : 'Waiting for the instructor to assign your seat.'}</p>}<button onClick={() => { api.logout(); setUser(null); setLobby(null); }}>Sign out</button></main>;
-  if (mine.role === 'instructor') return <InstructorGame sessionId={lobby.session_id} />;
-  if (!mine.entity_id) return <main className="auth-page">This game has started, but you do not have an assigned seat.</main>;
-  return <GameProvider sessionId={lobby.session_id} membership={mine}><GameShell /></GameProvider>;
+  if (lobby.status === 'lobby') return <main className="auth-page"><h1>Game lobby</h1>{mine.role === 'instructor' ? <InstructorLobby lobby={lobby} refresh={() => loadLobby(lobby.session_id)} generateMap={() => generateAndPersistMap(lobby.session_id, lobby.seed).then(() => loadLobby(lobby.session_id))} /> : <PlayerLobby lobby={lobby} refresh={() => loadLobby(lobby.session_id)} />}<button onClick={signOut}>Sign out</button></main>;
+  if (mine.role === 'instructor') return <InstructorGame sessionId={lobby.session_id} onSignOut={signOut} />;
+  if (!mine.entity_id) return <main className="auth-page"><p>This game has started, but you do not have an assigned seat.</p><button onClick={signOut}>Sign out</button></main>;
+  return <GameProvider sessionId={lobby.session_id} membership={mine}><GameShell onSignOut={signOut} /></GameProvider>;
 }
 
-function InstructorLobby({ lobby, refresh }) {
+function PlayerLobby({ lobby, refresh }) {
+  const [name, setName] = useState('');
+  const [message, setMessage] = useState('');
+  const membership = lobby.my_membership;
+  const rename = async () => {
+    try {
+      if (membership.role === 'president') await api.renameNation(lobby.session_id, membership.entity_id, name);
+      if (membership.role === 'executive') await api.renameCompany(lobby.session_id, membership.entity_id, name);
+      setMessage('Name updated.');
+      setName('');
+      await refresh();
+    } catch (error) {
+      setMessage(error.message);
+    }
+  };
+  return <>{membership.entity_id ? <><p>Assigned as {membership.role}. Waiting for the instructor to start the game.</p><div><input maxLength={60} placeholder={`Rename your ${membership.role === 'president' ? 'nation' : 'company'}`} value={name} onChange={(event) => setName(event.target.value)} /><button disabled={name.trim().length < 2} onClick={rename}>Update name</button></div>{message && <p>{message}</p>}</> : <p>Waiting for the instructor to assign your seat.</p>}</>;
+}
+
+function InstructorLobby({ lobby, refresh, generateMap }) {
   const [error, setError] = useState('');
-  const assign = async (userId, role, entityId) => { try { await api.assignSeat(lobby.session_id, { user_id: userId, role, entity_id: Number(entityId) }); refresh(); } catch (err) { setError(err.message); } };
-  return <><p>Share join code: <strong>{lobby.join_code}</strong></p><p>{lobby.members.length} players in lobby</p><p>{lobby.seats.nations.filter(s => !s.occupied).length} president seats and {lobby.seats.companies.filter(s => !s.occupied).length} executive seats available; unfilled seats will be AI-vacant.</p>{lobby.members.filter(m => m.role !== 'instructor').map(member => <div key={member.id}><span>{member.display_name} — {member.role}{member.entity_id ? ` #${member.entity_id}` : ''}</span><select defaultValue="" onChange={e => { const [role, id] = e.target.value.split(':'); if (id) assign(member.user_id, role, id); }}><option value="">Assign seat…</option><optgroup label="Presidents">{lobby.seats.nations.map(s => <option key={`p${s.id}`} disabled={s.occupied} value={`president:${s.id}`}>{s.name}{s.occupied ? ' (occupied)' : ''}</option>)}</optgroup><optgroup label="Executives">{lobby.seats.companies.map(s => <option key={`e${s.id}`} disabled={s.occupied} value={`executive:${s.id}`}>{s.name}{s.occupied ? ' (occupied)' : ''}</option>)}</optgroup></select></div>)}<button onClick={() => api.startLobby(lobby.session_id).then(refresh).catch(e => setError(e.message))}>Start game</button>{error && <p>{error}</p>}</>;
+  const assign = async (userId, role, entityId) => {
+    try {
+      await api.assignSeat(lobby.session_id, { user_id: userId, role, entity_id: Number(entityId) });
+      await refresh();
+    } catch (err) {
+      setError(err.message);
+    }
+  };
+  return <><p>Share join code: <strong>{lobby.join_code}</strong></p><p>{lobby.members.length} players in lobby</p><p>{lobby.seats.nations.filter((seat) => !seat.occupied).length} president seats and {lobby.seats.companies.filter((seat) => !seat.occupied).length} executive seats available; unfilled seats will be AI-vacant.</p>{!lobby.has_map_snapshot && <button onClick={() => generateMap().catch((mapError) => setError(mapError.message))}>Generate starting map</button>}{lobby.members.filter((member) => member.role !== 'instructor').map((member) => <div key={member.id} data-member-email={member.display_name}><span>{member.display_name} — {member.role}{member.entity_id ? ` #${member.entity_id}` : ''}</span><select defaultValue="" onChange={(event) => { const [role, id] = event.target.value.split(':'); if (id) assign(member.user_id, role, id); }}><option value="">Assign seat…</option><optgroup label="Presidents">{lobby.seats.nations.map((seat) => <option key={`p${seat.id}`} disabled={seat.occupied} value={`president:${seat.id}`}>{seat.name}{seat.occupied ? ' (occupied)' : ''}</option>)}</optgroup><optgroup label="Executives">{lobby.seats.companies.map((seat) => <option key={`e${seat.id}`} disabled={seat.occupied} value={`executive:${seat.id}`}>{seat.name}{seat.occupied ? ' (occupied)' : ''}</option>)}</optgroup></select></div>)}<button disabled={!lobby.has_map_snapshot} onClick={() => api.startLobby(lobby.session_id).then(refresh).catch((error) => setError(error.message))}>Start game</button>{error && <p>{error}</p>}</>;
 }
 
-function InstructorGame({ sessionId }) {
-  const [summary, setSummary] = useState(null); const [error, setError] = useState('');
-  const refresh = () => api.getReadiness(sessionId).then(setSummary).catch(err => setError(err.message));
-  useEffect(() => { refresh(); const timer = window.setInterval(refresh, 15000); return () => window.clearInterval(timer); }, [sessionId]);
-  const advance = async () => { try { await api.advanceRound(sessionId); await refresh(); } catch (err) { setError(err.message); } };
-  return <main className="auth-page"><h1>Instructor readiness board</h1>{summary && <><p>Round {summary.round} · {summary.phase}</p><p>{summary.submitted}/{summary.total} assigned seats submitted.</p>{summary.seats.map(seat => <p key={`${seat.role}-${seat.entity_id}`}>{seat.role} #{seat.entity_id}: {seat.status}</p>)}</>}{error && <p>{error}</p>}<button onClick={refresh}>Refresh</button><button onClick={advance}>Advance phase</button></main>;
+function InstructorGame({ sessionId, onSignOut }) {
+  const [summary, setSummary] = useState(null);
+  const [error, setError] = useState('');
+  const refresh = useCallback(() => api.getReadiness(sessionId).then(setSummary).catch((err) => setError(err.message)), [sessionId]);
+  useEffect(() => {
+    refresh();
+    const timer = window.setInterval(refresh, 15000);
+    return () => window.clearInterval(timer);
+  }, [refresh]);
+  const realtimeConnected = useSessionEvents(sessionId, refresh);
+  const advance = async () => {
+    try {
+      await api.advanceRound(sessionId, summary.phase);
+      await refresh();
+    } catch (err) {
+      setError(err.message);
+    }
+  };
+  return <main className="auth-page"><h1>Instructor readiness board</h1><p>{realtimeConnected ? 'Live' : 'Reconnecting…'}</p>{summary && <><p>Round {summary.round} · {summary.phase}<DeadlineCountdown deadlineAt={summary.deadline_at} serverTime={summary.server_time} /></p><p>{summary.submitted}/{summary.total} assigned seats submitted.</p>{summary.seats.map((seat) => <p key={`${seat.role}-${seat.entity_id}`}>{seat.role} #{seat.entity_id}: {decisionStatusLabel(seat.status)}</p>)}</>}{error && <p>{error}</p>}<button onClick={refresh}>Refresh</button><button disabled={summary?.phase === 'complete'} onClick={advance}>Advance phase</button><button onClick={onSignOut}>Sign out</button></main>;
 }
 
-function App() {
+export default function App() {
   return <AuthAndLobby />;
 }
-
-export default App;

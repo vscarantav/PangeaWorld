@@ -13,9 +13,11 @@ PangeaWorld/
     ├── package.json / vite.config.js          (Vite tooling configuration)
     ├── index.html                             (Vite entry point)
     ├── src/
-    │   ├── components/GameMap.jsx             (React Canvas renderer and interactions)
-    │   └── utils/MapGenerator.js              (Canonical seeded map generator)
-    ├── src/utils/MapGenerator.test.js         (Seeded map-invariant regression suite)
+    │   ├── components/GameMap.jsx             (Canonical snapshot-backed React Canvas renderer)
+    │   ├── utils/MapGenerator.js              (One-time seeded map generator)
+    │   └── utils/MapSnapshot.js               (Snapshot serialization and hydration)
+    ├── src/utils/MapGenerator.test.js         (Seeded and snapshot regression suite)
+    ├── e2e/four-player.spec.js                (Isolated four-browser acceptance path)
     └── public/
         ├── favicon.svg / icons.svg
         └── map_prototype.html                 (Standalone Canvas map kept behaviorally aligned)
@@ -29,13 +31,13 @@ PangeaWorld/
 - **Backend Framework**: Scaffolded using Python FastAPI.
 
 ## Expected Behaviors
-- **Preview Map Generation**: The standalone `map_prototype.html` is a non-authoritative preview. It may generate a new transient layout when reloaded, and its changes are discarded when the page closes.
-- **Game-Session Map Generation**: A real game receives one server-issued seed when the session is created. The generated map must pass all invariants, be persisted as a snapshot, and be reloaded from that snapshot for the full game; refreshing a client must never regenerate it.
+- **Preview Map Generation**: The standalone `map_prototype.html` is a non-authoritative visual and interaction reference. It may generate a new transient layout when reloaded, and its changes are discarded when the page closes.
+- **Game-Session Map Generation**: A real game receives one server-issued seed when the session is created. `MapGenerator.js` generates it once, the full geometry and state are persisted, and the canonical React `GameMap` subsequently hydrates only from that snapshot; refreshing a client never regenerates it.
 - **Natural Borders**: The 8 countries are divided using a Voronoi diagram based on fixed capital anchor points, enhanced with 2D noise to create squiggly, organic borders.
 - **Map Adjustments**: Zephyria is positioned on the main continent between Nordvik and Drakmoor, reducing Terranova's coastline. Zephyria is landlocked with no sea access; its core challenge is securing resources and negotiating road access through neighboring nations, and its main resource is cheap labor for other nations opening new cities. Lunara has a small land connection (strait) to the mainland.
 - **Canonical Starting Settlement Counts**: Every nation starts with **exactly 8 cities total**. Port cities are included in this total rather than added on top of it.
 - **Canonical Starting Port Counts**: Nordvik and Lunara each start with **exactly 2 ports**. Drakmoor starts with **exactly 1 port**; it is coastal but has deliberately constrained sea access, not a landlocked nation. All other nations (Valdoria, Terranova, Korvath, Solhaven, and Zephyria) start with **0 ports**. Zephyria is fully landlocked with no sea access.
-- **Interactive Grid**: The map renders an equilateral triangle grid. Players can hover over the edges (which highlight in green/yellow) and click to permanently build railroads.
+- **Interactive Grid**: The prototype demonstrates edge-hover and railroad interactions. The multiplayer `GameMap` is read-only for players; future validated infrastructure commands will be the only authoritative mutation path.
 - **Dynamic Labels**: The country labels (e.g. "Terranova") dynamically position themselves deep within their respective borders based on the procedural shape formula.
 - **Zoom Controls**: The sidebar features a "Map Controls" panel with a slider to zoom the canvas in and out, preserving interaction accuracy.
 
@@ -72,7 +74,7 @@ PangeaWorld/
 - **Event Engine**: Seeded events modify production, CPI, approval, and eligible persisted railroad infrastructure.
 
 ### ⏳ Not Yet Applied (Phase 2 and Later)
-- **Multiplayer & Authentication**: Phase 2 Day 1 account registration, login, logout, revocable sessions, and membership-role data are complete. Instructor assignment, role enforcement, real-time synchronization, and enforced 48-hour deadlines remain in the active Phase 2 sprint; Phase 1 provides the local authoritative phase loop.
+- **Multiplayer & Authentication**: Phase 2 Sprint 1 Days 1–4 are complete: authentication, instructor assignment, role enforcement, readiness, enforced deadlines, conservative automatic submissions, and session-scoped real-time synchronization are implemented. The full Day 5 round-completion scenario remains in progress.
 - **Opportunity-Cost Decision Framework**: The cross-role budget/capacity constraints, pre-submission trade-off comparison, foregone-alternative ledger fields, post-round feedback, and instructor analytics required by the Opportunity-Cost Contract remain to be implemented. Existing isolated trade-offs do not satisfy the complete contract.
 - **AI Agent Integration**: The embedded Gemini AI Advisor and the Drakmoor AI antagonist bot are not yet wired up.
 - **Future Portals**: The FMI portal and Pangea Assembly remain planned product features.
@@ -1034,14 +1036,14 @@ Set-Location ../backend
 
 > **Goal:** Deliver a secure four-player vertical slice in which two Presidents and two Company Executives can sign in from separate browsers, join the same game, see only their assigned role, submit authorized decisions, observe synchronized phase changes, and complete one authoritative round.
 
-> **Sprint status: 🟡 IN PROGRESS — 2/5 days complete.** This is the first five-day delivery slice of the broader 4–6 week Phase 2 roadmap. Trade proposals, treaties, sanctions, FMI lending, AI backfill, and the Drakmoor antagonist remain in later Phase 2 sprints.
+> **Sprint status: 🟡 IN PROGRESS — 4/5 days complete.** This is the first five-day delivery slice of the broader 4–6 week Phase 2 roadmap. Trade proposals, treaties, sanctions, FMI lending, AI backfill, and the Drakmoor antagonist remain in later Phase 2 sprints.
 
 ### Progress Tracker
 
 - [x] **Day 1:** Authentication and multiplayer data model
 - [x] **Day 2:** Session lobby, invitations, and role assignment
-- [ ] **Day 3:** Authorization and decision-readiness workflow
-- [ ] **Day 4:** Deadlines and real-time synchronization
+- [x] **Day 3:** Authorization and decision-readiness workflow
+- [x] **Day 4:** Deadlines and real-time synchronization
 - [ ] **Day 5:** Four-player acceptance test, hardening, and documentation
 
 ### Sprint Architecture Decisions
@@ -1067,7 +1069,7 @@ Set-Location ../backend
 #### Day 1 Acceptance
 
 - [x] Two users can create accounts, sign in independently, refresh the browser without losing their login, and sign out.
-- [x] The full Phase 1 regression suite remains green after the schema extension (19 backend tests passing).
+- [x] The full Phase 1 regression suite remains green after the schema extension (35 backend tests currently passing, including the added multiplayer coverage).
 
 ### ✅ Day 2 (Sep 10) — Session Lobby, Invitations & Role Assignment — Complete
 
@@ -1091,7 +1093,7 @@ Set-Location ../backend
 - [x] Four accounts can join one game; the instructor can assign two Presidents and two Company Executives across two nations.
 - [x] Each player lands on the correct dashboard after assignment and cannot select an unassigned role from the UI.
 
-### Day 3 (Sep 11) — Server Authorization & Decision Readiness
+### ✅ Day 3 (Sep 11) — Server Authorization & Decision Readiness — Complete
 
 **Theme:** _"A player can act only for the seat they own."_
 
@@ -1100,9 +1102,9 @@ Set-Location ../backend
 - [x] Require authentication on session, nation, company, market, map, news, and decision routes; define the intentionally public lobby response separately.
 - [x] Enforce membership, session boundary, role, entity ownership, and current-phase checks on every command.
 - [x] Restrict phase advancement and map mutation to the instructor; freeze the initial map when the game starts except through future validated infrastructure commands.
-- [ ] Add per-seat decision status (`not_started`, `draft`, `submitted`, `auto_submitted`) and a session readiness summary without exposing private decision payloads.
+- [x] Add per-seat decision status (`not_started`, `draft`, `submitted`, `auto_submitted`) and a session readiness summary without exposing private decision payloads.
 - [x] Preserve idempotent decision resubmission during the correct open phase and lock decisions when that phase closes.
-- [ ] Add negative integration tests for cross-session access, horizontal privilege escalation, wrong-role submission, closed-phase submission, and non-instructor advancement.
+- [x] Add negative integration tests for cross-session access, horizontal privilege escalation, wrong-role submission, closed-phase submission, and non-instructor advancement.
 
 #### Frontend
 
@@ -1114,27 +1116,29 @@ Set-Location ../backend
 - [x] Direct API calls cannot let one player read or mutate another player's protected seat.
 - [x] The instructor can tell who is ready while secret decisions remain private until results make them public.
 
-### Day 4 (Sep 12) — Phase Deadlines & Real-Time Synchronization
+### ✅ Day 4 (Sep 12) — Phase Deadlines & Real-Time Synchronization — Complete
 
 **Theme:** _"Every browser sees the same clock and authoritative phase."_
 
 #### Backend
 
-- [ ] Add timezone-aware `presidential_deadline_at` and `company_deadline_at` values plus an instructor-configurable accelerated mode for local testing.
-- [ ] Enforce deadlines server-side and make transition processing transactional and idempotent so a round cannot process twice.
-- [ ] Apply the existing conservative auto-decisions to seats that miss their deadline and record why/when each automatic submission occurred.
-- [ ] Add a session-scoped WebSocket channel for phase, readiness, assignment, and results notifications; send identifiers and event types, not secret payloads.
-- [ ] Add concurrency tests for simultaneous submissions, reconnects, and duplicate phase-transition attempts.
+- [x] Add timezone-aware `presidential_deadline_at` and `company_deadline_at` values plus an instructor-configurable accelerated mode for local testing.
+- [x] Enforce deadlines server-side and make transition processing transactional and idempotent so a round cannot process twice.
+- [x] Apply the existing conservative auto-decisions to seats that miss their deadline and record why/when each automatic submission occurred.
+- [x] Add a session-scoped WebSocket channel for phase, readiness, assignment, and results notifications; send identifiers and event types, not secret payloads.
+- [x] Add concurrency tests for simultaneous submissions, reconnects, and duplicate phase-transition attempts.
 
 #### Frontend
 
-- [ ] Add a server-time-based countdown and live phase/readiness updates with reconnect and periodic-refresh fallback.
-- [ ] Refresh canonical session data after each notification and visibly label automatic submissions.
+- [x] Add a server-time-based countdown and live phase/readiness updates with reconnect and periodic-refresh fallback.
+- [x] Refresh canonical session data after each notification and visibly label automatic submissions.
 
 #### Day 4 Acceptance
 
-- [ ] A phase change made in one browser appears in the other three without a manual reload.
-- [ ] Late writes are rejected, missing decisions are filled automatically, and concurrent transition attempts yield one stored round result.
+- [x] A phase change made in one browser appears in the other three without a manual reload.
+- [x] Late writes are rejected, missing decisions are filled automatically, and concurrent transition attempts yield one stored round result.
+
+**Verified:** the browser acceptance test waits until all four player clients report a live socket, then requires the phase update within five seconds—before the 15-second REST fallback. Backend tests cover late writes, recorded automatic submissions, simultaneous duplicate submissions, reconnects, duplicate transitions, and exactly one completed round result.
 
 ### Day 5 (Sep 13) — Four-Player Vertical Slice & Hardening
 
@@ -1183,6 +1187,9 @@ Set-Location ../frontend
 npm test
 npm run lint
 npm run build
+
+# Real browser acceptance path (starts isolated local servers and database)
+npm run test:e2e
 ```
 
 > [!IMPORTANT]

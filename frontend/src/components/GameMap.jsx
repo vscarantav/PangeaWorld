@@ -1,5 +1,6 @@
-import React, { useEffect, useRef, useState, useMemo } from 'react';
-import { generateMapData, distToSegment, TERRAIN } from '../utils/MapGenerator';
+import React, { useEffect, useRef, useState } from 'react';
+import { distToSegment, TERRAIN } from '../utils/MapGenerator';
+import { hydrateMapSnapshot, serializeMapSnapshot } from '../utils/MapSnapshot';
 
 // SVG Assets for Organic View
 const mountainSvg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="#555" stroke="#ccc" stroke-width="1"><path d="m8 3 4 8 5-5 5 15H2L8 3z"/></svg>`;
@@ -161,22 +162,6 @@ const drawCurve = (ctx, points, tension = 0.4, isClosed = true) => {
     }
 };
 
-function serializeMapSnapshot(map, seed) {
-    return {
-        seed,
-        triangles: map.triangles.map((triangle) => ({ id: triangle.id, terrain: triangle.terrain.name, points: triangle.points })),
-        edges: map.edges.map((edge) => ({ id: edge.id, triangle_ids: edge.triangles.map((triangle) => triangle.id), has_railroad: Boolean(edge.hasRailroad), is_river: Boolean(edge.isRiver), is_impassable: Boolean(edge.isImpassable) })),
-        countries: map.countries.map((country) => ({ id: country.id, name: country.name, x: country.x, y: country.y, labelX: country.labelX, labelY: country.labelY })),
-        cities: map.triangles.filter((triangle) => triangle.isSmallCity || triangle.isBigCity).map((triangle) => ({
-            id: triangle.id,
-            triangle_id: triangle.id,
-            country_id: triangle.country?.id,
-            is_port: Boolean(triangle.isPort),
-            is_big_city: Boolean(triangle.isBigCity),
-        })),
-    };
-}
-
 export default function GameMap({ seed = 'PangeaGameSeed123', mapSnapshot = null, onSnapshotChange, width = 800, height = 600, isPlanningMode = false }) {
     const canvasRef = useRef(null);
     const [mapData, setMapData] = useState(null);
@@ -188,19 +173,19 @@ export default function GameMap({ seed = 'PangeaGameSeed123', mapSnapshot = null
     const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
     const [hasDragged, setHasDragged] = useState(false);
     const [imagesLoaded, setImagesLoaded] = useState(false);
+    const [snapshotError, setSnapshotError] = useState('');
 
     useEffect(() => {
-        const data = generateMapData(seed, width, height);
-        const savedEdges = new Map((mapSnapshot?.edges || []).map((edge) => [edge.id, edge]));
-        const savedCountries = new Map((mapSnapshot?.countries || []).map((country) => [String(country.id), country]));
-        data.countries.forEach((country) => {
-            const saved = savedCountries.get(String(country.id));
-            if (saved?.name) country.name = saved.name;
-        });
-        data.edges.forEach((edge) => {
-            const saved = savedEdges.get(edge.id);
-            if (saved) edge.hasRailroad = Boolean(saved.has_railroad);
-        });
+        let data;
+        try {
+            data = hydrateMapSnapshot(mapSnapshot);
+            setSnapshotError('');
+        } catch (error) {
+            setMapData(null);
+            setOrganicDataCache(null);
+            setSnapshotError(error.message);
+            return;
+        }
         let initialCost = 0;
         data.edges.forEach(e => {
             if (e.hasRailroad) {
@@ -258,7 +243,7 @@ export default function GameMap({ seed = 'PangeaGameSeed123', mapSnapshot = null
             new Promise(res => { textureImgs.redrock.onload = res; if (textureImgs.redrock.complete) res(); }),
             new Promise(res => { textureImgs.drakmoor.onload = res; if (textureImgs.drakmoor.complete) res(); })
         ]).then(() => setImagesLoaded(true));
-    }, [seed, mapSnapshot, width, height]);
+    }, [mapSnapshot]);
 
     useEffect(() => {
         if (!mapData || !canvasRef.current) return;
@@ -615,6 +600,7 @@ export default function GameMap({ seed = 'PangeaGameSeed123', mapSnapshot = null
 
     return (
         <div style={{ position: 'relative', width: '100%', maxWidth: '800px' }}>
+            {snapshotError && <div role="alert" style={{ color: '#fca5a5', background: '#450a0a', padding: '1rem', borderRadius: 8 }}>{snapshotError}</div>}
             <div style={{
                 position: 'absolute',
                 top: 10,

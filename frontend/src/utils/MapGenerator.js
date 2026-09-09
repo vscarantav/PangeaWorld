@@ -140,6 +140,7 @@ export function generateMapData(seedStr = 'default', width = 800, height = 600) 
 
             // Procedural map generation based on coordinates
             let terrain = TERRAIN.OCEAN;
+            let country = null;
             
             // Main continent
             let distFromMain = Math.sqrt(Math.pow(cx - 400, 2) + Math.pow(cy - 300, 2));
@@ -171,7 +172,7 @@ export function generateMapData(seedStr = 'default', width = 800, height = 600) 
             let straitRadius = isTopSide ? 0 : 15;
 
             if (distFromMain < mainRadius || distFromIsland < islandRadius || distToStrait < straitRadius) {
-                let country = getVoronoiCountry(cx, cy);
+                country = getVoronoiCountry(cx, cy);
                 terrain = country.terrain;
             }
 
@@ -223,6 +224,7 @@ export function generateMapData(seedStr = 'default', width = 800, height = 600) 
                     {x: x3, y: y3}
                 ],
                 terrain: terrain,
+                country,
                 center: {
                     x: cx,
                     y: cy
@@ -259,8 +261,10 @@ export function generateMapData(seedStr = 'default', width = 800, height = 600) 
                     let neighborLand = t.neighbors.find(n => n.terrain !== TERRAIN.OCEAN && n.terrain !== TERRAIN.ZEPHYRIA && n.terrain !== TERRAIN.MOUNTAIN);
                     if (neighborLand) {
                         t.terrain = neighborLand.terrain;
+                        t.country = neighborLand.country;
                     } else {
                         t.terrain = t.center.x < 420 ? TERRAIN.NORDVIK : TERRAIN.DRAKMOOR;
+                        t.country = countriesDef.find(country => country.terrain === t.terrain);
                     }
                     zephyriaReassigned = true;
                 }
