@@ -1,4 +1,4 @@
-import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
+import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import * as api from '../api/client';
 import { useSessionEvents } from '../hooks/useSessionEvents';
 
@@ -11,19 +11,39 @@ export function GameProvider({ children, sessionId, membership }) {
   const [market, setMarket] = useState(null);
   const [resourceMarket, setResourceMarket] = useState(null);
   const [news, setNews] = useState([]);
+  const [readiness, setReadiness] = useState(null);
   const [selectedNationId, setSelectedNationId] = useState(null);
   const [selectedCompanyId, setSelectedCompanyId] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const refreshGeneration = useRef(0);
+  const liveRefreshGeneration = useRef(0);
 
   const refresh = useCallback(async (targetSessionId) => {
     if (!targetSessionId) return;
-    const [nextSession, nextNations, nextCompanies, nextMarket, nextNews] = await Promise.all([
-      api.getSession(targetSessionId), api.getNations(targetSessionId), api.getCompanies(targetSessionId), api.getMarket(targetSessionId), api.getNews(targetSessionId),
+    const generation = ++refreshGeneration.current;
+    const [nextSession, nextNations, nextCompanies, nextMarket, nextNews, nextReadiness] = await Promise.all([
+      api.getSession(targetSessionId), api.getNations(targetSessionId), api.getCompanies(targetSessionId), api.getMarket(targetSessionId), api.getNews(targetSessionId), api.getReadiness(targetSessionId),
     ]);
-    setSession(nextSession); setNations(nextNations); setCompanies(nextCompanies); setMarket(nextMarket); setNews(nextNews.articles || []);
+    if (generation !== refreshGeneration.current) return;
+    setSession(nextSession); setNations(nextNations); setCompanies(nextCompanies); setMarket(nextMarket); setNews(nextNews.articles || []); setReadiness(nextReadiness);
     setSelectedNationId((current) => current || nextNations[0]?.id || null);
     setSelectedCompanyId((current) => current || nextCompanies[0]?.id || null);
+  }, []);
+
+  const refreshLiveState = useCallback(async (targetSessionId) => {
+    if (!targetSessionId) return;
+    // A socket-driven readiness request must not invalidate an in-flight full
+    // hydration request (especially while restoring a page after reload).
+    const generation = ++liveRefreshGeneration.current;
+    const nextReadiness = await api.getReadiness(targetSessionId);
+    if (generation !== liveRefreshGeneration.current) return;
+    setReadiness(nextReadiness);
+    setSession((current) => current ? {
+      ...current,
+      current_round: nextReadiness.round,
+      phase: nextReadiness.phase,
+    } : current);
   }, []);
 
   useEffect(() => {
@@ -44,9 +64,12 @@ export function GameProvider({ children, sessionId, membership }) {
   }, [sessionId, membership?.role, membership?.entity_id, refresh]);
 
   const realtimeConnected = useSessionEvents(sessionId, () => {
-    // Refresh on initial connection/reconnect too, closing the race where a
-    // state change occurs while the socket is being established.
-    refresh(sessionId).catch((refreshError) => setError(refreshError.message));
+    // A lightweight authoritative phase/readiness fetch updates the clock and
+    // controls immediately; the full canonical refresh follows for map,
+    // dashboards, results, and news.
+    refreshLiveState(sessionId)
+      .then(() => refresh(sessionId))
+      .catch((refreshError) => setError(refreshError.message));
   });
 
   const advance = async () => { const result = await api.advanceRound(session.id, session.phase); await refresh(session.id); return result; };
@@ -63,12 +86,12 @@ export function GameProvider({ children, sessionId, membership }) {
   const submitNation = (data) => api.submitNationDecision(session.id, selectedNationId, data);
   const submitCompany = (data) => api.submitCompanyDecision(session.id, selectedCompanyId, data);
   const saveCompanyDraft = (data) => api.saveCompanyDraft(session.id, selectedCompanyId, data);
-  const value = useMemo(() => ({ session, nations, companies, market, resourceMarket, news,
+  const value = useMemo(() => ({ session, nations, companies, market, resourceMarket, news, readiness,
     nation: nations.find((item) => item.id === selectedNationId) || null,
     company: companies.find((item) => item.id === selectedCompanyId) || null,
     selectedNationId, setSelectedNationId, selectedCompanyId, setSelectedCompanyId,
     membership, loading, error, realtimeConnected, refresh, advance, submitNation, submitCompany, saveCompanyDraft, saveMapSnapshot, loadResourceMarket }),
-    [session, nations, companies, market, resourceMarket, news, selectedNationId, selectedCompanyId, membership, loading, error, realtimeConnected, refresh]);
+    [session, nations, companies, market, resourceMarket, news, readiness, selectedNationId, selectedCompanyId, membership, loading, error, realtimeConnected, refresh]);
   return <GameContext.Provider value={value}>{children}</GameContext.Provider>;
 }
 

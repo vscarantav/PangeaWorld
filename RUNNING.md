@@ -43,7 +43,8 @@ they can restart.
 
 1. Register or sign in as the instructor, select a phase deadline, and choose
    **Create instructor game**. The normal setting is 48 hours; 5 minutes and
-   30 seconds are available for local testing.
+   30 seconds are available for local testing, and 5 seconds is reserved for
+   automated acceptance testing.
 2. Open four separate browser profiles or private contexts. Register each
    player and join with the instructor's code.
 3. Assign two President seats and two Company Executive seats across two

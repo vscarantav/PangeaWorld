@@ -32,14 +32,13 @@ function decisionStatusLabel(status) {
 }
 
 function GameShell({ onSignOut }) {
-  const { loading, error, session, nation, company, membership, realtimeConnected, refresh } = useGame();
+  const { loading, error, session, nation, company, membership, news, readiness, realtimeConnected, refresh } = useGame();
   const dashboardRole = membership?.role === 'president' ? 'president' : 'executive';
   const [view, setView] = useState(dashboardRole);
-  const [readiness, setReadiness] = useState(null);
 
   useEffect(() => {
     if (!session?.id) return undefined;
-    const load = () => Promise.all([api.getReadiness(session.id).then(setReadiness), refresh(session.id)]).catch(() => {});
+    const load = () => refresh(session.id).catch(() => {});
     load();
     const timer = window.setInterval(load, 15000);
     return () => window.clearInterval(timer);
@@ -47,6 +46,8 @@ function GameShell({ onSignOut }) {
 
   if (loading) return <div style={{ padding: '3rem', color: 'white' }}>Connecting to PangeaWorld server…</div>;
   if (error) return <div style={{ padding: '3rem', color: '#f87171' }}>Unable to connect to the game server: {error}</div>;
+  if (!session) return <div style={{ padding: '3rem', color: 'white' }}>Connecting to PangeaWorld server…</div>;
+  const latestCompletedRound = [...(session.rounds || [])].reverse().find((round) => round.status === 'complete' && round.results?.nations);
   return (
     <>
       <div style={{ position: 'fixed', top: 10, left: '50%', transform: 'translateX(-50%)', zIndex: 9999, background: 'rgba(0,0,0,0.8)', padding: '5px 10px', borderRadius: 20, border: '1px solid var(--border-light)', display: 'flex', gap: 10, alignItems: 'center' }}>
@@ -59,12 +60,13 @@ function GameShell({ onSignOut }) {
         </button>
         <button onClick={onSignOut}>Sign out</button>
       </div>
-      <div style={{ position: 'fixed', bottom: 16, left: 16, zIndex: 9999, background: 'rgba(15,23,42,.95)', padding: '10px 14px', borderRadius: 8, color: 'white', border: '1px solid var(--border-light)' }}>
+      <div data-testid="game-status" style={{ position: 'fixed', bottom: 16, left: 16, zIndex: 9999, background: 'rgba(15,23,42,.95)', padding: '10px 14px', borderRadius: 8, color: 'white', border: '1px solid var(--border-light)' }}>
         Round {session.current_round} · {session.phase} · {nation?.name || 'No nation'} · {company?.name || 'No company'}
         {readiness?.my_status && ` · Decision: ${decisionStatusLabel(readiness.my_status)}`}
         {` · ${realtimeConnected ? 'Live' : 'Reconnecting…'}`}
         <DeadlineCountdown deadlineAt={readiness?.deadline_at} serverTime={readiness?.server_time} />
       </div>
+      {latestCompletedRound && <aside data-testid="round-results" style={{ position: 'fixed', bottom: 16, right: 16, zIndex: 9999, maxWidth: 360, background: 'rgba(15,23,42,.96)', padding: '12px 16px', borderRadius: 8, color: 'white', border: '1px solid var(--border-light)' }}><strong>Round {latestCompletedRound.number} results published</strong><p style={{ margin: '6px 0 0' }}>Pangea Times: {news[0]?.headline || 'Round results are available.'}</p></aside>}
       {view === 'president' && <PresidentDashboard />}
       {view === 'executive' && <ExecutiveDashboard />}
       {view === 'map' && (
@@ -133,7 +135,7 @@ function AuthAndLobby() {
     return () => window.clearInterval(timer);
   }, [lobby?.session_id, lobby?.status]);
 
-  useSessionEvents(lobby?.status === 'lobby' ? lobby.session_id : null, () => {
+  const lobbyRealtimeConnected = useSessionEvents(lobby?.status === 'lobby' ? lobby.session_id : null, () => {
     if (lobby?.session_id) loadLobby(lobby.session_id).catch(() => {});
   });
 
@@ -160,6 +162,7 @@ function AuthAndLobby() {
       setUser(null);
       setLobby(null);
       setRecoverable([]);
+      setRegistering(false);
     }
   };
 
@@ -205,10 +208,10 @@ function AuthAndLobby() {
 
   if (loadingAuth) return <main className="auth-page"><h1>PangeaWorld</h1><p>Restoring your secure session…</p></main>;
   if (!user) return <main className="auth-page"><h1>PangeaWorld</h1><form onSubmit={authenticate}><input placeholder="Email" value={email} onChange={(event) => setEmail(event.target.value)} /><input type="password" placeholder="Password (8+ characters)" value={password} onChange={(event) => setPassword(event.target.value)} /><button>{registering ? 'Create account' : 'Sign in'}</button></form><button onClick={() => setRegistering(!registering)}>{registering ? 'Already have an account?' : 'Need an account?'}</button>{error && <p>{error}</p>}</main>;
-  if (!lobby) return <main className="auth-page"><h1>Welcome, {user.display_name || user.email}</h1>{user.is_instructor && <div><label>Phase deadline <select aria-label="Phase deadline" value={phaseDurationSeconds} onChange={(event) => setPhaseDurationSeconds(Number(event.target.value))}><option value={172800}>48 hours</option><option value={300}>5 minutes (testing)</option><option value={30}>30 seconds (testing)</option></select></label><button onClick={createGame}>Create instructor game</button></div>}{recoverable.map((legacy) => <button key={legacy.id} onClick={() => recoverGame(legacy)}>Recover legacy game #{legacy.id}</button>)}<div><input placeholder="Lobby join code" value={joinCode} onChange={(event) => setJoinCode(event.target.value)} /><button onClick={joinGame}>Join game</button></div>{!user.is_instructor && <p>Ask your instructor for a lobby join code.</p>}<button onClick={signOut}>Sign out</button>{error && <p>{error}</p>}</main>;
+  if (!lobby) return <main className="auth-page"><h1>Welcome, {user.display_name || user.email}</h1>{user.is_instructor && <div><label>Phase deadline <select aria-label="Phase deadline" value={phaseDurationSeconds} onChange={(event) => setPhaseDurationSeconds(Number(event.target.value))}><option value={172800}>48 hours</option><option value={300}>5 minutes (testing)</option><option value={30}>30 seconds (testing)</option><option value={5}>5 seconds (automated testing)</option></select></label><button onClick={createGame}>Create instructor game</button></div>}{recoverable.map((legacy) => <button key={legacy.id} onClick={() => recoverGame(legacy)}>Recover legacy game #{legacy.id}</button>)}<div><input placeholder="Lobby join code" value={joinCode} onChange={(event) => setJoinCode(event.target.value)} /><button onClick={joinGame}>Join game</button></div>{!user.is_instructor && <p>Ask your instructor for a lobby join code.</p>}<button onClick={signOut}>Sign out</button>{error && <p>{error}</p>}</main>;
 
   const mine = lobby.my_membership;
-  if (lobby.status === 'lobby') return <main className="auth-page"><h1>Game lobby</h1>{mine.role === 'instructor' ? <InstructorLobby lobby={lobby} refresh={() => loadLobby(lobby.session_id)} generateMap={() => generateAndPersistMap(lobby.session_id, lobby.seed).then(() => loadLobby(lobby.session_id))} /> : <PlayerLobby lobby={lobby} refresh={() => loadLobby(lobby.session_id)} />}<button onClick={signOut}>Sign out</button></main>;
+  if (lobby.status === 'lobby') return <main className="auth-page"><h1>Game lobby</h1><p data-testid="lobby-connection">{lobbyRealtimeConnected ? 'Live' : 'Reconnecting…'}</p>{mine.role === 'instructor' ? <InstructorLobby lobby={lobby} refresh={() => loadLobby(lobby.session_id)} generateMap={() => generateAndPersistMap(lobby.session_id, lobby.seed).then(() => loadLobby(lobby.session_id))} /> : <PlayerLobby lobby={lobby} refresh={() => loadLobby(lobby.session_id)} />}<button onClick={signOut}>Sign out</button></main>;
   if (mine.role === 'instructor') return <InstructorGame sessionId={lobby.session_id} onSignOut={signOut} />;
   if (!mine.entity_id) return <main className="auth-page"><p>This game has started, but you do not have an assigned seat.</p><button onClick={signOut}>Sign out</button></main>;
   return <GameProvider sessionId={lobby.session_id} membership={mine}><GameShell onSignOut={signOut} /></GameProvider>;

@@ -2,6 +2,8 @@ from datetime import timedelta
 from concurrent.futures import ThreadPoolExecutor
 
 from fastapi.testclient import TestClient
+import pytest
+from starlette.websockets import WebSocketDisconnect
 
 from auth import get_current_user
 from database import get_db
@@ -158,4 +160,23 @@ def test_session_websocket_broadcasts_identifier_only_phase_event():
     }
     with instructor.websocket_connect(f"/api/sessions/{game_id}/ws") as reconnected:
         assert reconnected.receive_json() == {"type": "connected", "session_id": game_id}
+    app.dependency_overrides.clear()
+
+
+def test_session_websocket_rejects_guests_and_nonmembers():
+    _, _, _, game_id, _, _ = setup_game()
+    guest = TestClient(app)
+    with pytest.raises(WebSocketDisconnect) as guest_error:
+        with guest.websocket_connect(f"/api/sessions/{game_id}/ws"):
+            pass
+    assert guest_error.value.code == 4401
+
+    outsider = TestClient(app)
+    assert outsider.post(
+        "/api/auth/register", json={"email": "outsider@socket.test", "password": "a safe password"}
+    ).status_code == 201
+    with pytest.raises(WebSocketDisconnect) as outsider_error:
+        with outsider.websocket_connect(f"/api/sessions/{game_id}/ws"):
+            pass
+    assert outsider_error.value.code == 4403
     app.dependency_overrides.clear()

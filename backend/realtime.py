@@ -2,7 +2,6 @@
 
 from collections import defaultdict
 import asyncio
-from concurrent.futures import TimeoutError as FutureTimeoutError
 
 from fastapi import APIRouter, Depends, WebSocket, WebSocketDisconnect
 from sqlalchemy.orm import Session
@@ -36,14 +35,22 @@ class SessionConnectionManager:
             self.connections.pop(session_id, None)
 
     async def broadcast(self, session_id: int, event: dict):
-        stale = []
-        for websocket in tuple(self.connections.get(session_id, ())):
+        async def send(websocket):
             try:
-                await websocket.send_json({"session_id": session_id, **event})
-            except (RuntimeError, WebSocketDisconnect, OSError):
-                stale.append(websocket)
+                await asyncio.wait_for(
+                    websocket.send_json({"session_id": session_id, **event}), timeout=1
+                )
+                return None
+            except (RuntimeError, WebSocketDisconnect, OSError, TimeoutError):
+                return websocket
+
+        connections = tuple(self.connections.get(session_id, ()))
+        if not connections:
+            return
+        stale = await asyncio.gather(*(send(websocket) for websocket in connections))
         for websocket in stale:
-            self.disconnect(session_id, websocket)
+            if websocket is not None:
+                self.disconnect(session_id, websocket)
 
 
 manager = SessionConnectionManager()
@@ -55,11 +62,10 @@ def notify_session(session_id: int, event_type: str, **identifiers):
     if loop is None or not loop.is_running():
         return
     try:
-        future = asyncio.run_coroutine_threadsafe(
+        asyncio.run_coroutine_threadsafe(
             manager.broadcast(session_id, {"type": event_type, **identifiers}), loop
         )
-        future.result(timeout=5)
-    except (RuntimeError, FutureTimeoutError):
+    except RuntimeError:
         # A closing development server may tear down its loop during a request.
         return
 

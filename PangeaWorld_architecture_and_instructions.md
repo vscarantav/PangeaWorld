@@ -73,8 +73,8 @@ PangeaWorld/
 - **Connected Dashboards**: President and Company Executive dashboards load live API data, submit authoritative decisions, display results/history/news, and distinguish local drafts from server-confirmed submissions.
 - **Event Engine**: Seeded events modify production, CPI, approval, and eligible persisted railroad infrastructure.
 
-### ⏳ Not Yet Applied (Phase 2 and Later)
-- **Multiplayer & Authentication**: Phase 2 Sprint 1 Days 1–4 are complete: authentication, instructor assignment, role enforcement, readiness, enforced deadlines, conservative automatic submissions, and session-scoped real-time synchronization are implemented. The full Day 5 round-completion scenario remains in progress.
+### ⏳ Not Yet Applied (Later Phase 2 and Beyond)
+- **Multiplayer Expansion**: Phase 2 Sprint 1 is complete: authentication, instructor assignment, role enforcement, readiness, enforced deadlines, conservative automatic submissions, session-scoped real-time synchronization, and the four-player one-round vertical slice are implemented. Trade, diplomacy, sanctions, FMI, and AI backfill remain in later Phase 2 sprints.
 - **Opportunity-Cost Decision Framework**: The cross-role budget/capacity constraints, pre-submission trade-off comparison, foregone-alternative ledger fields, post-round feedback, and instructor analytics required by the Opportunity-Cost Contract remain to be implemented. Existing isolated trade-offs do not satisfy the complete contract.
 - **AI Agent Integration**: The embedded Gemini AI Advisor and the Drakmoor AI antagonist bot are not yet wired up.
 - **Future Portals**: The FMI portal and Pangea Assembly remain planned product features.
@@ -1036,7 +1036,7 @@ Set-Location ../backend
 
 > **Goal:** Deliver a secure four-player vertical slice in which two Presidents and two Company Executives can sign in from separate browsers, join the same game, see only their assigned role, submit authorized decisions, observe synchronized phase changes, and complete one authoritative round.
 
-> **Sprint status: 🟡 IN PROGRESS — 4/5 days complete.** This is the first five-day delivery slice of the broader 4–6 week Phase 2 roadmap. Trade proposals, treaties, sanctions, FMI lending, AI backfill, and the Drakmoor antagonist remain in later Phase 2 sprints.
+> **Sprint status (Sep 10, 2026): ✅ COMPLETE — 5/5 days complete.** This is the first five-day delivery slice of the broader 4–6 week Phase 2 roadmap. Trade proposals, treaties, sanctions, FMI lending, AI backfill, and the Drakmoor antagonist remain in later Phase 2 sprints.
 
 ### Progress Tracker
 
@@ -1044,7 +1044,7 @@ Set-Location ../backend
 - [x] **Day 2:** Session lobby, invitations, and role assignment
 - [x] **Day 3:** Authorization and decision-readiness workflow
 - [x] **Day 4:** Deadlines and real-time synchronization
-- [ ] **Day 5:** Four-player acceptance test, hardening, and documentation
+- [x] **Day 5:** Four-player acceptance test, hardening, and documentation
 
 ### Sprint Architecture Decisions
 
@@ -1069,7 +1069,7 @@ Set-Location ../backend
 #### Day 1 Acceptance
 
 - [x] Two users can create accounts, sign in independently, refresh the browser without losing their login, and sign out.
-- [x] The full Phase 1 regression suite remains green after the schema extension (35 backend tests currently passing, including the added multiplayer coverage).
+- [x] The full Phase 1 regression suite remains green after the schema extension (37 backend tests currently passing, including the added multiplayer coverage).
 
 ### ✅ Day 2 (Sep 10) — Session Lobby, Invitations & Role Assignment — Complete
 
@@ -1140,26 +1140,30 @@ Set-Location ../backend
 
 **Verified:** the browser acceptance test waits until all four player clients report a live socket, then requires the phase update within five seconds—before the 15-second REST fallback. Backend tests cover late writes, recorded automatic submissions, simultaneous duplicate submissions, reconnects, duplicate transitions, and exactly one completed round result.
 
-### Day 5 (Sep 13) — Four-Player Vertical Slice & Hardening
+### ✅ Day 5 (Sep 13) — Four-Player Vertical Slice & Hardening — Complete
 
 **Theme:** _"Prove the multiplayer loop from four independent clients."_
 
 #### End-to-End Scenario
 
-- [ ] Instructor creates a game, shares the join code, assigns four players, and starts the session.
-- [ ] Both Presidents submit macro decisions during the Presidential phase; both Company Executives remain unable to submit early.
-- [ ] The Company phase opens and both executives submit pricing, production, R&D, and sourcing decisions.
-- [ ] One test seat intentionally misses a deadline and receives the recorded conservative auto-decision.
-- [ ] The engine processes exactly once; all four clients receive the update and see consistent Round 1 results and news.
-- [ ] Refresh and sign-out/sign-in tests restore the same membership, session, role, phase, and persisted map snapshot.
+- [x] Instructor creates a game, shares the join code, assigns four players, and starts the session.
+- [x] Both Presidents submit macro decisions during the Presidential phase; both Company Executives remain unable to submit early.
+- [x] The Company phase opens and both executives submit pricing, production, R&D, and sourcing decisions.
+- [x] One test seat intentionally misses a deadline and receives the recorded conservative auto-decision.
+- [x] The engine processes exactly once; all four clients receive the update and see consistent Round 1 results and news.
+- [x] Refresh and sign-out/sign-in tests restore the same membership, session, role, phase, and persisted map snapshot.
 
 #### Quality Gate
 
-- [ ] Backend authentication, authorization, deadline, concurrency, and four-player API tests pass.
-- [ ] Existing Phase 1 backend and deterministic map tests pass with no regressions.
-- [ ] Frontend lint and production build pass.
-- [ ] `RUNNING.md` documents account creation, instructor setup, four-client testing, accelerated deadlines, and recovery from a disconnected client.
-- [ ] Security review confirms no password leakage, cross-session access, secret-decision exposure, or client-authoritative phase transition.
+- [x] Backend authentication, authorization, deadline, concurrency, and four-player API tests pass.
+- [x] Existing Phase 1 backend and deterministic map tests pass with no regressions.
+- [x] Frontend lint and production build pass.
+- [x] `RUNNING.md` documents account creation, instructor setup, four-client testing, accelerated deadlines, and recovery from a disconnected client.
+- [x] Security review confirms no password leakage, cross-session access, secret-decision exposure, or client-authoritative phase transition.
+
+**Verified (Sep 10, 2026):** 37 backend tests and 3 deterministic frontend map tests pass; frontend lint completes without errors; the production build succeeds; and the isolated-Chrome four-client acceptance test passes. The browser path covers lobby setup, role/phase enforcement, complete President and Executive submissions, live phase propagation, one authoritative round result, identical player-visible results/news, sign-out/sign-in, refresh, and canonical React map restoration. The four-player API path separately exercises an expired deadline and confirms exactly one recorded automatic decision and one completed round.
+
+**Security review:** Authentication responses exclude password and hash fields; protected REST routes reject unauthenticated, cross-session, wrong-role, and wrong-entity access; readiness and WebSocket messages expose status/identifiers but not private decision payloads; guest and non-member sockets close with authorization errors; and only the instructor's authenticated REST command can advance the canonical server phase.
 
 ### Definition of Done
 

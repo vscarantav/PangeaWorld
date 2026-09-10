@@ -370,7 +370,8 @@ def _advance_session_locked(session_id, expected_phase, db, user):
             session.presidential_deadline_at = None
             session.company_deadline_at = None
         db.commit()
-        notify_session(session_id, "phase_changed", round=session.current_round, phase=session.phase.value,
+        event_type = "results_published" if result.get("processed") else "phase_changed"
+        notify_session(session_id, event_type, round=session.current_round, phase=session.phase.value,
                        processed=bool(result.get("processed")))
         return result
     except ValueError as exc:
