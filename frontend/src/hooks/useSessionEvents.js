@@ -15,10 +15,15 @@ export function useSessionEvents(sessionId, onEvent) {
     const connect = () => {
       if (!active) return;
       socket = new WebSocket(sessionWebSocketUrl(sessionId));
-      socket.onopen = () => setConnected(true);
+      // The browser-level open event can precede the server adding this socket
+      // to its session broadcast set. Report Live only after the server's
+      // acknowledgement, so callers cannot advance a phase into that gap.
+      socket.onopen = () => setConnected(false);
       socket.onmessage = (message) => {
         try {
-          callbackRef.current(JSON.parse(message.data));
+          const event = JSON.parse(message.data);
+          if (event.type === 'connected') setConnected(true);
+          callbackRef.current(event);
         } catch {
           // Ignore malformed notifications; periodic REST refresh remains active.
         }

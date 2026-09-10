@@ -7,7 +7,7 @@ import { useGame } from '../../../context/GameContext';
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, ArcElement, Title, Tooltip, Legend);
 
-export default function InfrastructureTab({ setBudget, onOpenProjectModal }) {
+export default function InfrastructureTab({ onOpenProjectModal }) {
   const { session, saveMapSnapshot } = useGame();
   const [railBudget, setRailBudget] = useState(450);
   const [portBudget, setPortBudget] = useState(200);

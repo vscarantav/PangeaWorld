@@ -1,3 +1,4 @@
+/* oxlint-disable react/immutability, react/set-state-in-effect, react-hooks/exhaustive-deps -- Canvas drawing functions and snapshot hydration are intentionally component-local. */
 import React, { useEffect, useRef, useState } from 'react';
 import { distToSegment, TERRAIN } from '../utils/MapGenerator';
 import { hydrateMapSnapshot, serializeMapSnapshot } from '../utils/MapSnapshot';
@@ -74,7 +75,7 @@ const extractRegionPolygons = (triangles) => {
     
     // Filter to boundary edges (ones with no reverse edge in the same terrain group)
     const boundaryEdges = [];
-    edgeCounts.forEach((edge, key) => {
+    edgeCounts.forEach((edge) => {
         const reverseKey = getEdgeKey(edge.p2, edge.p1);
         if (!edgeCounts.has(reverseKey)) {
             boundaryEdges.push(edge);

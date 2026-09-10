@@ -87,7 +87,11 @@ async def session_websocket(websocket: WebSocket, session_id: int, db: Session =
     # not. In particular, an open SQLite read transaction can block game writes.
     db.close()
     await manager.connect(session_id, websocket)
-    await websocket.send_json({"type": "connected", "session_id": session_id})
+    try:
+        await websocket.send_json({"type": "connected", "session_id": session_id})
+    except (RuntimeError, WebSocketDisconnect, OSError):
+        manager.disconnect(session_id, websocket)
+        return
     try:
         while True:
             await websocket.receive_text()

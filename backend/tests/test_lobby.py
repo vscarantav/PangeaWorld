@@ -5,6 +5,7 @@ from sqlalchemy.pool import StaticPool
 
 from database import Base, get_db
 from main import app
+from routes.sessions import JOIN_CODE_LENGTH
 
 
 def persist_test_map(client, game):
@@ -87,6 +88,28 @@ def test_game_cannot_start_until_a_validated_map_is_persisted():
     assert instructor.post(f"/api/sessions/{game['id']}/lobby/start").status_code == 409
     persist_test_map(instructor, game)
     assert instructor.post(f"/api/sessions/{game['id']}/lobby/start").status_code == 200
+
+
+def test_session_summary_can_omit_the_large_map_snapshot():
+    instructor = make_client(); register(instructor, "summary-teacher@example.com")
+    game = instructor.post("/api/sessions", json={}).json()
+    persist_test_map(instructor, game)
+    summary = instructor.get(f"/api/sessions/{game['id']}?include_map=false")
+    full = instructor.get(f"/api/sessions/{game['id']}")
+    assert summary.status_code == full.status_code == 200
+    assert summary.json()["map_snapshot"] is None
+    assert full.json()["map_snapshot"]["seed"] == game["seed"]
+    app.dependency_overrides.clear()
+
+
+def test_created_lobby_code_always_satisfies_join_validation():
+    instructor = make_client(); register(instructor, "join-code-teacher@example.com")
+    game = instructor.post("/api/sessions", json={}).json()
+    code = instructor.get(f"/api/sessions/{game['id']}/lobby").json()["join_code"]
+    assert len(code) == JOIN_CODE_LENGTH >= 6
+    player = TestClient(app); register(player, "join-code-player@example.com")
+    assert player.post("/api/sessions/lobby/join", json={"join_code": code}).status_code == 200
+    app.dependency_overrides.clear()
 
 
 def test_four_accounts_receive_two_presidential_and_two_executive_seats_then_start():

@@ -1,17 +1,23 @@
 import React, { useState } from 'react';
-import { Target, UserCheck, Skull, Expand, MapPin } from 'lucide-react';
+import { Target, UserCheck, Skull, MapPin } from 'lucide-react';
 import { Chart as ChartJS, RadialLinearScale, PointElement, LineElement, Filler, Tooltip, Legend } from 'chart.js';
 import { Radar } from 'react-chartjs-2';
 import GameMap from '../../GameMap';
 import { useGame } from '../../../context/GameContext';
+import Phase3Results from '../Widgets/Phase3Results';
 
 ChartJS.register(RadialLinearScale, PointElement, LineElement, Filler, Tooltip, Legend);
 
-export default function IntelTab({ setBudget, onOpenProjectModal }) {
-  const { nation, nations, session, saveMapSnapshot } = useGame();
+export default function IntelTab({ onOpenProjectModal }) {
+  const { nation, nations, session, saveMapSnapshot, savePresidentialReadiness } = useGame();
   const [troopBudget, setTroopBudget] = useState(300);
   const [intelBudget, setIntelBudget] = useState(150);
   const [covertBudget, setCovertBudget] = useState(50);
+  const [posture, setPosture] = useState('defend');
+  const [preparednessBudget, setPreparednessBudget] = useState(200);
+  const [message, setMessage] = useState('');
+  const militaryInvestment = troopBudget + intelBudget + covertBudget;
+  const remainingTreasury = Math.max(0, (nation?.treasury || 0) - militaryInvestment - preparednessBudget);
 
   const radarData = {
     labels: ['Army Size', 'Naval Power', 'Air Superiority', 'Intel Network', 'Defense Infra', 'Cyber'],
@@ -53,6 +59,7 @@ export default function IntelTab({ setBudget, onOpenProjectModal }) {
 
   return (
     <section className="dashboard-grid">
+      <Phase3Results />
       <div className="card col-4">
         <div className="card-header">
           <h3 className="card-title"><Target /> Threat Assessment</h3>
@@ -122,6 +129,33 @@ export default function IntelTab({ setBudget, onOpenProjectModal }) {
                 <span className="range-value">${covertBudget}M</span>
               </div>
             </div>
+          </div>
+          <div className="col-6">
+            <div className="input-group">
+              <label>Military posture</label>
+              <select value={posture} onChange={(event) => setPosture(event.target.value)}>
+                <option value="defend">Defend — protect domestic capacity</option>
+                <option value="patrol">Patrol — secure routes</option>
+                <option value="reconnaissance">Reconnaissance — improve awareness</option>
+              </select>
+            </div>
+            <div className="input-group">
+              <label>Emergency preparedness fund ($ Millions)</label>
+              <div className="range-slider-container">
+                <input aria-label="Emergency preparedness fund" type="range" min="0" max="1000" value={preparednessBudget} onChange={(event) => setPreparednessBudget(Number(event.target.value))} />
+                <span className="range-value">${preparednessBudget}M</span>
+              </div>
+              <small className="text-muted">Natural-disaster recovery uses this public fund first. Uncovered companies pay costly private emergency financing, reducing approval and GDP.</small>
+            </div>
+            <p className="text-muted">Military + preparedness: ${militaryInvestment + preparednessBudget}M · Remaining treasury: ${remainingTreasury.toFixed(0)}M</p>
+            <p className="text-muted">This plan leaves ${remainingTreasury.toFixed(0)}M for civilian services, infrastructure, and tax relief this round.</p>
+            <button className="btn" disabled={session?.phase !== 'presidential' || militaryInvestment + preparednessBudget > (nation?.treasury || 0)} onClick={async () => {
+              try {
+                const receipt = await savePresidentialReadiness({ military_posture: posture, military_investment: militaryInvestment, emergency_preparedness_investment: preparednessBudget });
+                setMessage(`Readiness plan saved for Round ${receipt.round_id}.`);
+              } catch (error) { setMessage(error.message); }
+            }}>Save readiness plan</button>
+            {message && <p className="text-muted" style={{ marginTop: 8 }}>{message}</p>}
           </div>
         </div>
       </div>

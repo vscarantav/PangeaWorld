@@ -56,6 +56,7 @@ test('four isolated players complete one authoritative round and receive identic
 
   await instructor.getByRole('button', { name: 'Start game' }).click();
   await expect(instructor.getByRole('heading', { name: 'Instructor readiness board' })).toBeVisible();
+  await expect(instructor.getByText(/Round 1.*planning/)).toBeVisible();
 
   for (let index = 0; index < players.length; index += 1) {
     const roleLabel = index < 2 ? 'President' : 'Company Executive';
@@ -65,8 +66,8 @@ test('four isolated players complete one authoritative round and receive identic
 
   await instructor.getByRole('button', { name: 'Advance phase' }).click();
   for (const player of players) {
-    // The REST safety poll runs every 15 seconds, so a five-second assertion
-    // proves the session WebSocket delivered the phase notification.
+    // The REST safety poll runs every two seconds, so this remains bounded
+    // even during a short WebSocket reconnect window.
     await expect(player.getByTestId('game-status')).toContainText(/Round 1.*presidential/, { timeout: 5000 });
   }
 
@@ -150,12 +151,12 @@ test('four isolated players complete one authoritative round and receive identic
   await expect(players[0].getByTestId('round-results')).toContainText('Round 1 results published');
   await players[0].getByRole('button', { name: 'Map View' }).click();
   await expect(players[0].getByRole('alert')).toHaveCount(0);
-  await expect(players[0].locator('canvas')).toBeVisible();
+  await expect(players[0].locator('canvas').first()).toBeVisible();
   await players[0].reload();
   await expect(players[0].getByText('President', { exact: true }).first()).toBeVisible();
   await expect(players[0].getByTestId('game-status')).toContainText(/Round 2.*planning/);
   await players[0].getByRole('button', { name: 'Map View' }).click();
-  await expect(players[0].locator('canvas')).toBeVisible();
+  await expect(players[0].locator('canvas').first()).toBeVisible();
 
   await Promise.all(playerContexts.map((context) => context.close()));
   await instructorContext.close();

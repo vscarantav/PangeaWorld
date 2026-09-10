@@ -15,6 +15,7 @@ export default function NewsFeed() {
               <span className="text-muted" style={{ fontSize: '0.75rem' }}>Round {item.round}</span>
             </div>
             <h4 style={{ fontSize: '0.9rem', lineHeight: '1.4' }}>{item.headline}</h4>
+            {item.summary && <p className="text-muted" style={{ fontSize: '0.78rem' }}>{item.summary}</p>}
           </div>
         ))}
       </div>

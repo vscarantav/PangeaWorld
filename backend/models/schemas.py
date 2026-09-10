@@ -2,7 +2,7 @@ from pydantic import BaseModel, ConfigDict, Field, NonNegativeFloat
 from typing import List, Dict, Any, Optional, Literal
 from pydantic import Field
 from datetime import datetime
-from .domain import PhaseEnum, RoundStatus, ResourceType
+from .domain import MilitaryPosture, PhaseEnum, RoundStatus, ResourceType
 
 class CompanyBase(BaseModel):
     name: str
@@ -75,9 +75,9 @@ class DecisionCreate(DecisionBase):
 
 
 class PresidentDecisionData(BaseModel):
-    """The supported Phase 1 presidential controls."""
+    """Authoritative presidential controls, including Phase 3 readiness inputs."""
 
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra="forbid", use_enum_values=True)
 
     government_spending: float = Field(default=0.0, ge=0.0)
     tax_rate: Optional[float] = Field(default=None, ge=0.0, le=1.0)
@@ -85,6 +85,19 @@ class PresidentDecisionData(BaseModel):
     tariffs: Optional[float] = Field(default=None, ge=0.0, le=1.0)
     immigration: Optional[float] = Field(default=None, ge=-0.05, le=0.05)
     resource_consumption: Dict[str, float] = Field(default_factory=dict)
+    military_posture: MilitaryPosture = MilitaryPosture.DEFEND
+    military_investment: float = Field(default=0.0, ge=0.0, le=1000000)
+    emergency_preparedness_investment: float = Field(default=0.0, ge=0.0, le=1000000)
+
+
+class PresidentialReadinessData(BaseModel):
+    """Phase 3 fields that can be saved without replacing fiscal policy."""
+
+    model_config = ConfigDict(extra="forbid", use_enum_values=True)
+
+    military_posture: MilitaryPosture = MilitaryPosture.DEFEND
+    military_investment: float = Field(default=0.0, ge=0.0, le=1000000)
+    emergency_preparedness_investment: float = Field(default=0.0, ge=0.0, le=1000000)
 
 
 class SourcingDecisionData(BaseModel):

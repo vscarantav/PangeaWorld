@@ -29,9 +29,13 @@ def ensure_schema():
         with engine.begin() as connection:
             connection.execute(text("ALTER TABLE rounds ADD COLUMN results JSON"))
     nation_columns = {column["name"] for column in inspect(engine).get_columns("nations")}
-    if "approval_rating" not in nation_columns:
-        with engine.begin() as connection:
+    with engine.begin() as connection:
+        if "approval_rating" not in nation_columns:
             connection.execute(text("ALTER TABLE nations ADD COLUMN approval_rating FLOAT DEFAULT 60.0"))
+        if "military_readiness" not in nation_columns:
+            connection.execute(text("ALTER TABLE nations ADD COLUMN military_readiness FLOAT DEFAULT 0.0"))
+        if "emergency_preparedness_balance" not in nation_columns:
+            connection.execute(text("ALTER TABLE nations ADD COLUMN emergency_preparedness_balance FLOAT DEFAULT 0.0"))
     session_columns = {column["name"] for column in inspect(engine).get_columns("game_sessions")}
     with engine.begin() as connection:
         if "lobby_join_code" not in session_columns:

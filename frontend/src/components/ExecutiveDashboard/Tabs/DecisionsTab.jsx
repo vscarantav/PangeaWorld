@@ -1,3 +1,4 @@
+/* oxlint-disable react/set-state-in-effect, react-hooks/exhaustive-deps -- Effects intentionally synchronize persisted drafts and valid route selections. */
 import React, { useEffect, useMemo, useState } from 'react';
 import NewsFeed from '../Widgets/NewsFeed';
 import { useGame } from '../../../context/GameContext';
@@ -9,7 +10,7 @@ const controlStyle = {
 
 export default function DecisionsTab() {
   const { company, session, market, resourceMarket, loadResourceMarket, saveCompanyDraft, submitCompany } = useGame();
-  const resources = Object.keys(market?.resources || {});
+  const resources = useMemo(() => Object.keys(market?.resources || {}), [market]);
   const [price, setPrice] = useState(Number(company?.products?.Widget?.price || 299));
   const [headcount, setHeadcount] = useState(20);
   const [productionUnits, setProductionUnits] = useState(1);
@@ -24,6 +25,12 @@ export default function DecisionsTab() {
 
   const decisionKey = session && company ? `pangeaworld.companyDecision.${session.id}.${session.current_round}.${company.id}` : null;
   const submittedKey = decisionKey ? `${decisionKey}.submitted` : null;
+  const sessionId = session?.id;
+  const currentRound = session?.current_round;
+  const companyId = company?.id;
+  const companyNationId = company?.nation_id;
+  const productPrice = company?.products?.Widget?.price;
+  const productProductionUnits = company?.products?.Widget?.production_units;
 
   useEffect(() => {
     if (!company || !session) return;
@@ -32,7 +39,7 @@ export default function DecisionsTab() {
       try {
         const decision = JSON.parse(stored);
         const order = decision.sourcing?.[0];
-        setPrice(Number(decision.price ?? company.products?.Widget?.price ?? 299));
+        setPrice(Number(decision.price ?? productPrice ?? 299));
         setHeadcount(Number(decision.headcount ?? 20));
         setProductionUnits(Number(decision.production_units ?? 1));
         setRndInvestment(Number(decision.rnd_investment ?? 0));
@@ -51,9 +58,9 @@ export default function DecisionsTab() {
         window.localStorage.removeItem(`${decisionKey}.submitted`);
       }
     } else {
-      setPrice(Number(company.products?.Widget?.price || 299));
+      setPrice(Number(productPrice || 299));
       setHeadcount(20);
-      setProductionUnits(Number(company.products?.Widget?.production_units || 1));
+      setProductionUnits(Number(productProductionUnits || 1));
       setRndInvestment(0);
       setResourceType(resources[0] || 'Energy');
       setSupplierNationId('');
@@ -63,15 +70,15 @@ export default function DecisionsTab() {
       setSubmittedSignature('');
     }
     setMessage('');
-  }, [company?.id, session?.id, session?.current_round, decisionKey]);
+  }, [companyId, currentRound, decisionKey, productPrice, productProductionUnits, resources, sessionId]);
 
   useEffect(() => {
     if (resources.length && !resources.includes(resourceType)) setResourceType(resources[0]);
-  }, [resources.join('|'), resourceType]);
+  }, [resources, resourceType]);
 
   useEffect(() => {
     if (session && company) loadResourceMarket(resourceType, company.nation_id).catch((error) => setMessage(error.message));
-  }, [resourceType, session?.id, company?.nation_id]);
+  }, [company, companyNationId, loadResourceMarket, resourceType, session]);
 
   const suppliers = resourceMarket?.resource_type === resourceType ? resourceMarket.suppliers || [] : [];
   useEffect(() => {
@@ -80,13 +87,13 @@ export default function DecisionsTab() {
       const preferred = suppliers.find((supplier) => supplier.nation_id !== company?.nation_id) || suppliers[0];
       setSupplierNationId(String(preferred.nation_id));
     }
-  }, [resourceMarket, resourceType, company?.nation_id]);
+  }, [companyNationId, resourceMarket, resourceType, supplierNationId, suppliers]);
 
   const selectedSupplier = suppliers.find((supplier) => String(supplier.nation_id) === String(supplierNationId));
   const availableRoutes = selectedSupplier?.routes || [];
   useEffect(() => {
     if (availableRoutes.length && !availableRoutes.some((route) => route.mode === mode)) setMode(availableRoutes[0].mode);
-  }, [supplierNationId, resourceMarket, mode]);
+  }, [availableRoutes, mode]);
   const selectedRoute = availableRoutes.find((route) => route.mode === mode);
 
   const currentDecision = useMemo(() => ({

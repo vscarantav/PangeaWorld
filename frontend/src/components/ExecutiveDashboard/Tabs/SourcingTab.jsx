@@ -1,16 +1,17 @@
-import React, { useEffect, useState } from 'react';
+/* oxlint-disable react/set-state-in-effect -- The selected resource must track a replaced market catalog. */
+import React, { useEffect, useMemo, useState } from 'react';
 import SupplyChainMap from '../Widgets/SupplyChainMap';
 import { useGame } from '../../../context/GameContext';
 
 export default function SourcingTab() {
   const { market, nations, company, session, resourceMarket, loadResourceMarket } = useGame();
-  const resources = Object.keys(market?.resources || {});
+  const resources = useMemo(() => Object.keys(market?.resources || {}), [market]);
   const [resourceType, setResourceType] = useState(resources[0] || 'Energy');
 
   useEffect(() => {
     if (resources.length && !resources.includes(resourceType)) setResourceType(resources[0]);
-  }, [market, resourceType]);
-  useEffect(() => { if (session && company) loadResourceMarket(resourceType, company.nation_id).catch(() => {}); }, [resourceType, session?.id, company?.nation_id]);
+  }, [resources, resourceType]);
+  useEffect(() => { if (session && company) loadResourceMarket(resourceType, company.nation_id).catch(() => {}); }, [resourceType, session, company, loadResourceMarket]);
 
   const nationName = (id) => nations.find((nation) => nation.id === id)?.name || `Nation ${id}`;
   return (

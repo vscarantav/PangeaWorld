@@ -1,7 +1,8 @@
 from .domain import (
     GameSession, MapSnapshot, Nation, Company, Resource, Round, Decision,
     User, AuthSession, GameMembership,
-    PhaseEnum, RoundStatus, ResourceType,
+    PhaseEnum, RoundStatus, ResourceType, MilitaryPosture, EventType, EventScope,
+    RoundEvent, RoundEffect, CompanyRecoveryFunding,
 )
 from .schemas import (
     GameSessionBase, GameSessionCreate, GameSession,

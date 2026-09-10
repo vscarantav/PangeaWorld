@@ -1,5 +1,5 @@
 # pyrefly: ignore [missing-import]
-from sqlalchemy import Column, Integer, String, Float, ForeignKey, JSON, DateTime, Enum, UniqueConstraint
+from sqlalchemy import CheckConstraint, Column, Integer, String, Float, ForeignKey, JSON, DateTime, Enum, UniqueConstraint
 # pyrefly: ignore [missing-import]
 from sqlalchemy.orm import relationship
 # pyrefly: ignore [missing-import]
@@ -30,6 +30,21 @@ class ResourceType(str, enum.Enum):
     TECHNOLOGY = "Technology"
     LABOR = "Labor"
     CAPITAL = "Capital"
+
+
+class MilitaryPosture(str, enum.Enum):
+    DEFEND = "defend"
+    PATROL = "patrol"
+    RECONNAISSANCE = "reconnaissance"
+
+
+class EventType(str, enum.Enum):
+    NATURAL_DISASTER = "natural_disaster"
+
+
+class EventScope(str, enum.Enum):
+    PUBLIC = "public"
+    PRIVATE = "private"
 
 class GameSession(Base):
     __tablename__ = "game_sessions"
@@ -162,6 +177,8 @@ class Nation(Base):
     # Military Stats
     military_atk = Column(Integer, default=1)
     military_def = Column(Integer, default=1)
+    military_readiness = Column(Float, default=0.0, nullable=False)
+    emergency_preparedness_balance = Column(Float, default=0.0, nullable=False)
     
     # Policies (JSON for flexible schema)
     policies = Column(JSON, default=dict)
@@ -169,6 +186,11 @@ class Nation(Base):
     session = relationship("GameSession", back_populates="nations")
     companies = relationship("Company", back_populates="nation")
     resources = relationship("Resource", back_populates="nation")
+
+    __table_args__ = (
+        CheckConstraint("military_readiness >= 0", name="ck_nation_military_readiness_nonnegative"),
+        CheckConstraint("emergency_preparedness_balance >= 0", name="ck_nation_emergency_fund_nonnegative"),
+    )
 
 class Company(Base):
     __tablename__ = "companies"
@@ -216,6 +238,8 @@ class Round(Base):
 
     session = relationship("GameSession", back_populates="rounds")
     decisions = relationship("Decision", back_populates="round")
+    phase3_events = relationship("RoundEvent", back_populates="round", cascade="all, delete-orphan")
+    effects = relationship("RoundEffect", back_populates="round", cascade="all, delete-orphan")
 
 class Decision(Base):
     __tablename__ = "decisions"
@@ -233,4 +257,78 @@ class Decision(Base):
 
     __table_args__ = (
         UniqueConstraint("round_id", "player_type", "entity_id", name="uq_decision_entity_per_round"),
+    )
+
+
+class RoundEvent(Base):
+    """One validated Phase 3 event scheduled for a round.
+
+    Event definitions are catalog-backed in the API layer; this record stores
+    the immutable selected instance and its deterministic inputs.
+    """
+
+    __tablename__ = "round_events"
+
+    id = Column(Integer, primary_key=True, index=True)
+    round_id = Column(Integer, ForeignKey("rounds.id"), nullable=False, index=True)
+    event_type = Column(Enum(EventType), nullable=False)
+    target_nation_id = Column(Integer, ForeignKey("nations.id"), nullable=True, index=True)
+    severity = Column(Integer, nullable=False, default=1)
+    event_data = Column(JSON, default=dict, nullable=False)
+    source = Column(String, nullable=False, default="instructor")
+    injected_by_user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    round = relationship("Round", back_populates="phase3_events")
+    recovery_funding = relationship("CompanyRecoveryFunding", back_populates="round_event", cascade="all, delete-orphan")
+
+    __table_args__ = (
+        UniqueConstraint("round_id", "event_type", "target_nation_id", name="uq_round_event_target"),
+        CheckConstraint("severity BETWEEN 1 AND 3", name="ck_round_event_severity_range"),
+    )
+
+
+class RoundEffect(Base):
+    """Append-only resolved effect for a completed round."""
+
+    __tablename__ = "round_effects"
+
+    id = Column(Integer, primary_key=True, index=True)
+    round_id = Column(Integer, ForeignKey("rounds.id"), nullable=False, index=True)
+    round_event_id = Column(Integer, ForeignKey("round_events.id"), nullable=True, index=True)
+    entity_type = Column(String, nullable=False)
+    entity_id = Column(Integer, nullable=False)
+    effect_type = Column(String, nullable=False)
+    scope = Column(Enum(EventScope), nullable=False, default=EventScope.PUBLIC)
+    effect_data = Column(JSON, default=dict, nullable=False)
+    reproducibility_key = Column(String, nullable=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    round = relationship("Round", back_populates="effects")
+
+    __table_args__ = (
+        UniqueConstraint("round_id", "entity_type", "entity_id", "effect_type", name="uq_round_effect_entity_type"),
+    )
+
+
+class CompanyRecoveryFunding(Base):
+    """Public and private recovery amounts allocated after a disaster."""
+
+    __tablename__ = "company_recovery_funding"
+
+    id = Column(Integer, primary_key=True, index=True)
+    round_event_id = Column(Integer, ForeignKey("round_events.id"), nullable=False, index=True)
+    company_id = Column(Integer, ForeignKey("companies.id"), nullable=False, index=True)
+    public_fund_amount = Column(Float, nullable=False, default=0.0)
+    private_fund_amount = Column(Float, nullable=False, default=0.0)
+    private_financing_cost = Column(Float, nullable=False, default=0.0)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    round_event = relationship("RoundEvent", back_populates="recovery_funding")
+
+    __table_args__ = (
+        UniqueConstraint("round_event_id", "company_id", name="uq_recovery_funding_company_event"),
+        CheckConstraint("public_fund_amount >= 0", name="ck_recovery_public_fund_nonnegative"),
+        CheckConstraint("private_fund_amount >= 0", name="ck_recovery_private_fund_nonnegative"),
+        CheckConstraint("private_financing_cost >= 0", name="ck_recovery_financing_cost_nonnegative"),
     )

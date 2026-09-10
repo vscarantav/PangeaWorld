@@ -12,7 +12,7 @@ try:
     from ..database import get_db
     from ..deadlines import active_deadline, as_utc, deadline_has_passed, session_mutation_lock, utc_now
     from ..engines.round_manager import advance_phase, apply_auto_decisions
-    from ..models.domain import Company, Decision, DecisionDraft, GameMembership, GameSession, LobbyAudit, Nation, PhaseEnum, Round, User
+    from ..models.domain import Company, Decision, DecisionDraft, GameMembership, GameSession, LobbyAudit, Nation, PhaseEnum, Round, RoundStatus, User
     from ..auth import get_current_user
     from ..moderation import is_classroom_safe_name
     from ..realtime import notify_session
@@ -21,12 +21,16 @@ except ImportError:
     from database import get_db
     from deadlines import active_deadline, as_utc, deadline_has_passed, session_mutation_lock, utc_now
     from engines.round_manager import advance_phase, apply_auto_decisions
-    from models.domain import Company, Decision, DecisionDraft, GameMembership, GameSession, LobbyAudit, Nation, PhaseEnum, Round, User
+    from models.domain import Company, Decision, DecisionDraft, GameMembership, GameSession, LobbyAudit, Nation, PhaseEnum, Round, RoundStatus, User
     from auth import get_current_user
     from moderation import is_classroom_safe_name
     from realtime import notify_session
     from seed_data import seed_game_session
 from .helpers import get_session_or_404, require_assigned_membership, require_instructor, require_membership
+try:
+    from ..engines.phase3_resolver import public_disaster_article
+except ImportError:
+    from engines.phase3_resolver import public_disaster_article
 try:
     from ..map_snapshots import normalize_map_snapshot
     from ..models.domain import MapSnapshot
@@ -35,6 +39,8 @@ except ImportError:
     from models.domain import MapSnapshot
 
 router = APIRouter(prefix="/api/sessions", tags=["sessions"])
+JOIN_CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
+JOIN_CODE_LENGTH = 8
 
 class SessionCreate(BaseModel):
     model_config = {"extra": "forbid"}
@@ -79,7 +85,10 @@ def _instructor_or_403(db, session_id, user_id):
 
 def _new_join_code(db):
     while True:
-        code = secrets.token_urlsafe(6).upper().replace("-", "").replace("_", "")[:10]
+        # A token with punctuation removed can occasionally become shorter than
+        # LobbyJoin's six-character validation minimum. Generate from the
+        # display alphabet directly so every issued code is valid and readable.
+        code = "".join(secrets.choice(JOIN_CODE_ALPHABET) for _ in range(JOIN_CODE_LENGTH))
         if not db.query(GameSession).filter_by(lobby_join_code=code).first():
             return code
 
@@ -290,9 +299,10 @@ def rename_nation(session_id: int, nation_id: int, payload: RenamePayload, db: S
 def rename_company(session_id: int, company_id: int, payload: RenamePayload, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
     return _rename(session_id, company_id, payload, "executive", db, user)
 
-def _session_view(session):
+def _session_view(session, include_map=True):
     return {"id": session.id, "seed": session.seed, "current_round": session.current_round,
-            "phase": session.phase.value, "status": session.status, "map_snapshot": session.map_snapshot,
+            "phase": session.phase.value, "status": session.status,
+            "map_snapshot": session.map_snapshot if include_map else None,
             "server_time": utc_now().isoformat(),
             "presidential_deadline_at": as_utc(session.presidential_deadline_at),
             "company_deadline_at": as_utc(session.company_deadline_at),
@@ -301,10 +311,10 @@ def _session_view(session):
 
 
 @router.get("/{session_id}")
-def get_session(session_id: int, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+def get_session(session_id: int, include_map: bool = True, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
     session = get_session_or_404(db, session_id)
     require_assigned_membership(db, session_id, user.id)
-    return _session_view(session)
+    return _session_view(session, include_map=include_map)
 
 
 @router.put("/{session_id}/map")
@@ -394,7 +404,18 @@ def get_news(session_id: int, db: Session = Depends(get_db), user: User = Depend
     for round_ in sorted(session.rounds, key=lambda item: item.number, reverse=True):
         for event in reversed(round_.events or []):
             articles.append({"id": event["id"], "round": round_.number, "headline": event["headline"],
-                             "category": event["category"], "impact": event["impact"], "nation_id": event["nation_id"]})
+                             "summary": event.get("summary"), "category": event["category"],
+                             "impact": event["impact"], "nation_id": event["nation_id"]})
+        if round_.status == RoundStatus.COMPLETE:
+            for event in round_.phase3_events:
+                public_effect = next((effect for effect in round_.effects if effect.round_event_id == event.id and effect.entity_type == "nation"), None)
+                nation = next((item for item in session.nations if item.id == event.target_nation_id), None)
+                if public_effect is not None and nation is not None:
+                    articles.append({**public_disaster_article(
+                        event_id=event.id, round_number=round_.number, nation_name=nation.name,
+                        event_title=(event.event_data or {}).get("title", "Natural disaster"), severity=event.severity,
+                        public_fund_used=float((public_effect.effect_data or {}).get("public_fund_used", 0.0)),
+                    ), "nation_id": nation.id})
     return {"articles": articles}
 
 

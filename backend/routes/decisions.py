@@ -6,16 +6,16 @@ try:
     from ..deadlines import deadline_has_passed, session_mutation_lock
     from ..database import get_db
     from ..engines.round_manager import submit_decision
-    from ..models.schemas import CompanyDecisionData, PresidentDecisionData
-    from ..models.domain import DecisionDraft, GameSession, Round, User
+    from ..models.schemas import CompanyDecisionData, PresidentDecisionData, PresidentialReadinessData
+    from ..models.domain import Decision, DecisionDraft, GameSession, Round, User
     from ..auth import get_current_user
     from ..realtime import notify_session
 except ImportError:
     from deadlines import deadline_has_passed, session_mutation_lock
     from database import get_db
     from engines.round_manager import submit_decision
-    from models.schemas import CompanyDecisionData, PresidentDecisionData
-    from models.domain import DecisionDraft, GameSession, Round, User
+    from models.schemas import CompanyDecisionData, PresidentDecisionData, PresidentialReadinessData
+    from models.domain import Decision, DecisionDraft, GameSession, Round, User
     from auth import get_current_user
     from realtime import notify_session
 from .helpers import require_membership
@@ -28,6 +28,10 @@ class PresidentDecisionPayload(BaseModel):
 
 class CompanyDecisionPayload(BaseModel):
     decision_data: CompanyDecisionData = Field(default_factory=CompanyDecisionData)
+
+
+class PresidentialReadinessPayload(BaseModel):
+    decision_data: PresidentialReadinessData = Field(default_factory=PresidentialReadinessData)
 
 def _owned_session(session_id: int, entity_id: int, player_type: str, db: Session, user: User):
     session = db.query(GameSession).filter_by(id=session_id).with_for_update().first()
@@ -67,6 +71,25 @@ def submit_presidential_decision(session_id: int, nation_id: int, payload: Presi
 @router.post("/companies/{company_id}/decisions")
 def submit_company_decision(session_id: int, company_id: int, payload: CompanyDecisionPayload, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
     return _submit(session_id, company_id, "company", payload, db, user)
+
+
+@router.put("/nations/{nation_id}/readiness")
+def save_presidential_readiness(session_id: int, nation_id: int, payload: PresidentialReadinessPayload, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    """Merge Phase 3 readiness inputs into the President's canonical decision."""
+    with session_mutation_lock(session_id):
+        session = _owned_session(session_id, nation_id, "president", db, user)
+        if deadline_has_passed(session):
+            raise HTTPException(status_code=409, detail="the phase deadline has passed")
+        round_ = db.query(Round).filter_by(session_id=session_id, number=session.current_round).first()
+        existing = db.query(Decision).filter_by(round_id=round_.id, player_type="president", entity_id=nation_id).first()
+        merged = dict(existing.decision_data or {}) if existing else {}
+        merged.update(payload.decision_data.model_dump(exclude_none=True))
+        try:
+            decision = submit_decision(db, session, "president", nation_id, merged)
+        except ValueError as exc:
+            raise HTTPException(status_code=409, detail=str(exc)) from exc
+        notify_session(session_id, "readiness_changed", round=session.current_round)
+        return {"id": decision.id, "round_id": decision.round_id, "decision_data": decision.decision_data}
 
 
 def _save_draft_locked(session_id: int, entity_id: int, player_type: str, payload, db: Session, user: User):

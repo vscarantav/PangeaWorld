@@ -1,4 +1,6 @@
 # pyrefly: ignore [missing-import]
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI, Depends
 # pyrefly: ignore [missing-import]
 from fastapi.middleware.cors import CORSMiddleware
@@ -14,6 +16,7 @@ try:
     from .routes.decisions import router as decisions_router
     from .routes.market import router as market_router
     from .routes.auth import router as auth_router
+    from .routes.phase3 import router as phase3_router
     from .realtime import router as realtime_router
 except ImportError:  # Allows `uvicorn main:app` from inside backend.
     from database import engine, Base, get_db, ensure_schema
@@ -25,19 +28,36 @@ except ImportError:  # Allows `uvicorn main:app` from inside backend.
     from routes.decisions import router as decisions_router
     from routes.market import router as market_router
     from routes.auth import router as auth_router
+    from routes.phase3 import router as phase3_router
     from realtime import router as realtime_router
 
-# Create tables
-Base.metadata.create_all(bind=engine)
-ensure_schema()
+@asynccontextmanager
+async def lifespan(_app: FastAPI):
+    """Prepare the local schema and seed the development session once."""
+    Base.metadata.create_all(bind=engine)
+    ensure_schema()
+    db = next(get_db())
+    try:
+        default_session = db.query(GameSession).first()
+        if not default_session:
+            default_session = GameSession(seed="default_dev_seed", phase=PhaseEnum.PLANNING)
+            db.add(default_session)
+            db.commit()
+            db.refresh(default_session)
+            seed_game_session(db, default_session.id)
+        yield
+    finally:
+        db.close()
 
-app = FastAPI(title="PangeaWorld API")
+
+app = FastAPI(title="PangeaWorld API", lifespan=lifespan)
 app.include_router(sessions_router)
 app.include_router(nations_router)
 app.include_router(companies_router)
 app.include_router(decisions_router)
 app.include_router(market_router)
 app.include_router(auth_router)
+app.include_router(phase3_router)
 app.include_router(realtime_router)
 
 # Configure CORS so the React frontend can communicate with this API
@@ -48,19 +68,6 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
-@app.on_event("startup")
-def startup_event():
-    # Initialize a default game session if none exists
-    db = next(get_db())
-    default_session = db.query(GameSession).first()
-    if not default_session:
-        default_session = GameSession(seed="default_dev_seed", phase=PhaseEnum.PLANNING)
-        db.add(default_session)
-        db.commit()
-        db.refresh(default_session)
-        seed_game_session(db, default_session.id)
-    db.close()
 
 @app.get("/")
 def read_root():

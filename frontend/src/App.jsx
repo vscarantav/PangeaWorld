@@ -31,15 +31,20 @@ function decisionStatusLabel(status) {
   return status === 'auto_submitted' ? 'automatic (deadline missed)' : status?.replaceAll('_', ' ');
 }
 
+function isOlderLobbyStatus(current, incoming) {
+  const rank = { lobby: 0, active: 1, complete: 2 };
+  return current?.session_id === incoming?.session_id
+    && (rank[incoming.status] ?? -1) < (rank[current.status] ?? -1);
+}
+
 function GameShell({ onSignOut }) {
-  const { loading, error, session, nation, company, membership, news, readiness, realtimeConnected, refresh } = useGame();
+  const { loading, error, session, nation, company, membership, news, readiness, realtimeConnected, refresh, loadMapSnapshot } = useGame();
   const dashboardRole = membership?.role === 'president' ? 'president' : 'executive';
   const [view, setView] = useState(dashboardRole);
 
   useEffect(() => {
     if (!session?.id) return undefined;
     const load = () => refresh(session.id).catch(() => {});
-    load();
     const timer = window.setInterval(load, 15000);
     return () => window.clearInterval(timer);
   }, [session?.id, refresh]);
@@ -53,7 +58,14 @@ function GameShell({ onSignOut }) {
       <div style={{ position: 'fixed', top: 10, left: '50%', transform: 'translateX(-50%)', zIndex: 9999, background: 'rgba(0,0,0,0.8)', padding: '5px 10px', borderRadius: 20, border: '1px solid var(--border-light)', display: 'flex', gap: 10, alignItems: 'center' }}>
         <span style={{ color: 'white', padding: '5px 15px', fontWeight: 'bold' }}>{dashboardRole === 'president' ? 'President' : 'Company Executive'}</span>
         <button
-          onClick={() => setView(view === 'map' ? dashboardRole : 'map')}
+          onClick={async () => {
+            if (view === 'map') {
+              setView(dashboardRole);
+              return;
+            }
+            if (!session.map_snapshot) await loadMapSnapshot();
+            setView('map');
+          }}
           style={{ background: view === 'map' ? 'var(--accent-primary)' : 'transparent', color: 'white', border: 'none', padding: '5px 15px', borderRadius: 15, cursor: 'pointer', fontWeight: 'bold' }}
         >
           {view === 'map' ? 'Return to dashboard' : 'Map View'}
@@ -67,8 +79,8 @@ function GameShell({ onSignOut }) {
         <DeadlineCountdown deadlineAt={readiness?.deadline_at} serverTime={readiness?.server_time} />
       </div>
       {latestCompletedRound && <aside data-testid="round-results" style={{ position: 'fixed', bottom: 16, right: 16, zIndex: 9999, maxWidth: 360, background: 'rgba(15,23,42,.96)', padding: '12px 16px', borderRadius: 8, color: 'white', border: '1px solid var(--border-light)' }}><strong>Round {latestCompletedRound.number} results published</strong><p style={{ margin: '6px 0 0' }}>Pangea Times: {news[0]?.headline || 'Round results are available.'}</p></aside>}
-      {view === 'president' && <PresidentDashboard />}
-      {view === 'executive' && <ExecutiveDashboard />}
+      {view === 'president' && (nation ? <PresidentDashboard /> : <div style={{ padding: '3rem', color: 'white' }}>Loading nation dashboard…</div>)}
+      {view === 'executive' && (company ? <ExecutiveDashboard /> : <div style={{ padding: '3rem', color: 'white' }}>Loading company dashboard…</div>)}
       {view === 'map' && (
         <div style={{ width: '100vw', height: '100vh', display: 'flex', justifyContent: 'center', alignItems: 'center', backgroundColor: '#1e1e1e' }}>
           <GameMap seed={session.seed} mapSnapshot={session.map_snapshot} isPlanningMode={false} />
@@ -90,12 +102,16 @@ function AuthAndLobby() {
   const [loadingAuth, setLoadingAuth] = useState(true);
   const [phaseDurationSeconds, setPhaseDurationSeconds] = useState(172800);
 
+  const applyLobby = useCallback((next) => {
+    setLobby((current) => isOlderLobbyStatus(current, next) ? current : next);
+  }, []);
+
   const loadLobby = useCallback(async (id) => {
     const next = await api.getLobby(id);
-    setLobby(next);
+    applyLobby(next);
     window.localStorage.setItem('pangeaworld.sessionId', id);
     return next;
-  }, []);
+  }, [applyLobby]);
 
   const loadRecoverable = useCallback(async (currentUser) => {
     if (!currentUser?.is_instructor) return;
@@ -131,9 +147,9 @@ function AuthAndLobby() {
   useEffect(() => {
     const sessionId = lobby?.session_id;
     if (!sessionId || lobby.status !== 'lobby') return undefined;
-    const timer = window.setInterval(() => api.getLobby(sessionId).then(setLobby).catch(() => {}), 10000);
+    const timer = window.setInterval(() => api.getLobby(sessionId).then(applyLobby).catch(() => {}), 10000);
     return () => window.clearInterval(timer);
-  }, [lobby?.session_id, lobby?.status]);
+  }, [lobby?.session_id, lobby?.status, applyLobby]);
 
   const lobbyRealtimeConnected = useSessionEvents(lobby?.status === 'lobby' ? lobby.session_id : null, () => {
     if (lobby?.session_id) loadLobby(lobby.session_id).catch(() => {});
@@ -254,7 +270,7 @@ function InstructorGame({ sessionId, onSignOut }) {
   const refresh = useCallback(() => api.getReadiness(sessionId).then(setSummary).catch((err) => setError(err.message)), [sessionId]);
   useEffect(() => {
     refresh();
-    const timer = window.setInterval(refresh, 15000);
+    const timer = window.setInterval(refresh, 5000);
     return () => window.clearInterval(timer);
   }, [refresh]);
   const realtimeConnected = useSessionEvents(sessionId, refresh);
@@ -266,7 +282,7 @@ function InstructorGame({ sessionId, onSignOut }) {
       setError(err.message);
     }
   };
-  return <main className="auth-page"><h1>Instructor readiness board</h1><p>{realtimeConnected ? 'Live' : 'Reconnecting…'}</p>{summary && <><p>Round {summary.round} · {summary.phase}<DeadlineCountdown deadlineAt={summary.deadline_at} serverTime={summary.server_time} /></p><p>{summary.submitted}/{summary.total} assigned seats submitted.</p>{summary.seats.map((seat) => <p key={`${seat.role}-${seat.entity_id}`}>{seat.role} #{seat.entity_id}: {decisionStatusLabel(seat.status)}</p>)}</>}{error && <p>{error}</p>}<button onClick={refresh}>Refresh</button><button disabled={summary?.phase === 'complete'} onClick={advance}>Advance phase</button><button onClick={onSignOut}>Sign out</button></main>;
+  return <main className="auth-page"><h1>Instructor readiness board</h1><p>{realtimeConnected ? 'Live' : 'Reconnecting…'}</p>{summary && <><p>Round {summary.round} · {summary.phase}<DeadlineCountdown deadlineAt={summary.deadline_at} serverTime={summary.server_time} /></p><p>{summary.submitted}/{summary.total} assigned seats submitted.</p>{summary.seats.map((seat) => <p key={`${seat.role}-${seat.entity_id}`}>{seat.role} #{seat.entity_id}: {decisionStatusLabel(seat.status)}</p>)}</>}{error && <p>{error}</p>}<button onClick={refresh}>Refresh</button><button disabled={!summary || summary.phase === 'complete'} onClick={advance}>Advance phase</button><button onClick={onSignOut}>Sign out</button></main>;
 }
 
 export default function App() {

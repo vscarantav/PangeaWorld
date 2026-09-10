@@ -5,16 +5,17 @@ from copy import deepcopy
 from sqlalchemy.orm import Session
 
 try:
-    from ..models.domain import Company, Decision, GameSession, Nation, PhaseEnum, Resource, Round, RoundStatus
+    from ..models.domain import Company, CompanyRecoveryFunding, Decision, EventScope, EventType, GameSession, Nation, PhaseEnum, Resource, Round, RoundEffect, RoundStatus
     from ..models.schemas import CompanyDecisionData, PresidentDecisionData
 except ImportError:
-    from models.domain import Company, Decision, GameSession, Nation, PhaseEnum, Resource, Round, RoundStatus
+    from models.domain import Company, CompanyRecoveryFunding, Decision, EventScope, EventType, GameSession, Nation, PhaseEnum, Resource, Round, RoundEffect, RoundStatus
     from models.schemas import CompanyDecisionData, PresidentDecisionData
 
 from .economy import calculate_cpi, calculate_gdp, calculate_inflation, calculate_unemployment
 from .events import event_effects, generate_round_events
 from .logistics import calculate_landed_cost, estimate_route
 from .resources import BASE_PRICES, calculate_scarcity, process_trade, produce_resources
+from .phase3_resolver import resolve_natural_disaster
 
 
 def _current_round(session: GameSession) -> Round:
@@ -116,8 +117,12 @@ def submit_decision(db: Session, session: GameSession, player_type: str, entity_
         raise ValueError(f"{player_type} entity does not belong to this session")
 
     normalized = _validated_decision(player_type, decision_data)
-    if player_type == "president" and normalized.get("government_spending", 0.0) > float(entity.treasury or 0.0):
-        raise ValueError("government_spending cannot exceed the nation's treasury")
+    if player_type == "president":
+        committed_budget = sum(float(normalized.get(field, 0.0)) for field in (
+            "government_spending", "military_investment", "emergency_preparedness_investment",
+        ))
+        if committed_budget > float(entity.treasury or 0.0):
+            raise ValueError("government, military, and emergency investments cannot exceed the nation's treasury")
     if player_type == "company":
         _validate_company_sourcing(db, session, entity, normalized)
 
@@ -285,11 +290,62 @@ def generate_round_results(session: GameSession, nation_results: list[dict], com
     }
 
 
+def _resolve_phase3_event(db: Session, current_round: Round, nation_state: dict, company_results: list[dict]) -> dict:
+    """Persist the one allowed Phase 3 event plan and apply private recovery."""
+    scheduled = sorted(current_round.phase3_events, key=lambda event: event.id)
+    if not scheduled:
+        return {}
+    if len(scheduled) > 1:
+        raise ValueError("only one Phase 3 event may be resolved in a round")
+    event = scheduled[0]
+    if event.event_type != EventType.NATURAL_DISASTER or event.target_nation_id is None:
+        raise ValueError("unsupported Phase 3 event")
+    nation = next((item for item in current_round.session.nations if item.id == event.target_nation_id), None)
+    if nation is None:
+        raise ValueError("Phase 3 event target does not belong to this session")
+    presidential = nation_state[nation.id]["presidential"]
+    plan = resolve_natural_disaster(
+        event_id=event.id,
+        event_key=(event.event_data or {}).get("catalog_key", "natural_disaster"),
+        severity=event.severity,
+        nation_id=nation.id,
+        posture=str(presidential.get("military_posture", "defend")),
+        military_investment=float(presidential.get("military_investment", 0.0)),
+        public_fund_available=float(nation.emergency_preparedness_balance or 0.0),
+        company_ids=[company.id for company in nation.companies],
+        round_number=current_round.number,
+    )
+    nation.emergency_preparedness_balance = round(float(nation.emergency_preparedness_balance or 0.0) - plan["public_fund_used"], 4)
+    nation.approval_rating = round(min(100.0, max(0.0, float(nation.approval_rating or 60.0) + plan["approval_delta"])), 4)
+    db.add(RoundEffect(
+        round_id=current_round.id, round_event_id=event.id, entity_type="nation", entity_id=nation.id,
+        effect_type="natural_disaster", scope=EventScope.PUBLIC,
+        effect_data={key: plan[key] for key in ("gross_impact", "public_fund_used", "private_recovery_total", "private_financing_total", "approval_delta", "gdp_delta")},
+        reproducibility_key=plan["reproducibility_key"],
+    ))
+    result_by_company = {result["company_id"]: result for result in company_results}
+    for allocation in plan["allocations"]:
+        company = next(company for company in nation.companies if company.id == allocation["company_id"])
+        private_cost = allocation["private_fund_amount"] + allocation["private_financing_cost"]
+        company.cash = round(float(company.cash or 0.0) - private_cost, 4)
+        company.net_profit = round(float(company.net_profit or 0.0) - private_cost, 4)
+        result_by_company[company.id]["cash"] = company.cash
+        result_by_company[company.id]["net_profit"] = company.net_profit
+        db.add(CompanyRecoveryFunding(round_event_id=event.id, **allocation))
+        db.add(RoundEffect(
+            round_id=current_round.id, round_event_id=event.id, entity_type="company", entity_id=company.id,
+            effect_type="private_disaster_recovery", scope=EventScope.PRIVATE,
+            effect_data={**allocation, "cash_delta": round(-private_cost, 2)},
+            reproducibility_key=plan["reproducibility_key"],
+        ))
+    return {nation.id: plan}
+
+
 def process_round(db: Session, session: GameSession, commit: bool = True) -> dict:
     """Run the authoritative economy/resource loop for the active round."""
-    current_round = _current_round(session)
     if session.phase != PhaseEnum.PROCESSING:
         raise ValueError("round can only be processed from the processing phase")
+    current_round = _current_round(session)
     current_round.status = RoundStatus.PROCESSING
     decisions = _decision_map(current_round)
     current_round.events = generate_round_events(session, current_round)
@@ -304,8 +360,11 @@ def process_round(db: Session, session: GameSession, commit: bool = True) -> dic
         nation.trade_balance = 0.0
         presidential = decisions.get(("president", nation.id)) or apply_auto_decisions(nation, "president")
         government_spending = float(presidential.get("government_spending", 0.0))
-        if government_spending > float(nation.treasury or 0.0):
-            raise ValueError("government_spending cannot exceed the nation's treasury")
+        military_investment = float(presidential.get("military_investment", 0.0))
+        preparedness_investment = float(presidential.get("emergency_preparedness_investment", 0.0))
+        total_commitment = government_spending + military_investment + preparedness_investment
+        if total_commitment > float(nation.treasury or 0.0):
+            raise ValueError("government, military, and emergency investments cannot exceed the nation's treasury")
         nation.policies = {
             **(nation.policies or {}),
             **{key: presidential[key] for key in ("tax_rate", "income_tax", "tariffs", "immigration") if key in presidential},
@@ -319,10 +378,14 @@ def process_round(db: Session, session: GameSession, commit: bool = True) -> dic
             for resource in nation.resources
         }
         nation.approval_rating = round(min(100.0, max(0.0, float(nation.approval_rating or 60.0) + effects["approval_delta"])), 4)
-        nation.treasury = round(float(nation.treasury or 0.0) - government_spending, 4)
+        nation.treasury = round(float(nation.treasury or 0.0) - total_commitment, 4)
+        nation.military_readiness = round(float(nation.military_readiness or 0.0) + military_investment / 100.0, 4)
+        nation.emergency_preparedness_balance = round(float(nation.emergency_preparedness_balance or 0.0) + preparedness_investment, 4)
         nation_state[nation.id] = {
             "presidential": presidential,
             "government_spending": government_spending,
+            "military_investment": military_investment,
+            "preparedness_investment": preparedness_investment,
             "previous_cpi": previous_cpi,
             "cpi_delta": effects["cpi_delta"],
             "resource_result": resource_result,
@@ -352,9 +415,14 @@ def process_round(db: Session, session: GameSession, commit: bool = True) -> dic
         company.market_share = round((float(company.revenue or 0.0) / global_revenue) * 100, 4) if global_revenue else 0.0
         company_result_by_id[company.id]["market_share"] = company.market_share
 
+    phase3_plans = _resolve_phase3_event(db, current_round, nation_state, company_results)
+
     for nation in session.nations:
         state = nation_state[nation.id]
         nation.gdp = round(calculate_gdp(nation, state["government_spending"]), 4)
+        phase3_plan = phase3_plans.get(nation.id)
+        if phase3_plan:
+            nation.gdp = round(max(0.0, nation.gdp + phase3_plan["gdp_delta"]), 4)
         nation.cpi = round(calculate_cpi(nation, state["resource_demands"]) + state["cpi_delta"], 4)
         nation.inflation = calculate_inflation(nation.cpi, state["previous_cpi"])
         labor_pool = sum(float(r.stockpile or 0.0) for r in nation.resources if getattr(r.type, "value", r.type) == "Labor")
@@ -372,8 +440,11 @@ def process_round(db: Session, session: GameSession, commit: bool = True) -> dic
             "approval_rating": nation.approval_rating,
             "trade_balance": nation.trade_balance,
             "treasury": nation.treasury,
+            "military_readiness": nation.military_readiness,
+            "emergency_preparedness_balance": nation.emergency_preparedness_balance,
             "resources": state["resource_result"],
             "events": [event for event in current_round.events if event.get("nation_id") == nation.id],
+            "phase3_effect": ({key: phase3_plan[key] for key in ("gross_impact", "public_fund_used", "private_recovery_total", "approval_delta", "gdp_delta", "reproducibility_key")} if phase3_plan else None),
         })
 
     current_round.results = generate_round_results(session, nation_results, company_results)

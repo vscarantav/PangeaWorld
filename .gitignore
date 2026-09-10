@@ -4,4 +4,7 @@ __pycache__/
 .pytest_cache/
 pytest-cache-files-*/
 .venv/
+# The local development database is backend/pangeaworld.db. Never commit a
+# database copied into the repository root or any other generated SQLite file.
 *.db
+phase2-*.log
