@@ -133,6 +133,13 @@ def test_phase3_readiness_api_enforces_identity_phase_and_budget():
         saved = president.put(endpoint, json=payload)
         assert saved.status_code == 200
         assert saved.json()["decision_data"]["military_posture"] == "patrol"
+        policy = president.post(
+            f"/api/sessions/{game_id}/nations/{nation_id}/decisions",
+            json={"decision_data": {"government_spending": 250.0, "tax_rate": 0.24}},
+        )
+        assert policy.status_code == 200
+        assert policy.json()["decision_data"]["emergency_preparedness_investment"] == 200.0
+        assert policy.json()["decision_data"]["military_posture"] == "patrol"
         assert instructor.post(f"/api/sessions/{game_id}/advance", json={"expected_phase": "presidential"}).status_code == 200
         assert president.put(endpoint, json=payload).status_code == 409
     finally:

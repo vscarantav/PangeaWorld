@@ -1190,7 +1190,7 @@ The sprint is complete only when every Progress Tracker item is checked and the 
 
 ## Phase 3 Sprint 1 — Military, Events & News Vertical Slice
 
-> **Status:** 🚧 In progress — Day 4/5 complete. This is a five-day delivery slice of the broader Phase 3 roadmap, not completion of every military or event feature described above.
+> **Status:** ✅ Complete — Day 5/5 complete. This is a five-day delivery slice of the broader Phase 3 roadmap, not completion of every military or event feature described above.
 
 > **Goal:** Deliver one secure, instructor-observable conflict-and-event round in the existing four-player game: an instructor can inject a validated event, each President can make authorized military-posture and emergency-preparedness decisions, the server resolves the consequences once during processing, and every player receives the same persisted result and Pangea Times coverage.
 
@@ -1213,17 +1213,17 @@ The sprint is complete only when every Progress Tracker item is checked and the 
 - [x] **Day 2 — Authoritative APIs and President UI:** Added protected presidential readiness submission, the compact President military/preparedness panel with cost, remaining capacity, and civilian opportunity cost, plus instructor-only event catalog and injection commands. Regression coverage rejects unauthenticated, wrong-role, invalid-posture, out-of-phase, invalid-event, and duplicate-event requests. Verified with 45 backend tests, clean frontend lint, and a successful production build.
 - [x] **Day 3 — Resolver and event effects:** Added a pure deterministic disaster resolver with explicit tuning constants, posture/readiness mitigation, public-fund-first allocation, and deterministic company recovery splits. Processing now commits military/preparedness spending, carries unspent public funds, applies private financing costs, approval/GDP effects, and persists immutable public/private effects plus reproducibility keys. A round accepts at most one Phase 3 event. Repeatability and exactly-once coverage pass with 47 backend tests.
 - [x] **Day 4 — Results, news, and real-time UX:** Published sanitized, immutable event results with deterministic Pangea Times payloads; rendered canonical public results in the President dashboard and summaries in Pangea Times; retained REST hydration on session notifications and stale-response protection. Added regression coverage for identical cross-role result payloads and privacy. Verified with 48 backend tests, frontend unit tests, clean lint, and a successful production build.
-- [ ] **Day 5 — Eight-seat stress rehearsal, balancing, and handoff:** Exercise seven human seats plus one scripted Drakmoor placeholder or the closest available test fixture, inject one event, complete a full authoritative round, validate identical public results/news across clients, document tuning constants, and update this architecture file with the measured verification baseline.
+- [x] **Day 5 — Eight-seat stress rehearsal, balancing, and handoff:** Exercised the closest available fixture: an eight-nation session with four isolated browser clients, remaining seats vacant, and a Phase 3 coastal-storm injection. The affected President saved preparedness and ordinary policy in the same round; all clients received identical sanitized results/news after processing, sign-out/sign-in, and reload. Verified with 48 backend tests, 3 frontend unit tests, lint, production build, and the Playwright rehearsal (1 passed; 96.5 seconds).
 
 ### Acceptance Criteria
 
-- [ ] A President can submit exactly one valid military posture for the active round; it is rejected outside the permitted phase, after deadline, or for another entity/session.
-- [ ] A President can submit a bounded emergency-preparedness investment. A natural-disaster resolution uses available eligible public funds before applying documented private-recovery costs, approval-rating loss, and GDP loss for any uncovered impact.
-- [ ] An instructor can inject one catalog event for a permitted target round; duplicate or invalid injections are rejected and audited.
-- [ ] Processing resolves the same persisted inputs to the same effects and article payloads on repeat/reconnect; a duplicate advance cannot apply effects twice.
-- [ ] The completed-round result identifies the event, public effects, economic opportunity cost, and any intentionally disclosed posture information without exposing private pre-processing decisions.
-- [ ] Four isolated browser clients receive the phase/result update, view identical public results/news, and retain those results after sign-out/sign-in and reload.
-- [ ] Backend regression tests, frontend lint/build, deterministic resolver tests, and the browser acceptance scenario pass before any tracker item is marked complete.
+- [x] A President can submit exactly one valid military posture for the active round; it is rejected outside the permitted phase, after deadline, or for another entity/session.
+- [x] A President can submit a bounded emergency-preparedness investment. A natural-disaster resolution uses available eligible public funds before applying documented private-recovery costs, approval-rating loss, and GDP loss for any uncovered impact.
+- [x] An instructor can inject one catalog event for a permitted target round; duplicate or invalid injections are rejected and audited.
+- [x] Processing resolves the same persisted inputs to the same effects and article payloads on repeat/reconnect; a duplicate advance cannot apply effects twice.
+- [x] The completed-round result identifies the event, public effects, economic opportunity cost, and any intentionally disclosed posture information without exposing private pre-processing decisions.
+- [x] Four isolated browser clients receive the phase/result update, view identical public results/news, and retain those results after sign-out/sign-in and reload.
+- [x] Backend regression tests, frontend lint/build, deterministic resolver tests, and the browser acceptance scenario pass before any tracker item is marked complete.
 
 ### Explicitly Deferred Beyond Phase 3 Sprint 1
 

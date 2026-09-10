@@ -361,7 +361,35 @@ export default function GameMap({ seed = 'PangeaGameSeed123', mapSnapshot = null
             ctx.fill();
         });
 
-        // 2. Straight Railroads (Contrasting the curved geography cleanly)
+        // 2. Rivers must be drawn in the organic view as well as planning
+        // mode.  A river may only have a few interior `isRiver` edges, so use
+        // every edge touching river terrain to keep the route legible.
+        const riverEdges = mapData.edges.filter((edge) =>
+            edge.triangles.some((triangle) => triangle.terrain === TERRAIN.RIVER)
+        );
+        if (riverEdges.length > 0) {
+            ctx.beginPath();
+            riverEdges.forEach((edge) => {
+                ctx.moveTo(edge.p1.x, edge.p1.y);
+                ctx.lineTo(edge.p2.x, edge.p2.y);
+            });
+            ctx.strokeStyle = 'rgba(8, 52, 92, 0.72)';
+            ctx.lineWidth = 5;
+            ctx.lineCap = 'round';
+            ctx.lineJoin = 'round';
+            ctx.stroke();
+
+            ctx.beginPath();
+            riverEdges.forEach((edge) => {
+                ctx.moveTo(edge.p1.x, edge.p1.y);
+                ctx.lineTo(edge.p2.x, edge.p2.y);
+            });
+            ctx.strokeStyle = '#4cc9f0';
+            ctx.lineWidth = 2.5;
+            ctx.stroke();
+        }
+
+        // 3. Straight Railroads (Contrasting the curved geography cleanly)
         const railroads = mapData.edges.filter(e => e.hasRailroad);
         if (railroads.length > 0) {
             ctx.beginPath();
@@ -386,7 +414,19 @@ export default function GameMap({ seed = 'PangeaGameSeed123', mapSnapshot = null
             ctx.setLineDash([]); 
         }
 
-        // 3. Clustered Icons
+        // 4. Clustered Icons.  The translucent base makes narrow mountain
+        // polygons readable even when their texture is scaled down.
+        mapData.triangles.forEach((tri) => {
+            if (tri.terrain !== TERRAIN.MOUNTAIN) return;
+            ctx.beginPath();
+            ctx.moveTo(tri.points[0].x, tri.points[0].y);
+            ctx.lineTo(tri.points[1].x, tri.points[1].y);
+            ctx.lineTo(tri.points[2].x, tri.points[2].y);
+            ctx.closePath();
+            ctx.fillStyle = 'rgba(34, 42, 53, 0.22)';
+            ctx.fill();
+        });
+
         ctx.shadowColor = "rgba(0, 0, 0, 0.4)";
         ctx.shadowBlur = 3;
         ctx.shadowOffsetX = 1;
@@ -409,7 +449,7 @@ export default function GameMap({ seed = 'PangeaGameSeed123', mapSnapshot = null
                 if (!tooClose) {
                     let jitterX = (tri.center.x % 4) - 2;
                     let jitterY = (tri.center.y % 4) - 2;
-                    ctx.drawImage(icons.mountain, tri.center.x - 6 + jitterX, tri.center.y - 6 + jitterY, 12, 12);
+                    ctx.drawImage(icons.mountain, tri.center.x - 9 + jitterX, tri.center.y - 9 + jitterY, 18, 18);
                     drawnMountains.push(tri.center);
                 }
             }

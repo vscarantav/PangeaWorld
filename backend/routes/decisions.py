@@ -48,8 +48,21 @@ def _submit_locked(session_id: int, entity_id: int, player_type: str, payload, d
     session = _owned_session(session_id, entity_id, player_type, db, user)
     if deadline_has_passed(session):
         raise HTTPException(status_code=409, detail="the phase deadline has passed")
+    decision_data = payload.decision_data.model_dump(exclude_none=True)
+    # The policy form and the Phase 3 readiness form save separate parts of
+    # the same presidential decision.  Pydantic supplies readiness defaults
+    # for a policy-only payload, so preserve the already-saved values unless
+    # the caller explicitly included a readiness field.
+    if player_type == "president":
+        round_ = db.query(Round).filter_by(session_id=session_id, number=session.current_round).first()
+        existing = db.query(Decision).filter_by(round_id=round_.id, player_type="president", entity_id=entity_id).first()
+        if existing:
+            explicit_fields = payload.decision_data.model_fields_set
+            for field in ("military_posture", "military_investment", "emergency_preparedness_investment"):
+                if field not in explicit_fields and field in (existing.decision_data or {}):
+                    decision_data[field] = existing.decision_data[field]
     try:
-        decision = submit_decision(db, session, player_type, entity_id, payload.decision_data.model_dump(exclude_none=True))
+        decision = submit_decision(db, session, player_type, entity_id, decision_data)
     except ValueError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
     round_ = db.query(Round).filter_by(session_id=session_id, number=session.current_round).first()

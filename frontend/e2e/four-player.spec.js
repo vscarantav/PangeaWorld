@@ -71,6 +71,12 @@ test('four isolated players complete one authoritative round and receive identic
     await expect(player.getByTestId('game-status')).toContainText(/Round 1.*presidential/, { timeout: 5000 });
   }
 
+  const eventResponse = await instructorContext.request.post(`${API_URL}/api/sessions/${sessionId}/phase3/events`, {
+    data: { catalog_key: 'coastal_storm', target_nation_id: firstNation.id },
+  });
+  expect(eventResponse.ok()).toBeTruthy();
+  const scheduledEvent = await eventResponse.json();
+
   for (let index = 2; index < 4; index += 1) {
     await players[index].locator('button.nav-item').filter({ hasText: 'Decisions' }).click({ force: true, timeout: 10000 });
     await expect(players[index].getByRole('button', { name: 'Save Decisions' })).toBeDisabled();
@@ -82,6 +88,12 @@ test('four isolated players complete one authoritative round and receive identic
   }
 
   for (let index = 0; index < 2; index += 1) {
+    if (index === 0) {
+      await players[index].locator('button.nav-item').filter({ hasText: 'Intel' }).click({ force: true, timeout: 10000 });
+      await players[index].getByLabel('Emergency preparedness fund').fill('500');
+      await players[index].getByRole('button', { name: 'Save readiness plan' }).click();
+      await expect(players[index].getByText(/Readiness plan saved for Round/)).toBeVisible();
+    }
     await players[index].locator('button.nav-item').filter({ hasText: 'Indexes' }).click({ force: true, timeout: 10000 });
     await players[index].getByRole('button', { name: 'Apply Policies' }).click();
     await expect(players[index].getByText(/Presidential decision submitted to the server/)).toBeVisible();
@@ -102,9 +114,9 @@ test('four isolated players complete one authoritative round and receive identic
     await expect(supplier.locator('option')).not.toHaveCount(0);
     await page.getByLabel('Sourcing quantity').fill('1');
     await page.getByRole('button', { name: 'Save Decisions' }).click();
-    await expect(page.getByText('Draft saved on the server. It is not submitted yet.')).toBeVisible();
+    await expect(page.getByText('Saved locally', { exact: true })).toBeVisible();
     await page.getByRole('button', { name: 'Submit Decisions' }).click();
-    await expect(page.getByText(/Submitted to the server for Round 1/)).toBeVisible();
+    await expect(page.getByText('Server confirmed', { exact: true })).toBeVisible();
     await expect(page.getByTestId('game-status')).toContainText(/Decision: submitted/, { timeout: 5000 });
   }
 
@@ -141,6 +153,17 @@ test('four isolated players complete one authoritative round and receive identic
   }));
   expect(newsFeeds[0].articles.length).toBeGreaterThan(0);
   for (const feed of newsFeeds.slice(1)) expect(feed).toEqual(newsFeeds[0]);
+
+  const eventResults = await Promise.all(playerContexts.map(async (context) => {
+    const resultResponse = await context.request.get(`${API_URL}/api/sessions/${sessionId}/phase3/results`);
+    expect(resultResponse.ok()).toBeTruthy();
+    return resultResponse.json();
+  }));
+  expect(eventResults[0].results).toHaveLength(1);
+  expect(eventResults[0].results[0].event_id).toBe(scheduledEvent.id);
+  expect(eventResults[0].results[0].effects.public_fund_used).toBeGreaterThan(0);
+  expect(JSON.stringify(eventResults[0])).not.toContain('private_financing_cost');
+  for (const results of eventResults.slice(1)) expect(results).toEqual(eventResults[0]);
 
   await players[0].getByRole('button', { name: 'Sign out' }).click();
   await players[0].getByPlaceholder('Email').fill(playerEmails[0]);
