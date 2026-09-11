@@ -21,6 +21,7 @@ from .logistics import calculate_landed_cost, estimate_route
 from .resources import BASE_PRICES, calculate_scarcity, process_trade, produce_resources
 from .phase3_resolver import resolve_natural_disaster
 from .phase3_military import apply_strategic_control, procurement_cost, normalized_units, resolve_battle, validate_attack_order, operation_cost
+from .ai_backfill import is_backfilled, is_scripted_seat
 
 
 def _current_round(session: GameSession) -> Round:
@@ -503,9 +504,13 @@ def process_round(db: Session, session: GameSession, commit: bool = True) -> dic
                     continue
                 automatic = apply_auto_decisions(entity, role)
                 reason = "vacant seat: conservative allocation"
-                if role == "president" and nation.archetype == "Marginalized military state":
+                if role == "president" and is_scripted_seat(session, nation):
                     automatic.update(drakmoor_order(session, nation))
                     reason = "Drakmoor scripted behavior"
+                elif not is_backfilled(session, "executive" if role == "company" else role, entity.id):
+                    # A human who missed a deadline receives the same conservative
+                    # decision, but the ledger records the distinct reason.
+                    reason = "deadline expired: conservative allocation"
                 decisions[(role, entity.id)] = automatic
                 db.add(Decision(round_id=current_round.id, player_type=role, entity_id=entity.id,
                     decision_data=automatic, submission_kind="automatic", auto_reason=reason))

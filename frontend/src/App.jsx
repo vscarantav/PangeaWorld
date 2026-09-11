@@ -1,4 +1,7 @@
 import InstructorPhase3 from './components/InstructorPhase3';
+import AnalyticsPanel from './components/InstructorDashboard/AnalyticsPanel';
+import BackfillPanel from './components/InstructorDashboard/BackfillPanel';
+import DebriefPanel from './components/Debrief/DebriefPanel';
 import DecisionFeedback from './components/DecisionFeedback';
 import React, { useCallback, useEffect, useState } from 'react';
 import PresidentDashboard from './components/PresidentDashboard';
@@ -81,6 +84,7 @@ function GameShell({ onSignOut }) {
         <DeadlineCountdown deadlineAt={readiness?.deadline_at} serverTime={readiness?.server_time} />
       </div>
       {latestCompletedRound && <aside data-testid="round-results" style={{ position: 'fixed', bottom: 16, right: 16, zIndex: 9999, maxWidth: 360, background: 'rgba(15,23,42,.96)', padding: '12px 16px', borderRadius: 8, color: 'white', border: '1px solid var(--border-light)' }}><strong>Round {latestCompletedRound.number} results published</strong><p style={{ margin: '6px 0 0' }}>Pangea Times: {news[0]?.headline || 'Round results are available.'}</p></aside>}
+      {session.phase === 'complete' && <DebriefPanel sessionId={session.id} />}
       {view === 'president' && (nation ? <PresidentDashboard /> : <div style={{ padding: '3rem', color: 'white' }}>Loading nation dashboard…</div>)}
       {view === 'executive' && (company ? <ExecutiveDashboard /> : <div style={{ padding: '3rem', color: 'white' }}>Loading company dashboard…</div>)}
       {view === 'map' && (
@@ -284,7 +288,7 @@ function InstructorGame({ sessionId, onSignOut }) {
       setError(err.message);
     }
   };
-  return <main className="auth-page"><h1>Instructor readiness board</h1><InstructorPhase3 sessionId={sessionId} phase={summary?.phase} /><DecisionFeedback sessionId={sessionId} round={summary?.round} /><p>{realtimeConnected ? 'Live' : 'Reconnecting…'}</p>{summary && <><p>Round {summary.round} · {summary.phase}<DeadlineCountdown deadlineAt={summary.deadline_at} serverTime={summary.server_time} /></p><p>{summary.submitted}/{summary.total} assigned seats submitted.</p>{summary.seats.map((seat) => <p key={`${seat.role}-${seat.entity_id}`}>{seat.role} #{seat.entity_id}: {decisionStatusLabel(seat.status)}</p>)}</>}{error && <p>{error}</p>}<button onClick={refresh}>Refresh</button><button disabled={!summary || summary.phase === 'complete'} onClick={advance}>Advance phase</button><button onClick={onSignOut}>Sign out</button></main>;
+  return <main className="auth-page"><h1>Instructor readiness board</h1><InstructorPhase3 sessionId={sessionId} phase={summary?.phase} /><AnalyticsPanel sessionId={sessionId} phase={summary?.phase} /><BackfillPanel sessionId={sessionId} phase={summary?.phase} /><DecisionFeedback sessionId={sessionId} round={summary?.round} />{summary?.phase === 'complete' && <DebriefPanel sessionId={sessionId} />}<p>{realtimeConnected ? 'Live' : 'Reconnecting…'}</p>{summary && <><p>Round {summary.round} · {summary.phase}<DeadlineCountdown deadlineAt={summary.deadline_at} serverTime={summary.server_time} /></p><p>{summary.submitted}/{summary.total} assigned seats submitted.</p>{summary.seats.map((seat) => <p key={`${seat.role}-${seat.entity_id}`}>{seat.role} #{seat.entity_id}: {decisionStatusLabel(seat.status)}</p>)}</>}{error && <p>{error}</p>}<button onClick={refresh}>Refresh</button><button disabled={!summary || summary.phase === 'complete'} onClick={advance}>Advance phase</button><button onClick={onSignOut}>Sign out</button></main>;
 }
 
 export default function App() {

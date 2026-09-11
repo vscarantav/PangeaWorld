@@ -52,3 +52,16 @@ export const injectScenario = (sessionId, data) => request(`/api/sessions/${sess
 export const getChatHistory = (sessionId) => request(`/api/sessions/${sessionId}/advisor/history`);
 export const clearChatHistory = (sessionId) => request(`/api/sessions/${sessionId}/advisor/history`, { method: 'DELETE' });
 export const getRateLimit = (sessionId) => request(`/api/sessions/${sessionId}/advisor/rate-limit`);
+export const getAnalyticsEngagement = (sessionId) => request(`/api/sessions/${sessionId}/analytics/engagement`);
+export const getAnalyticsDecisions = (sessionId) => request(`/api/sessions/${sessionId}/analytics/decisions`);
+export const getAnalyticsBalance = (sessionId) => request(`/api/sessions/${sessionId}/analytics/balance`);
+export const getAnalyticsAiGrading = (sessionId, rubric = {}) => {
+  const query = new URLSearchParams(rubric).toString();
+  return request(`/api/sessions/${sessionId}/analytics/ai-grading${query ? `?${query}` : ''}`);
+};
+export const analyticsExportUrl = (sessionId, format) => `${API_BASE_URL}/api/sessions/${sessionId}/analytics/export?format=${format}`;
+export const getBackfillStatus = (sessionId) => request(`/api/sessions/${sessionId}/backfill/status`);
+export const takeOverBackfill = (sessionId, seatId, userId) => request(`/api/sessions/${sessionId}/backfill/${encodeURIComponent(seatId)}/takeover`, { method: 'POST', body: JSON.stringify({ user_id: userId }) });
+export const getDebriefTimeline = (sessionId) => request(`/api/sessions/${sessionId}/debrief/timeline`);
+export const getDebriefConnections = (sessionId) => request(`/api/sessions/${sessionId}/debrief/connections`);
+export const getDebriefWhatIf = (sessionId, decisionReviewId) => request(`/api/sessions/${sessionId}/debrief/what-if`, { method: 'POST', body: JSON.stringify({ decision_review_id: decisionReviewId }) });

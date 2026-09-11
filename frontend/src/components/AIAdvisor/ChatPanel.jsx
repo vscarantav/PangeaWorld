@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useGame } from '../../context/GameContext';
 import { getChatHistory, clearChatHistory, getRateLimit, API_BASE_URL } from '../../api/client';
 import ContextBadge from './ContextBadge';
@@ -37,39 +37,36 @@ export default function ChatPanel({ isOpen, onClose }) {
   const role = membership?.role || 'president';
   const starterPrompts = role === 'executive' ? STARTER_PROMPTS_EXECUTIVE : STARTER_PROMPTS_PRESIDENT;
 
-  useEffect(() => {
-    if (isOpen && session?.id) {
-      loadHistory();
-      loadRateLimit();
-    }
-  }, [isOpen, session?.id]);
-
-  useEffect(() => {
-    scrollToBottom();
-  }, [messages]);
-
-  const loadHistory = async () => {
+  const loadHistory = useCallback(async () => {
+    if (!session?.id) return;
     try {
       const history = await getChatHistory(session.id);
       setMessages(history);
       setError(null);
-    } catch (err) {
+    } catch {
       setError('Could not load history. The server may be unavailable.');
     }
-  };
+  }, [session?.id]);
 
-  const loadRateLimit = async () => {
+  const loadRateLimit = useCallback(async () => {
+    if (!session?.id) return;
     try {
       const data = await getRateLimit(session.id);
       setRateLimitInfo(data);
-    } catch (_) {
+    } catch {
       // Non-fatal
     }
-  };
+  }, [session?.id]);
 
-  const scrollToBottom = () => {
+  const scrollToBottom = useCallback(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  };
+  }, []);
+
+  useEffect(() => {
+    if (isOpen && session?.id) { loadHistory(); loadRateLimit(); }
+  }, [isOpen, session?.id, loadHistory, loadRateLimit]);
+
+  useEffect(() => { scrollToBottom(); }, [messages, scrollToBottom]);
 
   const handleClear = async () => {
     if (!confirm('Are you sure you want to clear your chat history? This cannot be undone.')) return;
@@ -77,7 +74,7 @@ export default function ChatPanel({ isOpen, onClose }) {
       await clearChatHistory(session.id);
       setMessages([]);
       await loadRateLimit();
-    } catch (err) {
+    } catch {
       setError('Failed to clear history. Please try again.');
     }
   };
@@ -106,16 +103,12 @@ export default function ChatPanel({ isOpen, onClose }) {
       if (!response.ok) {
         if (response.status === 503) {
           setProviderDown(true);
-          setMessages(prev => {
-            const updated = [...prev];
-            updated[updated.length - 1] = {
-              ...updated[updated.length - 1],
+          setMessages(prev => prev.map((message, index) => index === prev.length - 1 ? {
+              ...message,
               content: 'The AI advisor is temporarily unavailable. Please try again in a moment.',
               streaming: false,
               isError: true
-            };
-            return updated;
-          });
+            } : message));
           return;
         }
         throw new Error(`Server error: ${response.status}`);
@@ -135,33 +128,21 @@ export default function ChatPanel({ isOpen, onClose }) {
         const { done, value } = await reader.read();
         if (done) break;
         accumulated += decoder.decode(value, { stream: true });
-        setMessages(prev => {
-          const updated = [...prev];
-          updated[updated.length - 1] = { ...updated[updated.length - 1], content: accumulated };
-          return updated;
-        });
+        setMessages(prev => prev.map((message, index) => index === prev.length - 1 ? { ...message, content: accumulated } : message));
       }
 
-      setMessages(prev => {
-        const updated = [...prev];
-        updated[updated.length - 1] = { ...updated[updated.length - 1], streaming: false };
-        return updated;
-      });
+      setMessages(prev => prev.map((message, index) => index === prev.length - 1 ? { ...message, streaming: false } : message));
 
     } catch (err) {
       console.error('Streaming failed:', err);
       if (err.message?.includes('Failed to fetch')) {
         setProviderDown(true);
-        setMessages(prev => {
-          const updated = [...prev];
-          updated[updated.length - 1] = {
-            ...updated[updated.length - 1],
+        setMessages(prev => prev.map((message, index) => index === prev.length - 1 ? {
+            ...message,
             content: 'The AI advisor is currently unreachable. Check your connection and try again.',
             streaming: false,
             isError: true
-          };
-          return updated;
-        });
+          } : message));
       } else {
         setError('Something went wrong. Please try again.');
         setMessages(prev => prev.slice(0, -1)); // remove placeholder

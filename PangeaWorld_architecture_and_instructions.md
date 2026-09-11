@@ -1332,9 +1332,9 @@ Verification: 55 backend tests, 3 deterministic map tests, frontend lint, and pr
 
 ### Progress Tracker
 
-- [ ] **Day 1:** Gemini advisor backend — per-user chat service, system prompt engineering, guardrails, and persistent conversation history
-- [ ] **Day 2:** Frontend AI chat panel, real-time streaming, and AI-usage logging pipeline
-- [ ] **Day 3:** Instructor analytics dashboard and AI-usage grading
+- [x] **Day 1:** Gemini advisor backend — per-user chat service, system prompt engineering, guardrails, and persistent conversation history
+- [x] **Day 2:** Frontend AI chat panel, real-time streaming, and AI-usage logging pipeline
+- [x] **Day 3:** Instructor analytics dashboard and AI-usage grading
 - [ ] **Day 4:** Post-game debrief tools, AI seat backfill, end-to-end verification, and hardening
 
 ### Day 1 (Sep 11) — Gemini Advisor Backend
@@ -1433,7 +1433,7 @@ Verification: 55 backend tests, 3 deterministic map tests, frontend lint, and pr
 
 #### Frontend
 
-- [ ] `frontend/src/components/InstructorDashboard/AnalyticsPanel.jsx` — instructor analytics dashboard
+- [x] `frontend/src/components/InstructorDashboard/AnalyticsPanel.jsx` — instructor analytics dashboard
   - **Engagement Metrics** per student/team:
     - Decisions submitted vs. auto-decided (per round, cumulative)
     - Login frequency and session duration
@@ -1459,7 +1459,7 @@ Verification: 55 backend tests, 3 deterministic map tests, frontend lint, and pr
 
 #### Backend
 
-- [ ] `backend/routes/analytics.py` — instructor analytics API
+- [x] `backend/routes/analytics.py` — instructor analytics API
   - `GET /api/sessions/{id}/analytics/engagement` — per-student engagement metrics
   - `GET /api/sessions/{id}/analytics/decisions` — decision quality and opportunity-cost reasoning summaries
   - `GET /api/sessions/{id}/analytics/balance` — game balance indicators
@@ -1467,13 +1467,13 @@ Verification: 55 backend tests, 3 deterministic map tests, frontend lint, and pr
   - `GET /api/sessions/{id}/analytics/export` — full data export (CSV or JSON, query-param selectable)
   - All routes require instructor role authorization
 
-- [ ] `backend/engines/grading.py` — AI-usage grading engine
+- [x] `backend/engines/grading.py` — AI-usage grading engine
   - Analyze prompt quality: length, specificity, follow-up chains, topic diversity
   - Detect low-effort patterns: single-word prompts, repeated identical queries, copy-paste detection
   - Apply configurable rubric weights and produce a suggested score per student
   - Flag notable interactions for instructor review
 
-- [ ] Backend tests for analytics and grading:
+- [x] Backend tests for analytics and grading:
   - Engagement metric accuracy against known test data
   - Grading engine rubric application and edge cases
   - Export format correctness (CSV and JSON)
@@ -1481,10 +1481,10 @@ Verification: 55 backend tests, 3 deterministic map tests, frontend lint, and pr
 
 #### Day 3 Acceptance
 
-- [ ] The instructor analytics dashboard displays engagement, decision quality, game balance, and AI grading data for all students in the session.
-- [ ] The AI grading module produces configurable, rubric-based scores with flagged interactions.
-- [ ] Full data export works in both CSV and JSON formats.
-- [ ] All analytics routes reject non-instructor access.
+- [x] The instructor analytics dashboard displays engagement, decision quality, game balance, and AI grading data for all students in the session.
+- [x] The AI grading module produces configurable, rubric-based scores with flagged interactions.
+- [x] Full data export works in both CSV and JSON formats.
+- [x] All analytics routes reject non-instructor access.
 
 ### Day 4 (Sep 14) — Debrief Tools, AI Backfill & Hardening
 
@@ -1497,7 +1497,7 @@ Verification: 55 backend tests, 3 deterministic map tests, frontend lint, and pr
   - **"What-If" Analysis**: for a given round and decision, re-run the deterministic engine with the recorded next-best foregone alternative and compare outcomes; clearly label the counterfactual as an estimate, not a historical fact
   - **Real-World Connections**: map game events to a curated catalog of real-world parallels (e.g., "Your nation experienced hyperinflation — here's what happened in Venezuela 2016–2020"); catalog is instructor-extensible
 
-- [ ] `backend/routes/debrief.py` — debrief API endpoints
+- [x] `backend/routes/debrief.py` — debrief API endpoints
   - `GET /api/sessions/{id}/debrief/timeline` — full game timeline playback data
   - `POST /api/sessions/{id}/debrief/what-if` — submit a decision + alternative for counterfactual comparison
   - `GET /api/sessions/{id}/debrief/connections` — real-world event parallels for the session's history
@@ -1505,14 +1505,14 @@ Verification: 55 backend tests, 3 deterministic map tests, frontend lint, and pr
 
 #### Backend — AI Seat Backfill
 
-- [ ] `backend/engines/ai_backfill.py` — general AI seat management
+- [x] `backend/engines/ai_backfill.py` — general AI seat management
   - Identify unfilled seats (no human assigned) at game start and mid-game
   - Generate conservative auto-decisions using the existing engine for each unfilled seat, every round
   - When an instructor assigns a human to a previously AI-backfilled seat, immediately cease AI control; the human inherits the current nation/company state
   - Backfilled seats are visually distinguished in the lobby and dashboards (labeled "AI-controlled")
   - AI backfill decisions are logged with the same immutability as human decisions for instructor review
 
-- [ ] `backend/routes/backfill.py` — backfill management endpoints
+- [x] `backend/routes/backfill.py` — backfill management endpoints
   - `GET /api/sessions/{id}/backfill/status` — list of AI-controlled vs. human-controlled seats
   - `POST /api/sessions/{id}/backfill/{seat_id}/takeover` — instructor assigns a human to an AI seat (mid-game handover)
   - Instructor-only authorization
@@ -1544,16 +1544,16 @@ Verification: 55 backend tests, 3 deterministic map tests, frontend lint, and pr
   - Backfilled seats submit conservative decisions each round; one seat is handed over to a human mid-game
   - Post-game debrief timeline, what-if, and real-world connections functional
   - Export produces valid CSV and JSON
-- [ ] Backend regression: all existing Phase 1–3 tests pass with no regressions
-- [ ] Frontend lint and production build pass
+- [x] Backend regression: all existing Phase 1–3 tests pass with no regressions
+- [x] Frontend lint and production build pass
 - [ ] Browser acceptance test: four isolated clients complete one round with AI advisor usage, instructor reviews analytics, and debrief tools load after game completion
 
 #### Day 4 Acceptance
 
-- [ ] The post-game debrief timeline, what-if analysis, and real-world connections are functional and accessible to all session members.
-- [ ] AI seat backfill covers unfilled seats; mid-game human takeover works without data loss.
+- [x] The post-game debrief timeline, what-if analysis, and real-world connections are functional and accessible to all session members.
+- [x] AI seat backfill covers unfilled seats; mid-game human takeover works without data loss.
 - [ ] The full Phase 4 layer (advisor, logging, grading, analytics, debrief, backfill) is regression-tested end-to-end.
-- [ ] All existing Phase 1–3 tests, frontend lint, and production build pass.
+- [x] All existing Phase 1–3 tests, frontend lint, and production build pass.
 
 ### Sprint Verification Commands
 
