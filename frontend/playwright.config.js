@@ -1,11 +1,16 @@
 import { defineConfig } from '@playwright/test';
+import { randomUUID } from 'node:crypto';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const frontendRoot = path.dirname(fileURLToPath(import.meta.url));
 const projectRoot = path.resolve(frontendRoot, '..');
-const databasePath = path.join(os.tmpdir(), `pangeaworld-e2e-${process.pid}.db`).replaceAll('\\', '/');
+// Process IDs are recycled on Windows. A per-run ID keeps a prior temporary
+// database from turning a later registration into a false duplicate-user test
+// failure.
+const runId = process.env.E2E_RUN_ID || randomUUID();
+const databasePath = path.join(os.tmpdir(), `pangeaworld-e2e-${runId}.db`).replaceAll('\\', '/');
 const backendPort = Number(process.env.E2E_BACKEND_PORT || 8001);
 const frontendPort = Number(process.env.E2E_FRONTEND_PORT || 5173);
 const backendPython = process.platform === 'win32'
@@ -14,6 +19,7 @@ const backendPython = process.platform === 'win32'
 
 export default defineConfig({
   testDir: './e2e',
+  outputDir: process.env.E2E_ARTIFACT_DIR || 'test-results',
   fullyParallel: false,
   workers: 1,
   timeout: 300000,

@@ -87,10 +87,16 @@ while ((Get-Date) -lt $deadline -and ($MaxIterations -eq 0 -or $iteration -lt $M
         # interrupted Playwright run cannot block the next one.
         $env:E2E_BACKEND_PORT = 8100 + ($iteration % 500)
         $env:E2E_FRONTEND_PORT = 5200 + ($iteration % 500)
+        # Isolate both data and traces. This makes a failed iteration
+        # self-contained even when Windows later recycles a process ID.
+        $env:E2E_RUN_ID = [guid]::NewGuid().ToString('N')
+        $env:E2E_ARTIFACT_DIR = Join-Path $iterationDirectory 'playwright'
         $browserExit = Invoke-LoggedCommand -Name 'browser' -WorkingDirectory $frontendRoot `
             -LogPath (Join-Path $iterationDirectory 'browser.log') -Command { & npm.cmd run test:e2e }
         Remove-Item Env:E2E_BACKEND_PORT -ErrorAction SilentlyContinue
         Remove-Item Env:E2E_FRONTEND_PORT -ErrorAction SilentlyContinue
+        Remove-Item Env:E2E_RUN_ID -ErrorAction SilentlyContinue
+        Remove-Item Env:E2E_ARTIFACT_DIR -ErrorAction SilentlyContinue
     }
 
     $allExitCodes = @($backendExit, $frontendTestExit, $frontendLintExit, $frontendBuildExit)
@@ -103,11 +109,11 @@ while ((Get-Date) -lt $deadline -and ($MaxIterations -eq 0 -or $iteration -lt $M
         started_at = $iterationStarted.ToString('o')
         finished_at = (Get-Date).ToString('o')
         status = $status
-        backend_exit = $backendExit
-        frontend_test_exit = $frontendTestExit
-        frontend_lint_exit = $frontendLintExit
-        frontend_build_exit = $frontendBuildExit
-        browser_exit = $browserExit
+        backend_exit = [int]$backendExit
+        frontend_test_exit = [int]$frontendTestExit
+        frontend_lint_exit = [int]$frontendLintExit
+        frontend_build_exit = [int]$frontendBuildExit
+        browser_exit = if ($null -eq $browserExit) { $null } else { [int]$browserExit }
         artifacts = $iterationDirectory
     } | ConvertTo-Json -Compress
     Add-Content -Path $outcomeLog -Value $record
