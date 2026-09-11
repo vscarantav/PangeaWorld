@@ -1,4 +1,4 @@
-import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
+import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import * as api from '../api/client';
 import DecisionReviewDialog from '../components/DecisionReviewDialog';
 import DecisionFeedback from '../components/DecisionFeedback';
@@ -44,20 +44,33 @@ export function GameProvider({ children, sessionId, membership }) {
   const [selectedCompanyId, setSelectedCompanyId] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [hydratedSessionId, setHydratedSessionId] = useState(null);
+  const refreshInFlight = useRef(null);
   const refresh = useCallback(async (targetSessionId) => {
     if (!targetSessionId) return;
-    const [nextSession, nextNations, nextCompanies, nextMarket, nextNews, nextReadiness, nextPhase3Results] = await Promise.all([
-      api.getSession(targetSessionId, { includeMap: false }), api.getNations(targetSessionId), api.getCompanies(targetSessionId), api.getMarket(targetSessionId), api.getNews(targetSessionId), api.getReadiness(targetSessionId),
-      api.getPhase3Results(targetSessionId),
-    ]);
-    // Requests issued before a socket event can resolve afterwards. Never let
-    // that older snapshot move the visible game backwards in phase or round.
-    setSession((current) => newestSession(current, nextSession));
-    setNations(nextNations); setCompanies(nextCompanies); setMarket(nextMarket); setNews(nextNews.articles || []);
-    setReadiness((current) => newestReadiness(current, nextReadiness)); setPhase3Results(nextPhase3Results.results || []);
-    setSelectedNationId((current) => current || nextNations[0]?.id || null);
-    setSelectedCompanyId((current) => current || nextCompanies[0]?.id || null);
-    return nextSession;
+    if (refreshInFlight.current) return refreshInFlight.current;
+    const request = (async () => {
+      const [nextSession, nextNations, nextCompanies, nextMarket, nextNews, nextReadiness, nextPhase3Results] = await Promise.all([
+        api.getSession(targetSessionId, { includeMap: false }), api.getNations(targetSessionId), api.getCompanies(targetSessionId), api.getMarket(targetSessionId), api.getNews(targetSessionId), api.getReadiness(targetSessionId),
+        api.getPhase3Results(targetSessionId),
+      ]);
+      // Requests issued before a socket event can resolve afterwards. Never let
+      // that older snapshot move the visible game backwards in phase or round.
+      setSession((current) => newestSession(current, nextSession));
+      setNations(nextNations); setCompanies(nextCompanies); setMarket(nextMarket); setNews(nextNews.articles || []);
+      setReadiness((current) => newestReadiness(current, nextReadiness)); setPhase3Results(nextPhase3Results.results || []);
+      setSelectedNationId((current) => current || nextNations[0]?.id || null);
+      setSelectedCompanyId((current) => current || nextCompanies[0]?.id || null);
+      setHydratedSessionId(String(targetSessionId));
+      setError('');
+      return nextSession;
+    })();
+    refreshInFlight.current = request;
+    try {
+      return await request;
+    } finally {
+      if (refreshInFlight.current === request) refreshInFlight.current = null;
+    }
   }, []);
 
   const applySessionEvent = useCallback((event) => {
@@ -133,14 +146,17 @@ export function GameProvider({ children, sessionId, membership }) {
       const before = { round: session?.current_round, phase: session?.phase };
       refreshLiveState(sessionId)
         .then((nextReadiness) => {
-          if (compareRoundPhase(nextReadiness, before) > 0) return refresh(sessionId);
+          // A transient failure during the first full-state request used to
+          // leave players on the lightweight shell forever. Keep retrying the
+          // canonical state until the dashboard has hydrated successfully.
+          if (hydratedSessionId !== String(sessionId) || compareRoundPhase(nextReadiness, before) > 0) return refresh(sessionId);
           return undefined;
         })
         .catch((refreshError) => setError(refreshError.message));
     };
     const timer = window.setInterval(pollReadiness, 2000);
     return () => window.clearInterval(timer);
-  }, [sessionId, session?.current_round, session?.phase, refreshLiveState, refresh]);
+  }, [sessionId, session?.current_round, session?.phase, hydratedSessionId, refreshLiveState, refresh]);
 
   const advance = useCallback(async () => { const result = await api.advanceRound(session.id, session.phase); await refresh(session.id); return result; }, [refresh, session]);
   const saveMapSnapshot = useCallback(async (snapshot) => {

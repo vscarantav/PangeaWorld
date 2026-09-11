@@ -11,6 +11,14 @@ async function register(page, email) {
   await expect(page.getByRole('heading', { name: new RegExp(`Welcome, ${email}`) })).toBeVisible();
 }
 
+async function login(page, email) {
+  await page.goto('/');
+  await page.getByPlaceholder('Email').fill(email);
+  await page.getByPlaceholder('Password (8+ characters)').fill('phase-two-password');
+  await page.getByRole('button', { name: 'Sign in' }).click();
+  await expect(page.getByRole('heading', { name: new RegExp(`Welcome, ${email}`) })).toBeVisible();
+}
+
 async function confirmReview(page) {
   await expect(page.getByRole('dialog', { name: 'Compare your decision' })).toBeVisible();
   await page.getByLabel('Foregone alternative').selectOption('reserve');
@@ -25,17 +33,53 @@ async function advancePhase(request, sessionId, expectedPhase) {
   expect(response.ok(), await response.text()).toBeTruthy();
 }
 
-test('four isolated players exercise the Phase 4 live classroom path', async ({ browser }) => {
+async function expectPlayerShell(page, roleLabel) {
+  let lastError;
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    try {
+      await expect(page.getByText(roleLabel, { exact: true }).first()).toBeVisible({ timeout: 12000 });
+      await expect(page.getByTestId('game-status')).toBeVisible({ timeout: 5000 });
+      return;
+    } catch (error) {
+      lastError = error;
+      if (attempt < 2) await page.reload({ waitUntil: 'domcontentloaded' });
+    }
+  }
+  throw lastError;
+}
+
+async function clickPlayerNav(page, name, roleLabel) {
+  const navigationItem = () => page.locator('button.nav-item').filter({ hasText: name });
+  try {
+    await navigationItem().click({ timeout: 10000 });
+  } catch {
+    // Reloading is also the supported recovery path for a real player whose
+    // initial state request was interrupted during a lobby/phase transition.
+    await page.reload({ waitUntil: 'domcontentloaded' });
+    await expectPlayerShell(page, roleLabel);
+    await navigationItem().click({ timeout: 10000 });
+  }
+}
+
+test('four isolated players exercise the Phase 4 live classroom path', async ({ browser }, testInfo) => {
+  const runSuffix = testInfo.repeatEachIndex ? `-${testInfo.repeatEachIndex}` : '';
   const instructorContext = await browser.newContext();
   const instructor = await instructorContext.newPage();
-  await register(instructor, 'instructor@e2e.test');
+  const instructorEmail = 'instructor@e2e.test';
+  if (testInfo.repeatEachIndex === 0) await register(instructor, instructorEmail);
+  else await login(instructor, instructorEmail);
   await instructor.getByRole('button', { name: 'Create instructor game' }).click();
   await expect(instructor.getByRole('heading', { name: 'Game lobby' })).toBeVisible({ timeout: 30000 });
   await expect(instructor.getByTestId('lobby-connection')).toHaveText('Live');
   const joinCode = await instructor.locator('strong').first().innerText();
   const sessionId = await instructor.evaluate(() => window.localStorage.getItem('pangeaworld.sessionId'));
 
-  const playerEmails = ['president-one@e2e.test', 'president-two@e2e.test', 'executive-one@e2e.test', 'executive-two@e2e.test'];
+  const playerEmails = [
+    `president-one${runSuffix}@e2e.test`,
+    `president-two${runSuffix}@e2e.test`,
+    `executive-one${runSuffix}@e2e.test`,
+    `executive-two${runSuffix}@e2e.test`,
+  ];
   const playerContexts = [];
   const players = [];
   for (const email of playerEmails) {
@@ -76,7 +120,7 @@ test('four isolated players exercise the Phase 4 live classroom path', async ({ 
 
   for (let index = 0; index < players.length; index += 1) {
     const roleLabel = index < 2 ? 'President' : 'Company Executive';
-    await expect(players[index].getByText(roleLabel, { exact: true }).first()).toBeVisible();
+    await expectPlayerShell(players[index], roleLabel);
     await expect(players[index].getByTestId('game-status')).toContainText(/Decision:.*Live/);
   }
 
@@ -107,7 +151,7 @@ test('four isolated players exercise the Phase 4 live classroom path', async ({ 
   const scheduledEvent = await eventResponse.json();
 
   for (let index = 2; index < 4; index += 1) {
-    await players[index].locator('button.nav-item').filter({ hasText: 'Decisions' }).click({ force: true, timeout: 10000 });
+    await clickPlayerNav(players[index], 'Decisions', 'Company Executive');
     await expect(players[index].getByRole('button', { name: 'Save Decisions' })).toBeDisabled();
     const early = await playerContexts[index].request.post(
       `${API_URL}/api/sessions/${sessionId}/companies/${seats[index].split(':')[1]}/decisions`,
@@ -117,7 +161,7 @@ test('four isolated players exercise the Phase 4 live classroom path', async ({ 
   }
 
   for (let index = 0; index < 2; index += 1) {
-    await players[index].locator('button.nav-item').filter({ hasText: 'Intel' }).click({ force: true, timeout: 10000 });
+    await clickPlayerNav(players[index], 'Intel', 'President');
     if (index === 0) {
       await players[index].getByLabel('Emergency preparedness fund').fill('500');
     }
@@ -127,7 +171,7 @@ test('four isolated players exercise the Phase 4 live classroom path', async ({ 
     await players[index].getByRole('button', { name: 'Save readiness plan' }).click();
     await confirmReview(players[index]);
     await expect(players[index].getByText(/Readiness plan saved for Round/)).toBeVisible();
-    await players[index].locator('button.nav-item').filter({ hasText: 'Indexes' }).click({ force: true, timeout: 10000 });
+    await clickPlayerNav(players[index], 'Indexes', 'President');
     await players[index].getByRole('button', { name: 'Apply Policies' }).click();
     await confirmReview(players[index]);
     await expect(players[index].getByText(/Presidential decision submitted to the server/)).toBeVisible();

@@ -153,7 +153,9 @@ function AuthAndLobby() {
   useEffect(() => {
     const sessionId = lobby?.session_id;
     if (!sessionId || lobby.status !== 'lobby') return undefined;
-    const timer = window.setInterval(() => api.getLobby(sessionId).then(applyLobby).catch(() => {}), 10000);
+    // WebSocket is the fast path. A short REST fallback prevents a player from
+    // remaining in the lobby when the game-start event lands during reconnect.
+    const timer = window.setInterval(() => api.getLobby(sessionId).then(applyLobby).catch(() => {}), 3000);
     return () => window.clearInterval(timer);
   }, [lobby?.session_id, lobby?.status, applyLobby]);
 
