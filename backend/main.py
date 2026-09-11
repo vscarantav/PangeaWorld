@@ -1,5 +1,6 @@
 # pyrefly: ignore [missing-import]
 from contextlib import asynccontextmanager
+import os
 
 from fastapi import FastAPI, Depends
 # pyrefly: ignore [missing-import]
@@ -76,9 +77,14 @@ app.include_router(backfill_router)
 app.include_router(realtime_router)
 
 # Configure CORS so the React frontend can communicate with this API
+cors_origins = [origin.strip() for origin in os.getenv(
+    "PANGEAWORLD_CORS_ORIGINS",
+    "http://localhost:5173,http://127.0.0.1:5173",
+).split(",") if origin.strip()]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173", "http://127.0.0.1:5173"],
+    allow_origins=cors_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

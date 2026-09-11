@@ -87,3 +87,33 @@ To run the isolated four-browser acceptance path with the installed Chrome:
 Set-Location frontend
 npm run test:e2e
 ```
+
+## Repeated endurance verification
+
+Run the complete backend API suite plus frontend tests, lint, and production
+build repeatedly for 30 minutes:
+
+```powershell
+.\run-endurance.ps1
+```
+
+Each iteration writes its console output and backend JUnit report under a new
+`endurance-logs/<timestamp>/iteration-*` directory. `outcomes.jsonl` records
+the status and exit code for every command in every iteration, and `summary.txt`
+is a concise human-readable recap. Stop at any time with `Ctrl+C`.
+
+For a short confidence check, use one iteration:
+
+```powershell
+.\run-endurance.ps1 -MaxIterations 1
+```
+
+To also include the Chrome-based browser rehearsal, use `-IncludeBrowser`.
+It is optional because it is substantially slower and depends on a local Chrome
+installation. Allow roughly two minutes per iteration for the browser run. The
+endurance runner assigns each browser iteration its own local test ports, so a
+previous interrupted rehearsal does not block the next iteration:
+
+```powershell
+.\run-endurance.ps1 -IncludeBrowser
+```

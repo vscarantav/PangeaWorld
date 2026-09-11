@@ -30,6 +30,7 @@ export default function ChatPanel({ isOpen, onClose }) {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState(null);
   const [providerDown, setProviderDown] = useState(false);
+  const [historyLoaded, setHistoryLoaded] = useState(false);
   const [rateLimitInfo, setRateLimitInfo] = useState({ remaining: 20, limit: 20 });
   const messagesEndRef = useRef(null);
 
@@ -63,7 +64,13 @@ export default function ChatPanel({ isOpen, onClose }) {
   }, []);
 
   useEffect(() => {
-    if (isOpen && session?.id) { loadHistory(); loadRateLimit(); }
+    if (!isOpen || !session?.id) return undefined;
+    let active = true;
+    setHistoryLoaded(false);
+    Promise.all([loadHistory(), loadRateLimit()]).finally(() => {
+      if (active) setHistoryLoaded(true);
+    });
+    return () => { active = false; };
   }, [isOpen, session?.id, loadHistory, loadRateLimit]);
 
   useEffect(() => { scrollToBottom(); }, [messages, scrollToBottom]);
@@ -80,7 +87,7 @@ export default function ChatPanel({ isOpen, onClose }) {
   };
 
   const sendMessage = async (promptText) => {
-    if (!promptText.trim() || isLoading) return;
+    if (!promptText.trim() || isLoading || !historyLoaded) return;
     setError(null);
     setProviderDown(false);
     setInput('');
@@ -101,6 +108,12 @@ export default function ChatPanel({ isOpen, onClose }) {
       });
 
       if (!response.ok) {
+        if (response.status === 429) {
+          setRateLimitInfo(prev => ({ ...prev, remaining: 0 }));
+          setError('Your prompt limit has been reached for this phase. It resets when the phase changes.');
+          setMessages(prev => prev.slice(0, -1));
+          return;
+        }
         if (response.status === 503) {
           setProviderDown(true);
           setMessages(prev => prev.map((message, index) => index === prev.length - 1 ? {
@@ -208,7 +221,7 @@ export default function ChatPanel({ isOpen, onClose }) {
                 <p>Ask me about strategy, trade-offs, or your current situation.</p>
                 <div className="starter-prompts">
                   {starterPrompts.map((p, i) => (
-                    <button key={i} className="starter-btn" onClick={() => handleStarterClick(p)} disabled={isLoading}>
+                    <button key={i} className="starter-btn" onClick={() => handleStarterClick(p)} disabled={isLoading || !historyLoaded}>
                       {p}
                     </button>
                   ))}
@@ -244,10 +257,10 @@ export default function ChatPanel({ isOpen, onClose }) {
             value={input}
             onChange={(e) => setInput(e.target.value)}
             placeholder={rateLimitInfo.remaining === 0 ? 'Prompt limit reached for this phase' : 'Ask about strategy, trade-offs, or market conditions...'}
-            disabled={isLoading || rateLimitInfo.remaining === 0}
+            disabled={isLoading || !historyLoaded || rateLimitInfo.remaining === 0}
             autoComplete="off"
           />
-          <button type="submit" disabled={!input.trim() || isLoading || rateLimitInfo.remaining === 0} className="send-btn">
+          <button type="submit" disabled={!input.trim() || isLoading || !historyLoaded || rateLimitInfo.remaining === 0} className="send-btn">
             {isLoading ? <span className="spinner" /> : '↑'}
           </button>
         </form>

@@ -6,6 +6,8 @@ import { fileURLToPath } from 'node:url';
 const frontendRoot = path.dirname(fileURLToPath(import.meta.url));
 const projectRoot = path.resolve(frontendRoot, '..');
 const databasePath = path.join(os.tmpdir(), `pangeaworld-e2e-${process.pid}.db`).replaceAll('\\', '/');
+const backendPort = Number(process.env.E2E_BACKEND_PORT || 8001);
+const frontendPort = Number(process.env.E2E_FRONTEND_PORT || 5173);
 const backendPython = process.platform === 'win32'
   ? path.join('backend', '.venv', 'Scripts', 'python.exe')
   : path.join('backend', '.venv', 'bin', 'python');
@@ -17,25 +19,29 @@ export default defineConfig({
   timeout: 300000,
   expect: { timeout: 25000 },
   use: {
-    baseURL: 'http://127.0.0.1:5173',
+    baseURL: `http://127.0.0.1:${frontendPort}`,
     channel: 'chrome',
     headless: true,
     trace: 'retain-on-failure',
   },
   webServer: [
     {
-      command: `"${backendPython}" -m uvicorn backend.main:app --host 127.0.0.1 --port 8001`,
+      command: `"${backendPython}" -m uvicorn backend.main:app --host 127.0.0.1 --port ${backendPort}`,
       cwd: projectRoot,
-      env: { ...process.env, PANGEAWORLD_DATABASE_URL: `sqlite:///${databasePath}` },
-      url: 'http://127.0.0.1:8001/',
+      env: {
+        ...process.env,
+        PANGEAWORLD_DATABASE_URL: `sqlite:///${databasePath}`,
+        PANGEAWORLD_CORS_ORIGINS: `http://127.0.0.1:${frontendPort}`,
+      },
+      url: `http://127.0.0.1:${backendPort}/`,
       reuseExistingServer: false,
       timeout: 120000,
     },
     {
-      command: 'npm run dev -- --host 127.0.0.1 --port 5173',
+      command: `npm run dev -- --host 127.0.0.1 --port ${frontendPort}`,
       cwd: frontendRoot,
-      env: { ...process.env, VITE_API_URL: 'http://127.0.0.1:8001' },
-      url: 'http://127.0.0.1:5173/',
+      env: { ...process.env, VITE_API_URL: `http://127.0.0.1:${backendPort}` },
+      url: `http://127.0.0.1:${frontendPort}/`,
       reuseExistingServer: false,
       timeout: 120000,
     },

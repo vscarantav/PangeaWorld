@@ -8,6 +8,7 @@ pytest-cache-files-*/
 # database copied into the repository root or any other generated SQLite file.
 *.db
 phase2-*.log
+endurance-logs/
 
 # Provider credentials are configured only in the backend environment.
 .env

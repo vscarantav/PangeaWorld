@@ -9,13 +9,13 @@ try:
     from ..auth import get_current_user
     from ..models.domain import GameSession, GameMembership, User
     from ..models.ai_chat import AIConversation, AIMessage
-    from ..engines.advisor import chat_stream, prompts_remaining
+    from ..engines.advisor import RATE_LIMIT_PER_PHASE, chat_stream, prompts_remaining
 except ImportError:
     from database import get_db
     from auth import get_current_user
     from models.domain import GameSession, GameMembership, User
     from models.ai_chat import AIConversation, AIMessage
-    from engines.advisor import chat_stream, prompts_remaining
+    from engines.advisor import RATE_LIMIT_PER_PHASE, chat_stream, prompts_remaining
 
 router = APIRouter(prefix="/api/sessions/{session_id}/advisor", tags=["advisor"])
 
@@ -42,6 +42,8 @@ async def chat_with_advisor(
         raise HTTPException(status_code=404, detail="Session not found")
         
     remaining = prompts_remaining(db, user.id, session_id, game_session.phase.value)
+    if remaining <= 0:
+        raise HTTPException(status_code=429, detail=f"Advisor prompt limit ({RATE_LIMIT_PER_PHASE}) reached for this phase.")
     return StreamingResponse(
         chat_stream(
             db=db,

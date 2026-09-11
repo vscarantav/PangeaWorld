@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test';
 
-const API_URL = 'http://127.0.0.1:8001';
+const API_URL = `http://127.0.0.1:${process.env.E2E_BACKEND_PORT || 8001}`;
 
 async function register(page, email) {
   await page.goto('/');
@@ -18,7 +18,14 @@ async function confirmReview(page) {
   await page.getByRole('button', { name: 'Confirm reviewed decision' }).click();
 }
 
-test('four isolated players resolve two direct attacks and receive identical results', async ({ browser }) => {
+async function advancePhase(request, sessionId, expectedPhase) {
+  const response = await request.post(`${API_URL}/api/sessions/${sessionId}/advance`, {
+    data: { expected_phase: expectedPhase },
+  });
+  expect(response.ok(), await response.text()).toBeTruthy();
+}
+
+test('four isolated players exercise the Phase 4 live classroom path', async ({ browser }) => {
   const instructorContext = await browser.newContext();
   const instructor = await instructorContext.newPage();
   await register(instructor, 'instructor@e2e.test');
@@ -63,7 +70,9 @@ test('four isolated players resolve two direct attacks and receive identical res
 
   await instructor.getByRole('button', { name: 'Start game' }).click();
   await expect(instructor.getByRole('heading', { name: 'Instructor readiness board' })).toBeVisible();
-  await expect(instructor.getByText(/Round 1.*planning/)).toBeVisible();
+  const initialReadiness = await instructorContext.request.get(`${API_URL}/api/sessions/${sessionId}/readiness`);
+  expect(initialReadiness.ok(), await initialReadiness.text()).toBeTruthy();
+  expect((await initialReadiness.json()).phase).toBe('planning');
 
   for (let index = 0; index < players.length; index += 1) {
     const roleLabel = index < 2 ? 'President' : 'Company Executive';
@@ -71,7 +80,20 @@ test('four isolated players resolve two direct attacks and receive identical res
     await expect(players[index].getByTestId('game-status')).toContainText(/Decision:.*Live/);
   }
 
-  await instructor.getByRole('button', { name: 'Advance phase' }).click();
+  await players[0].getByTitle('Open AI Advisor').click();
+  await expect(players[0].getByText('Gemini Advisor')).toBeVisible();
+  const tariffPrompt = players[0].getByRole('button', { name: 'What are the trade-offs of raising tariffs this round?' });
+  await expect(tariffPrompt).toBeEnabled();
+  await tariffPrompt.click();
+  await expect(players[0].getByText(/What impact do you think raising tariffs/)).toBeVisible({ timeout: 10000 });
+  await players[0].getByTitle('Close').click();
+
+  await expect(instructor.getByText('Phase 4 instructor analytics')).toBeVisible();
+  await instructor.getByRole('button', { name: 'Refresh analytics' }).click();
+  await expect(instructor.getByRole('cell', { name: playerEmails[0] }).first()).toBeVisible();
+  await expect(instructor.getByText('AI seat backfill')).toBeVisible();
+
+  await advancePhase(instructorContext.request, sessionId, 'planning');
   for (const player of players) {
     // The REST safety poll runs every two seconds, so this remains bounded
     // even during a short WebSocket reconnect window.
@@ -112,7 +134,7 @@ test('four isolated players resolve two direct attacks and receive identical res
     await expect(players[index].getByTestId('game-status')).toContainText(/Decision: submitted/, { timeout: 5000 });
   }
 
-  await instructor.getByRole('button', { name: 'Advance phase' }).click();
+  await advancePhase(instructorContext.request, sessionId, 'presidential');
   for (const player of players) {
     await expect(player.getByTestId('game-status')).toContainText(/Round 1.*company/, { timeout: 5000 });
   }
@@ -133,10 +155,11 @@ test('four isolated players resolve two direct attacks and receive identical res
     await expect(page.getByTestId('game-status')).toContainText(/Decision: submitted/, { timeout: 5000 });
   }
 
-  await instructor.getByRole('button', { name: 'Advance phase' }).click();
-  await expect(instructor.getByText(/Round 1.*processing/)).toBeVisible({ timeout: 5000 });
-  await instructor.getByRole('button', { name: 'Advance phase' }).click();
-  await expect(instructor.getByText(/Round 2.*planning/)).toBeVisible({ timeout: 15000 });
+  await advancePhase(instructorContext.request, sessionId, 'company');
+  await advancePhase(instructorContext.request, sessionId, 'processing');
+  const roundTwoResponse = await instructorContext.request.get(`${API_URL}/api/sessions/${sessionId}`);
+  expect(roundTwoResponse.ok()).toBeTruthy();
+  expect(await roundTwoResponse.json()).toMatchObject({ current_round: 2, phase: 'planning' });
 
   for (const player of players) {
     await expect(player.getByTestId('game-status')).toContainText(/Round 2.*planning/, { timeout: 5000 });

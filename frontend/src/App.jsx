@@ -3,7 +3,7 @@ import AnalyticsPanel from './components/InstructorDashboard/AnalyticsPanel';
 import BackfillPanel from './components/InstructorDashboard/BackfillPanel';
 import DebriefPanel from './components/Debrief/DebriefPanel';
 import DecisionFeedback from './components/DecisionFeedback';
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import PresidentDashboard from './components/PresidentDashboard';
 import ExecutiveDashboard from './components/ExecutiveDashboard';
 import GameMap from './components/GameMap';
@@ -273,7 +273,19 @@ function InstructorLobby({ lobby, refresh, generateMap }) {
 function InstructorGame({ sessionId, onSignOut }) {
   const [summary, setSummary] = useState(null);
   const [error, setError] = useState('');
-  const refresh = useCallback(() => api.getReadiness(sessionId).then(setSummary).catch((err) => setError(err.message)), [sessionId]);
+  const refreshing = useRef(false);
+  const refresh = useCallback(async () => {
+    if (refreshing.current) return;
+    refreshing.current = true;
+    try {
+      setSummary(await api.getReadiness(sessionId));
+      setError('');
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      refreshing.current = false;
+    }
+  }, [sessionId]);
   useEffect(() => {
     refresh();
     const timer = window.setInterval(refresh, 5000);

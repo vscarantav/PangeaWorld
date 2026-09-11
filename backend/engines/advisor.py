@@ -117,6 +117,37 @@ async def generate_advisor_stream(prompt: str, context: str, system_prompt: str)
 
 RATE_LIMIT_PER_PHASE = 20  # configurable default
 
+# These are deliberately narrow patterns that signal an attempt to extract
+# protected game data or override the advisor's teaching boundary. They are
+# evaluated before any player or public-ledger context is assembled.
+GUARDRAIL_PATTERNS = {
+    "cross_player_data_request": (
+        r"\bother player(?:'s|s)?\b", r"\bother nation(?:'s|s)?\b",
+        r"\bother compan(?:y|ies)(?:'s)?\b", r"\brival(?:'s|s)?\s+(?:secret|private|decision|intel)",
+        r"\bsecret decisions?\b", r"\bprivate (?:decision|deployment|intel|financial)s?\b",
+        r"\bconfidential intel(?:ligence)?\b",
+    ),
+    "prompt_injection_attempt": (
+        r"\bignore (?:all |any |the )?(?:previous|prior|system) instructions?\b",
+        r"\b(?:reveal|show|print) (?:the )?system prompt\b",
+        r"\b(?:developer|system) message\b",
+        r"\bbypass (?:the )?(?:guardrail|safety|restriction)s?\b",
+    ),
+    "direct_prescription_request": (
+        r"\b(?:tell|give|show) me (?:the )?(?:best|optimal|exact) (?:move|answer|decision|choice|strategy)\b",
+        r"\bwhat should i do\b",
+    ),
+}
+
+
+def guardrail_flag(prompt: str) -> str | None:
+    """Return the first privacy or teaching-boundary violation in a prompt."""
+    normalized = " ".join(prompt.lower().split())
+    for flag, patterns in GUARDRAIL_PATTERNS.items():
+        if any(re.search(pattern, normalized) for pattern in patterns):
+            return flag
+    return None
+
 def get_usage_count(db: Session, user_id: int, session_id: int, phase: str) -> int:
     """Return how many prompts this user has sent in the current phase."""
     try:
@@ -154,11 +185,10 @@ async def chat_stream(
         return
 
     # 1. Guardrail checks (simple mock implementation)
-    guardrail_triggered = (
-        "other player" in prompt.lower() or "secret" in prompt.lower()
-    )
+    guardrail_triggered = guardrail_flag(prompt)
     if guardrail_triggered:
-        rejection = "I cannot disclose other players' private data or secret decisions."
+        rejection = ("I cannot disclose private game data or bypass my teaching boundaries. "
+                     "I can help you examine your own public constraints and trade-offs instead.")
         yield rejection
         # Log the blocked interaction so instructors can see guardrail activations
         log_ai_usage(
@@ -172,7 +202,7 @@ async def chat_stream(
             input_token_count=len(prompt.split()),
             output_token_count=len(rejection.split()),
             latency_ms=int(time.monotonic() * 1000) - start_ms,
-            guardrail_flags="cross_player_data_request"
+            guardrail_flags=guardrail_triggered
         )
         return
         

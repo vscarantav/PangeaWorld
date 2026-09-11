@@ -61,6 +61,8 @@ def get_user_ai_usage(
             "prompt": log.prompt_text,
             "response": log.response_text,
             "tokens": log.total_token_count,
+            "latency_ms": log.latency_ms,
+            "guardrail_flags": log.guardrail_flags,
             "timestamp": log.timestamp.isoformat()
         } for log in logs
     ]

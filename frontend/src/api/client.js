@@ -2,14 +2,24 @@ export const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:80
 export const sessionWebSocketUrl = (id) => `${API_BASE_URL.replace(/^http/, 'ws')}/api/sessions/${id}/ws`;
 
 async function request(path, options = {}) {
-  const response = await fetch(`${API_BASE_URL}${path}`, {
-    credentials: 'include',
-    headers: { 'Content-Type': 'application/json', ...(options.headers || {}) },
-    ...options,
-  });
-  const body = await response.json().catch(() => ({}));
-  if (!response.ok) throw new Error(body.detail || `Request failed (${response.status})`);
-  return body;
+  const controller = options.signal ? null : new AbortController();
+  const timeout = window.setTimeout(() => controller?.abort(), options.timeoutMs || 12000);
+  try {
+    const response = await fetch(`${API_BASE_URL}${path}`, {
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json', ...(options.headers || {}) },
+      ...options,
+      signal: options.signal || controller.signal,
+    });
+    const body = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(body.detail || `Request failed (${response.status})`);
+    return body;
+  } catch (error) {
+    if (error.name === 'AbortError') throw new Error('The server did not respond in time. Please try again.');
+    throw error;
+  } finally {
+    window.clearTimeout(timeout);
+  }
 }
 
 export const createSession = (phaseDurationSeconds = 172800) => request('/api/sessions', {

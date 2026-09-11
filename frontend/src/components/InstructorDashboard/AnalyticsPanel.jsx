@@ -4,18 +4,26 @@ import * as api from '../../api/client';
 export default function AnalyticsPanel({ sessionId, phase }) {
   const [data, setData] = useState(null);
   const [error, setError] = useState('');
+  const [rubric, setRubric] = useState({ prompt_quality: 0.45, usage_frequency: 0.25, critical_thinking: 0.30 });
   const load = useCallback(async () => {
     setError('');
     try {
       const [engagement, decisions, balance, grading] = await Promise.all([
-        api.getAnalyticsEngagement(sessionId), api.getAnalyticsDecisions(sessionId), api.getAnalyticsBalance(sessionId), api.getAnalyticsAiGrading(sessionId),
+        api.getAnalyticsEngagement(sessionId), api.getAnalyticsDecisions(sessionId), api.getAnalyticsBalance(sessionId), api.getAnalyticsAiGrading(sessionId, rubric),
       ]);
       setData({ engagement, decisions, balance, grading });
     } catch (err) { setError(err.message); }
-  }, [sessionId]);
+  }, [sessionId, rubric]);
   useEffect(() => { load(); }, [load, phase]);
   return <details open><summary>Phase 4 instructor analytics</summary>
     <p>These scores are evidence for review, not automatic grades of student reasoning.</p>
+    <fieldset><legend>AI-usage rubric</legend>
+      {Object.entries(rubric).map(([key, value]) => <label key={key}>{key.replaceAll('_', ' ')}
+        <input aria-label={`${key.replaceAll('_', ' ')} weight`} type="number" min="0" step="0.05" value={value}
+          onChange={(event) => setRubric((current) => ({ ...current, [key]: Math.max(0, Number(event.target.value) || 0) }))} />
+      </label>)}
+      <span>Weights are normalized automatically.</span>
+    </fieldset>
     <button onClick={load}>Refresh analytics</button>{' '}
     <a href={api.analyticsExportUrl(sessionId, 'json')} target="_blank" rel="noreferrer">Export JSON</a>{' · '}
     <a href={api.analyticsExportUrl(sessionId, 'csv')} target="_blank" rel="noreferrer">Export CSV</a>
