@@ -34,7 +34,19 @@ if ([string]::IsNullOrWhiteSpace($OutputDirectory)) {
 New-Item -ItemType Directory -Force -Path $OutputDirectory | Out-Null
 $outcomeLog = Join-Path $OutputDirectory 'outcomes.jsonl'
 $summaryLog = Join-Path $OutputDirectory 'summary.txt'
-$deadline = (Get-Date).AddMinutes($DurationMinutes)
+$runStarted = Get-Date
+$deadline = $runStarted.AddMinutes($DurationMinutes)
+
+function Format-RemainingTime {
+    param([TimeSpan]$Span)
+
+    $totalSeconds = [Math]::Max(0, [int][Math]::Ceiling($Span.TotalSeconds))
+    $hours = [Math]::Floor($totalSeconds / 3600)
+    $minutes = [Math]::Floor(($totalSeconds % 3600) / 60)
+    $seconds = $totalSeconds % 60
+    if ($hours -gt 0) { return "${hours}h ${minutes}m ${seconds}s" }
+    return "${minutes}m ${seconds}s"
+}
 
 function Invoke-LoggedCommand {
     param(
@@ -58,9 +70,11 @@ function Invoke-LoggedCommand {
     }
 }
 
-"PangeaWorld endurance run started $(Get-Date -Format o)" | Set-Content $summaryLog
+"PangeaWorld endurance run started $($runStarted.ToString('o'))" | Set-Content $summaryLog
 "Output directory: $OutputDirectory" | Add-Content $summaryLog
 "Duration: $DurationMinutes minutes; browser: $IncludeBrowser" | Add-Content $summaryLog
+"Scheduled finish: $($deadline.ToString('yyyy-MM-dd h:mm:ss tt'))" | Add-Content $summaryLog
+Write-Host "Scheduled finish: $($deadline.ToString('h:mm:ss tt')) (in $(Format-RemainingTime ($deadline - $runStarted)))" -ForegroundColor Cyan
 
 $iteration = 0
 $passed = 0
@@ -68,6 +82,7 @@ $failed = 0
 while ((Get-Date) -lt $deadline -and ($MaxIterations -eq 0 -or $iteration -lt $MaxIterations)) {
     $iteration += 1
     $iterationStarted = Get-Date
+    Write-Host "Iteration $iteration starting. Scheduled time remaining: $(Format-RemainingTime ($deadline - $iterationStarted))" -ForegroundColor DarkCyan
     $iterationDirectory = Join-Path $OutputDirectory ("iteration-{0:D4}" -f $iteration)
     New-Item -ItemType Directory -Force -Path $iterationDirectory | Out-Null
 
@@ -119,6 +134,22 @@ while ((Get-Date) -lt $deadline -and ($MaxIterations -eq 0 -or $iteration -lt $M
     Add-Content -Path $outcomeLog -Value $record
     "Iteration ${iteration}: $status" | Add-Content $summaryLog
     Write-Host "Iteration ${iteration}: $status" -ForegroundColor $(if ($status -eq 'passed') { 'Green' } else { 'Red' })
+
+    $completedAt = Get-Date
+    $averageIterationSeconds = ($completedAt - $runStarted).TotalSeconds / $iteration
+    $estimatedFinish = $deadline
+    $finishReason = 'time limit'
+    if ($MaxIterations -gt 0) {
+        $remainingIterations = $MaxIterations - $iteration
+        $iterationLimitFinish = $completedAt.AddSeconds(($averageIterationSeconds * $remainingIterations) + ($PauseSeconds * $remainingIterations))
+        if ($iterationLimitFinish -lt $deadline) {
+            $estimatedFinish = $iterationLimitFinish
+            $finishReason = 'iteration limit'
+        }
+    }
+    $etaMessage = "Expected finish: $($estimatedFinish.ToString('h:mm:ss tt')) ($(Format-RemainingTime ($estimatedFinish - $completedAt)) remaining; $finishReason)"
+    $etaMessage | Add-Content $summaryLog
+    Write-Host $etaMessage -ForegroundColor Cyan
 
     if ($PauseSeconds -gt 0 -and (Get-Date) -lt $deadline) { Start-Sleep -Seconds $PauseSeconds }
 }
