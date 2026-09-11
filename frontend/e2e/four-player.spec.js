@@ -11,7 +11,14 @@ async function register(page, email) {
   await expect(page.getByRole('heading', { name: new RegExp(`Welcome, ${email}`) })).toBeVisible();
 }
 
-test('four isolated players complete one authoritative round and receive identical results', async ({ browser }) => {
+async function confirmReview(page) {
+  await expect(page.getByRole('dialog', { name: 'Compare your decision' })).toBeVisible();
+  await page.getByLabel('Foregone alternative').selectOption('reserve');
+  await page.getByLabel('Decision rationale').fill('I prefer the current investment to reserves because its near-term benefit outweighs the flexibility lost; further spending should wait.');
+  await page.getByRole('button', { name: 'Confirm reviewed decision' }).click();
+}
+
+test('four isolated players resolve two direct attacks and receive identical results', async ({ browser }) => {
   const instructorContext = await browser.newContext();
   const instructor = await instructorContext.newPage();
   await register(instructor, 'instructor@e2e.test');
@@ -88,14 +95,19 @@ test('four isolated players complete one authoritative round and receive identic
   }
 
   for (let index = 0; index < 2; index += 1) {
+    await players[index].locator('button.nav-item').filter({ hasText: 'Intel' }).click({ force: true, timeout: 10000 });
     if (index === 0) {
-      await players[index].locator('button.nav-item').filter({ hasText: 'Intel' }).click({ force: true, timeout: 10000 });
       await players[index].getByLabel('Emergency preparedness fund').fill('500');
-      await players[index].getByRole('button', { name: 'Save readiness plan' }).click();
-      await expect(players[index].getByText(/Readiness plan saved for Round/)).toBeVisible();
     }
+    await players[index].getByLabel('Submit a direct attack order').check();
+    await players[index].getByLabel('Attack target').selectOption(String(index === 0 ? secondNation.id : firstNation.id));
+    await players[index].getByLabel('Deploy infantry').fill('1');
+    await players[index].getByRole('button', { name: 'Save readiness plan' }).click();
+    await confirmReview(players[index]);
+    await expect(players[index].getByText(/Readiness plan saved for Round/)).toBeVisible();
     await players[index].locator('button.nav-item').filter({ hasText: 'Indexes' }).click({ force: true, timeout: 10000 });
     await players[index].getByRole('button', { name: 'Apply Policies' }).click();
+    await confirmReview(players[index]);
     await expect(players[index].getByText(/Presidential decision submitted to the server/)).toBeVisible();
     await expect(players[index].getByTestId('game-status')).toContainText(/Decision: submitted/, { timeout: 5000 });
   }
@@ -116,6 +128,7 @@ test('four isolated players complete one authoritative round and receive identic
     await page.getByRole('button', { name: 'Save Decisions' }).click();
     await expect(page.getByText('Saved locally', { exact: true })).toBeVisible();
     await page.getByRole('button', { name: 'Submit Decisions' }).click();
+    await confirmReview(page);
     await expect(page.getByText('Server confirmed', { exact: true })).toBeVisible();
     await expect(page.getByTestId('game-status')).toContainText(/Decision: submitted/, { timeout: 5000 });
   }
@@ -159,10 +172,15 @@ test('four isolated players complete one authoritative round and receive identic
     expect(resultResponse.ok()).toBeTruthy();
     return resultResponse.json();
   }));
-  expect(eventResults[0].results).toHaveLength(1);
-  expect(eventResults[0].results[0].event_id).toBe(scheduledEvent.id);
-  expect(eventResults[0].results[0].effects.public_fund_used).toBeGreaterThan(0);
+  expect(eventResults[0].results.length).toBeGreaterThanOrEqual(3);
+  const disasterResult = eventResults[0].results.find((result) => result.event_id === scheduledEvent.id);
+  expect(disasterResult.effects.public_fund_used).toBeGreaterThan(0);
+  const combatResults = eventResults[0].results.filter((result) => result.event_type === 'military_attack');
+  expect(combatResults).toHaveLength(2);
+  expect(new Set(combatResults.map((result) => result.target_nation_id))).toEqual(new Set([firstNation.id, secondNation.id]));
   expect(JSON.stringify(eventResults[0])).not.toContain('private_financing_cost');
+  expect(JSON.stringify(combatResults)).not.toContain('deployment');
+  expect(JSON.stringify(combatResults)).not.toContain('rolls');
   for (const results of eventResults.slice(1)) expect(results).toEqual(eventResults[0]);
 
   await players[0].getByRole('button', { name: 'Sign out' }).click();

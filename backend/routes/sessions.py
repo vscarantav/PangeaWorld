@@ -29,8 +29,10 @@ except ImportError:
 from .helpers import get_session_or_404, require_assigned_membership, require_instructor, require_membership
 try:
     from ..engines.phase3_resolver import public_disaster_article
+    from ..engines.phase3_military import public_attack_article
 except ImportError:
     from engines.phase3_resolver import public_disaster_article
+    from engines.phase3_military import public_attack_article
 try:
     from ..map_snapshots import normalize_map_snapshot
     from ..models.domain import MapSnapshot
@@ -43,6 +45,7 @@ JOIN_CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
 JOIN_CODE_LENGTH = 8
 
 class SessionCreate(BaseModel):
+    ruleset_version: str = Field(default="phase3-closure-v1", pattern="^(legacy-v1|phase3-closure-v1)$")
     model_config = {"extra": "forbid"}
     phase_duration_seconds: int = Field(default=172800, ge=1, le=172800)
 
@@ -122,7 +125,7 @@ def create_session(payload: SessionCreate, db: Session = Depends(get_db), user: 
         raise HTTPException(status_code=403, detail="instructor account required to create a game")
     session_seed = secrets.token_urlsafe(18)
     session = GameSession(seed=session_seed, phase=PhaseEnum.PLANNING, status="lobby",
-                          lobby_join_code=_new_join_code(db), phase_duration_seconds=payload.phase_duration_seconds)
+                          lobby_join_code=_new_join_code(db), phase_duration_seconds=payload.phase_duration_seconds, ruleset_version=payload.ruleset_version)
     db.add(session)
     db.flush()
     seed_game_session(db, session.id, commit=False)
@@ -177,8 +180,8 @@ def get_lobby(session_id: int, db: Session = Depends(get_db), user: User = Depen
         response.update({"join_code": None if session.lobby_code_revoked else session.lobby_join_code,
                          "seed": session.seed, "has_map_snapshot": _has_renderable_map_snapshot(session),
                          "members": [_member_view(item) for item in session.memberships],
-                         "seats": {"nations": [{"id": n.id, "name": n.name, "occupied": ("president", n.id) in occupied} for n in session.nations],
-                                   "companies": [{"id": c.id, "name": c.name, "nation_id": c.nation_id, "occupied": ("executive", c.id) in occupied}
+                         "seats": {"nations": [{"id": n.id, "name": n.name, "occupied": ("president", n.id) in occupied or (session.ruleset_version == "phase3-closure-v1" and n.archetype == "Marginalized military state")} for n in session.nations],
+                                   "companies": [{"id": c.id, "name": c.name, "nation_id": c.nation_id, "occupied": ("executive", c.id) in occupied or (session.ruleset_version == "phase3-closure-v1" and n.archetype == "Marginalized military state")}
                                                  for n in session.nations for c in n.companies]}})
     return response
 
@@ -196,6 +199,9 @@ def assign_seat(session_id: int, payload: SeatAssignment, db: Session = Depends(
              else db.query(Company).join(Nation).filter(Company.id == payload.entity_id, Nation.session_id == session_id).first())
     if valid is None:
         raise HTTPException(status_code=422, detail="seat entity does not belong to this game")
+    nation = valid if payload.role == "president" else valid.nation
+    if session.ruleset_version == "phase3-closure-v1" and nation.archetype == "Marginalized military state":
+        raise HTTPException(status_code=409, detail="Drakmoor seats are reserved for scripted play; use instructor behavior controls")
     occupied = db.query(GameMembership).filter_by(session_id=session_id, role=payload.role, entity_id=payload.entity_id).first()
     if occupied and occupied.id != membership.id:
         raise HTTPException(status_code=409, detail="seat is already assigned")
@@ -301,7 +307,7 @@ def rename_company(session_id: int, company_id: int, payload: RenamePayload, db:
 
 def _session_view(session, include_map=True):
     return {"id": session.id, "seed": session.seed, "current_round": session.current_round,
-            "phase": session.phase.value, "status": session.status,
+            "phase": session.phase.value, "status": session.status, "ruleset_version": session.ruleset_version,
             "map_snapshot": session.map_snapshot if include_map else None,
             "server_time": utc_now().isoformat(),
             "presidential_deadline_at": as_utc(session.presidential_deadline_at),
@@ -407,6 +413,7 @@ def get_news(session_id: int, db: Session = Depends(get_db), user: User = Depend
                              "summary": event.get("summary"), "category": event["category"],
                              "impact": event["impact"], "nation_id": event["nation_id"]})
         if round_.status == RoundStatus.COMPLETE:
+            articles.extend((round_.results or {}).get("news", []))
             for event in round_.phase3_events:
                 public_effect = next((effect for effect in round_.effects if effect.round_event_id == event.id and effect.entity_type == "nation"), None)
                 nation = next((item for item in session.nations if item.id == event.target_nation_id), None)
@@ -416,6 +423,19 @@ def get_news(session_id: int, db: Session = Depends(get_db), user: User = Depend
                         event_title=(event.event_data or {}).get("title", "Natural disaster"), severity=event.severity,
                         public_fund_used=float((public_effect.effect_data or {}).get("public_fund_used", 0.0)),
                     ), "nation_id": nation.id})
+            for effect in sorted((item for item in round_.effects
+                                  if item.effect_type == "military_attack" and item.scope.value == "public"),
+                                 key=lambda item: item.id):
+                data = effect.effect_data or {}
+                attacker = next((item for item in session.nations if item.id == effect.entity_id), None)
+                target = next((item for item in session.nations if item.id == data.get("target_id")), None)
+                if attacker is not None and target is not None:
+                    articles.append({**public_attack_article(
+                        effect_id=effect.id, round_number=round_.number, attacker_name=attacker.name,
+                        target_name=target.name, outcome=data.get("outcome", "defender_holds"),
+                        attacker_losses=int(data.get("attacker_losses", 0)), defender_losses=int(data.get("defender_losses", 0)),
+                        control_transferred=int(data.get("control_transferred", 0)),
+                    ), "nation_id": target.id})
     return {"articles": articles}
 
 

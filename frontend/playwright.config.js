@@ -6,6 +6,9 @@ import { fileURLToPath } from 'node:url';
 const frontendRoot = path.dirname(fileURLToPath(import.meta.url));
 const projectRoot = path.resolve(frontendRoot, '..');
 const databasePath = path.join(os.tmpdir(), `pangeaworld-e2e-${process.pid}.db`).replaceAll('\\', '/');
+const backendPython = process.platform === 'win32'
+  ? path.join('backend', '.venv', 'Scripts', 'python.exe')
+  : path.join('backend', '.venv', 'bin', 'python');
 
 export default defineConfig({
   testDir: './e2e',
@@ -21,7 +24,7 @@ export default defineConfig({
   },
   webServer: [
     {
-      command: 'backend\\.venv\\Scripts\\python.exe -m uvicorn backend.main:app --host 127.0.0.1 --port 8001',
+      command: `"${backendPython}" -m uvicorn backend.main:app --host 127.0.0.1 --port 8001`,
       cwd: projectRoot,
       env: { ...process.env, PANGEAWORLD_DATABASE_URL: `sqlite:///${databasePath}` },
       url: 'http://127.0.0.1:8001/',

@@ -58,7 +58,8 @@ def _submit_locked(session_id: int, entity_id: int, player_type: str, payload, d
         existing = db.query(Decision).filter_by(round_id=round_.id, player_type="president", entity_id=entity_id).first()
         if existing:
             explicit_fields = payload.decision_data.model_fields_set
-            for field in ("military_posture", "military_investment", "emergency_preparedness_investment"):
+            for field in ("military_posture", "military_investment", "emergency_preparedness_investment",
+                          "military_procurement", "military_operation"):
                 if field not in explicit_fields and field in (existing.decision_data or {}):
                     decision_data[field] = existing.decision_data[field]
     try:
@@ -96,7 +97,13 @@ def save_presidential_readiness(session_id: int, nation_id: int, payload: Presid
         round_ = db.query(Round).filter_by(session_id=session_id, number=session.current_round).first()
         existing = db.query(Decision).filter_by(round_id=round_.id, player_type="president", entity_id=nation_id).first()
         merged = dict(existing.decision_data or {}) if existing else {}
-        merged.update(payload.decision_data.model_dump(exclude_none=True))
+        # Only replace military fields the client actually supplied.  This is
+        # important when a player edits preparedness after saving an attack
+        # order: schema defaults must not silently clear that order.
+        # Preserve an explicitly supplied null so a President can withdraw a
+        # previously saved attack order; omitted fields still leave the saved
+        # readiness plan intact.
+        merged.update(payload.decision_data.model_dump(exclude_unset=True))
         try:
             decision = submit_decision(db, session, "president", nation_id, merged)
         except ValueError as exc:
@@ -136,3 +143,43 @@ def save_presidential_draft(session_id: int, nation_id: int, payload: PresidentD
 @router.put("/companies/{company_id}/draft")
 def save_company_draft(session_id: int, company_id: int, payload: CompanyDecisionPayload, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
     return _save_draft(session_id, company_id, "company", payload, db, user)
+
+
+class ReviewPreviewPayload(BaseModel):
+    decision_data: dict
+    readiness_only: bool = False
+
+
+@router.post("/decision-review/{player_type}/{entity_id}")
+def preview_review(session_id: int, player_type: str, entity_id: int, payload: ReviewPreviewPayload,
+                   db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    try:
+        from ..engines.round_manager import preview_decision
+        from ..models.domain import Nation, Company
+    except ImportError:
+        from engines.round_manager import preview_decision
+        from models.domain import Nation, Company
+    if player_type not in {"president", "company"}:
+        raise HTTPException(status_code=422, detail="unsupported decision role")
+    session = _owned_session(session_id, entity_id, player_type, db, user)
+    if deadline_has_passed(session):
+        raise HTTPException(status_code=409, detail="the phase deadline has passed")
+    expected_phase = "presidential" if player_type == "president" else "company"
+    if session.phase.value != expected_phase:
+        raise HTTPException(status_code=409, detail=f"{player_type} reviews are locked during {session.phase.value}")
+    data = dict(payload.decision_data)
+    if player_type == "president":
+        round_ = db.query(Round).filter_by(session_id=session_id, number=session.current_round).first()
+        existing = db.query(Decision).filter_by(round_id=round_.id, player_type=player_type, entity_id=entity_id).first()
+        previous = dict(existing.decision_data or {}) if existing else {}
+        if payload.readiness_only:
+            data = {**previous, **data}
+        else:
+            for field in ("military_posture", "military_investment", "emergency_preparedness_investment", "military_procurement", "military_operation"):
+                if field not in data and field in previous:
+                    data[field] = previous[field]
+    entity = db.get(Nation if player_type == "president" else Company, entity_id)
+    try:
+        return preview_decision(db, session, player_type, entity, data)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc

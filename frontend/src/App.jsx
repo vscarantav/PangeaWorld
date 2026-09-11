@@ -1,3 +1,5 @@
+import InstructorPhase3 from './components/InstructorPhase3';
+import DecisionFeedback from './components/DecisionFeedback';
 import React, { useCallback, useEffect, useState } from 'react';
 import PresidentDashboard from './components/PresidentDashboard';
 import ExecutiveDashboard from './components/ExecutiveDashboard';
@@ -282,7 +284,7 @@ function InstructorGame({ sessionId, onSignOut }) {
       setError(err.message);
     }
   };
-  return <main className="auth-page"><h1>Instructor readiness board</h1><p>{realtimeConnected ? 'Live' : 'Reconnecting…'}</p>{summary && <><p>Round {summary.round} · {summary.phase}<DeadlineCountdown deadlineAt={summary.deadline_at} serverTime={summary.server_time} /></p><p>{summary.submitted}/{summary.total} assigned seats submitted.</p>{summary.seats.map((seat) => <p key={`${seat.role}-${seat.entity_id}`}>{seat.role} #{seat.entity_id}: {decisionStatusLabel(seat.status)}</p>)}</>}{error && <p>{error}</p>}<button onClick={refresh}>Refresh</button><button disabled={!summary || summary.phase === 'complete'} onClick={advance}>Advance phase</button><button onClick={onSignOut}>Sign out</button></main>;
+  return <main className="auth-page"><h1>Instructor readiness board</h1><InstructorPhase3 sessionId={sessionId} phase={summary?.phase} /><DecisionFeedback sessionId={sessionId} round={summary?.round} /><p>{realtimeConnected ? 'Live' : 'Reconnecting…'}</p>{summary && <><p>Round {summary.round} · {summary.phase}<DeadlineCountdown deadlineAt={summary.deadline_at} serverTime={summary.server_time} /></p><p>{summary.submitted}/{summary.total} assigned seats submitted.</p>{summary.seats.map((seat) => <p key={`${seat.role}-${seat.entity_id}`}>{seat.role} #{seat.entity_id}: {decisionStatusLabel(seat.status)}</p>)}</>}{error && <p>{error}</p>}<button onClick={refresh}>Refresh</button><button disabled={!summary || summary.phase === 'complete'} onClick={advance}>Advance phase</button><button onClick={onSignOut}>Sign out</button></main>;
 }
 
 export default function App() {

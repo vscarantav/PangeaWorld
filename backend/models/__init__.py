@@ -4,6 +4,7 @@ from .domain import (
     PhaseEnum, RoundStatus, ResourceType, MilitaryPosture, EventType, EventScope,
     RoundEvent, RoundEffect, CompanyRecoveryFunding,
 )
+from .ai_chat import AIConversation, AIMessage, AIMessageRole, AIUsageLog
 from .schemas import (
     GameSessionBase, GameSessionCreate, GameSession,
     NationBase, NationCreate, Nation,

@@ -1,4 +1,4 @@
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+export const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 export const sessionWebSocketUrl = (id) => `${API_BASE_URL.replace(/^http/, 'ws')}/api/sessions/${id}/ws`;
 
 async function request(path, options = {}) {
@@ -43,3 +43,12 @@ export const getRecoverableSessions = () => request('/api/sessions/legacy/recove
 export const claimLegacySession = (id) => request(`/api/sessions/${id}/claim-legacy`, { method: 'POST' });
 export const renameNation = (sessionId, nationId, name) => request(`/api/sessions/${sessionId}/nations/${nationId}/name`, { method: 'PUT', body: JSON.stringify({ name }) });
 export const renameCompany = (sessionId, companyId, name) => request(`/api/sessions/${sessionId}/companies/${companyId}/name`, { method: 'PUT', body: JSON.stringify({ name }) });
+export const previewDecision = (sessionId, role, entityId, decisionData, readinessOnly = false) => request(`/api/sessions/${sessionId}/decision-review/${role}/${entityId}`, { method: 'POST', body: JSON.stringify({ decision_data: decisionData, readiness_only: readinessOnly }) });
+export const getDecisionReviews = (sessionId) => request(`/api/sessions/${sessionId}/phase3/decision-reviews`);
+export const getOpportunityCostScorecard = (sessionId) => request(`/api/sessions/${sessionId}/phase3/opportunity-cost-scorecard`);
+export const getPhase3Settings = (sessionId) => request(`/api/sessions/${sessionId}/phase3/settings`);
+export const savePhase3Settings = (sessionId, drakmoorMode) => request(`/api/sessions/${sessionId}/phase3/settings`, { method: 'PUT', body: JSON.stringify({ drakmoor_mode: drakmoorMode }) });
+export const injectScenario = (sessionId, data) => request(`/api/sessions/${sessionId}/phase3/events`, { method: 'POST', body: JSON.stringify(data) });
+export const getChatHistory = (sessionId) => request(`/api/sessions/${sessionId}/advisor/history`);
+export const clearChatHistory = (sessionId) => request(`/api/sessions/${sessionId}/advisor/history`, { method: 'DELETE' });
+export const getRateLimit = (sessionId) => request(`/api/sessions/${sessionId}/advisor/rate-limit`);

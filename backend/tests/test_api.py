@@ -33,7 +33,7 @@ def test_session_and_decision_api_flow():
             "countries": [{"id": str(index), "name": name, "x": index * 7, "y": 0} for index, name in enumerate(["Terranova", "Solhaven", "Korvath", "Valdoria", "Nordvik", "Zephyria", "Drakmoor", "Lunara"])],
             "cities": [{"id": index, "triangle_id": 2, "country_id": str(index // 8), "is_port": index in {32, 33, 48, 56, 57}} for index in range(64)],
         }
-        created = client.post("/api/sessions", json={})
+        created = client.post("/api/sessions", json={"ruleset_version": "legacy-v1"})
         assert created.status_code == 200
         session = created.json()
         session_id = session["id"]
@@ -41,7 +41,7 @@ def test_session_and_decision_api_flow():
         updated_map = client.put(f"/api/sessions/{session_id}/map", json={"map_snapshot": map_snapshot})
         assert updated_map.status_code == 200
         assert len(client.get(f"/api/sessions/{session_id}/nations").json()) == 8
-        generated = client.post("/api/sessions", json={})
+        generated = client.post("/api/sessions", json={"ruleset_version": "legacy-v1"})
         assert generated.status_code == 200
         assert generated.json()["seed"]
 

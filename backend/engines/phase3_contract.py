@@ -11,7 +11,7 @@ MAX_EVENT_SEVERITY = 3
 
 def validate_event_target(db, round_: Round, event_type: EventType, target_nation_id: int | None):
     """Return the valid target nation or raise without leaking another session."""
-    if event_type != EventType.NATURAL_DISASTER:
+    if event_type not in set(EventType):
         raise ValueError("unsupported Phase 3 event type")
     if target_nation_id is None:
         raise ValueError("a natural disaster must target one nation")

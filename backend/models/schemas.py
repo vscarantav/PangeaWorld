@@ -1,8 +1,8 @@
-from pydantic import BaseModel, ConfigDict, Field, NonNegativeFloat
+from pydantic import BaseModel, ConfigDict, Field, NonNegativeFloat, model_validator
 from typing import List, Dict, Any, Optional, Literal
 from pydantic import Field
 from datetime import datetime
-from .domain import MilitaryPosture, PhaseEnum, RoundStatus, ResourceType
+from .domain import MilitaryOperationType, MilitaryPosture, PhaseEnum, RoundStatus, ResourceType
 
 class CompanyBase(BaseModel):
     name: str
@@ -58,6 +58,9 @@ class Nation(NationBase):
     treasury: float
     military_atk: int
     military_def: int
+    military_readiness: float = 0.0
+    emergency_preparedness_balance: float = 0.0
+    military_inventory: Dict[str, int] = Field(default_factory=dict)
     policies: Dict[str, Any]
     
     companies: List[Company] = Field(default_factory=list)
@@ -74,8 +77,48 @@ class DecisionCreate(DecisionBase):
     pass
 
 
+class MilitaryUnitAllocation(BaseModel):
+    """Typed unit counts used both for procurement and an attack deployment."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    infantry: int = Field(default=0, ge=0, le=1000)
+    navy: int = Field(default=0, ge=0, le=1000)
+    air_force: int = Field(default=0, ge=0, le=1000)
+
+    def total(self) -> int:
+        return self.infantry + self.navy + self.air_force
+
+
+class MilitaryOperationOrder(BaseModel):
+    """One attack order.  Target ownership is checked against the session server-side."""
+
+    model_config = ConfigDict(extra="forbid", use_enum_values=True)
+
+    operation_type: MilitaryOperationType = MilitaryOperationType.ATTACK
+    target_nation_id: int = Field(gt=0)
+    units: MilitaryUnitAllocation
+    engagement_limit: int = Field(default=1, ge=1, le=3)
+    retreat_threshold: float = Field(default=0.5, ge=0.0, le=1.0)
+
+    @model_validator(mode="after")
+    def requires_deployment(self):
+        if self.units.total() < 1:
+            raise ValueError("an attack must deploy at least one unit")
+        return self
+
+
+class OpportunityCostEvidence(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    alternative_id: str
+    rationale: str = Field(min_length=20, max_length=2000)
+    preview_token: str
+
+
 class PresidentDecisionData(BaseModel):
     """Authoritative presidential controls, including Phase 3 readiness inputs."""
+
+    opportunity_cost: Optional[OpportunityCostEvidence] = None
 
     model_config = ConfigDict(extra="forbid", use_enum_values=True)
 
@@ -88,16 +131,22 @@ class PresidentDecisionData(BaseModel):
     military_posture: MilitaryPosture = MilitaryPosture.DEFEND
     military_investment: float = Field(default=0.0, ge=0.0, le=1000000)
     emergency_preparedness_investment: float = Field(default=0.0, ge=0.0, le=1000000)
+    military_procurement: MilitaryUnitAllocation = Field(default_factory=MilitaryUnitAllocation)
+    military_operation: Optional[MilitaryOperationOrder] = None
 
 
 class PresidentialReadinessData(BaseModel):
     """Phase 3 fields that can be saved without replacing fiscal policy."""
+
+    opportunity_cost: Optional[OpportunityCostEvidence] = None
 
     model_config = ConfigDict(extra="forbid", use_enum_values=True)
 
     military_posture: MilitaryPosture = MilitaryPosture.DEFEND
     military_investment: float = Field(default=0.0, ge=0.0, le=1000000)
     emergency_preparedness_investment: float = Field(default=0.0, ge=0.0, le=1000000)
+    military_procurement: MilitaryUnitAllocation = Field(default_factory=MilitaryUnitAllocation)
+    military_operation: Optional[MilitaryOperationOrder] = None
 
 
 class SourcingDecisionData(BaseModel):
@@ -113,6 +162,8 @@ class SourcingDecisionData(BaseModel):
 
 class CompanyDecisionData(BaseModel):
     """The supported Phase 1 company controls."""
+
+    opportunity_cost: Optional[OpportunityCostEvidence] = None
 
     model_config = ConfigDict(extra="forbid")
 

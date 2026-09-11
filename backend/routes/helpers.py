@@ -63,7 +63,9 @@ def serialize_nation(nation, include_companies: bool = True) -> dict:
             "gdp": nation.gdp, "cpi": nation.cpi, "inflation": nation.inflation, "unemployment": nation.unemployment,
             "approval_rating": nation.approval_rating,
             "trade_balance": nation.trade_balance, "treasury": nation.treasury, "military_atk": nation.military_atk,
-            "military_def": nation.military_def, "policies": nation.policies or {},
+            "military_def": nation.military_def, "military_readiness": nation.military_readiness,
+            "emergency_preparedness_balance": nation.emergency_preparedness_balance,
+            "military_inventory": nation.military_inventory or {}, "policies": nation.policies or {},
             "resources": [{"id": r.id, "type": getattr(r.type, "value", r.type), "production_rate": r.production_rate,
                            "stockpile": r.stockpile, "depletion_rate": r.depletion_rate} for r in nation.resources]}
     if include_companies:

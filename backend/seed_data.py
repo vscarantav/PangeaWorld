@@ -133,6 +133,7 @@ def seed_game_session(db: Session, session_id: int, commit: bool = True):
             military_atk=n_data["military_atk"],
             military_def=n_data["military_def"],
             treasury=n_data["treasury"],
+            military_inventory={"infantry": 6, "navy": 2, "air_force": 1},
             policies={"tax_rate": 0.15, "tariffs": 0.05}
         )
         db.add(nation)

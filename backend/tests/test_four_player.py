@@ -32,7 +32,7 @@ def setup_four_player_game():
     assert instructor.post(
         "/api/auth/register", json={"email": "teacher@four.test", "password": PASSWORD}
     ).status_code == 201
-    game = instructor.post("/api/sessions", json={"phase_duration_seconds": 5}).json()
+    game = instructor.post("/api/sessions", json={"phase_duration_seconds": 5, "ruleset_version": "legacy-v1"}).json()
     persist_test_map(instructor, game)
     lobby = instructor.get(f"/api/sessions/{game['id']}/lobby").json()
     nations = lobby["seats"]["nations"][:2]

@@ -36,8 +36,14 @@ def ensure_schema():
             connection.execute(text("ALTER TABLE nations ADD COLUMN military_readiness FLOAT DEFAULT 0.0"))
         if "emergency_preparedness_balance" not in nation_columns:
             connection.execute(text("ALTER TABLE nations ADD COLUMN emergency_preparedness_balance FLOAT DEFAULT 0.0"))
+        if "military_inventory" not in nation_columns:
+            connection.execute(text("ALTER TABLE nations ADD COLUMN military_inventory JSON DEFAULT '{}'"))
     session_columns = {column["name"] for column in inspect(engine).get_columns("game_sessions")}
     with engine.begin() as connection:
+        if "phase3_settings" not in session_columns:
+            connection.execute(text("ALTER TABLE game_sessions ADD COLUMN phase3_settings JSON NOT NULL DEFAULT '{}'"))
+        if "ruleset_version" not in session_columns:
+            connection.execute(text("ALTER TABLE game_sessions ADD COLUMN ruleset_version VARCHAR NOT NULL DEFAULT 'legacy-v1'"))
         if "lobby_join_code" not in session_columns:
             connection.execute(text("ALTER TABLE game_sessions ADD COLUMN lobby_join_code VARCHAR"))
         if "lobby_code_revoked" not in session_columns:

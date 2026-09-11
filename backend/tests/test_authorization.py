@@ -9,7 +9,7 @@ from tests.test_lobby import persist_test_map
 from models.domain import GameMembership, GameSession, PhaseEnum, User
 
 
-def setup_game():
+def setup_game(ruleset_version="legacy-v1"):
     engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
     Base.metadata.create_all(engine); factory = sessionmaker(bind=engine)
     def override():
@@ -19,7 +19,7 @@ def setup_game():
     app.dependency_overrides[get_db] = override
     instructor = TestClient(app)
     assert instructor.post("/api/auth/register", json={"email": "instructor@auth.test", "password": "a safe password"}).status_code == 201
-    game = instructor.post("/api/sessions", json={}).json(); lobby = instructor.get(f"/api/sessions/{game['id']}/lobby").json()
+    game = instructor.post("/api/sessions", json={"ruleset_version": ruleset_version}).json(); lobby = instructor.get(f"/api/sessions/{game['id']}/lobby").json()
     persist_test_map(instructor, game)
     players = []
     for number in range(2):
@@ -82,7 +82,7 @@ def test_unassigned_members_cannot_read_game_data_and_players_cannot_create_game
     finally:
         db.close()
     assert unassigned.get(f"/api/sessions/{game_id}/nations").status_code == 403
-    assert president.post("/api/sessions", json={}).status_code == 403
+    assert president.post("/api/sessions", json={"ruleset_version": "legacy-v1"}).status_code == 403
     app.dependency_overrides.clear()
 
 
@@ -123,7 +123,7 @@ def test_legacy_session_can_be_claimed_by_an_instructor():
 
 def test_cross_session_reads_and_commands_are_rejected():
     instructor, president, executive, game_id, _, _ = setup_game()
-    other_game = instructor.post("/api/sessions", json={}).json()
+    other_game = instructor.post("/api/sessions", json={"ruleset_version": "legacy-v1"}).json()
     persist_test_map(instructor, other_game)
     other_lobby = instructor.get(f"/api/sessions/{other_game['id']}/lobby").json()
     other_nation_id = other_lobby["seats"]["nations"][0]["id"]

@@ -17,6 +17,8 @@ try:
     from .routes.market import router as market_router
     from .routes.auth import router as auth_router
     from .routes.phase3 import router as phase3_router
+    from .routes.advisor import router as advisor_router
+    from .routes.ai_logs import router as ai_logs_router
     from .realtime import router as realtime_router
 except ImportError:  # Allows `uvicorn main:app` from inside backend.
     from database import engine, Base, get_db, ensure_schema
@@ -29,6 +31,8 @@ except ImportError:  # Allows `uvicorn main:app` from inside backend.
     from routes.market import router as market_router
     from routes.auth import router as auth_router
     from routes.phase3 import router as phase3_router
+    from routes.advisor import router as advisor_router
+    from routes.ai_logs import router as ai_logs_router
     from realtime import router as realtime_router
 
 @asynccontextmanager
@@ -58,6 +62,8 @@ app.include_router(decisions_router)
 app.include_router(market_router)
 app.include_router(auth_router)
 app.include_router(phase3_router)
+app.include_router(advisor_router)
+app.include_router(ai_logs_router)
 app.include_router(realtime_router)
 
 # Configure CORS so the React frontend can communicate with this API

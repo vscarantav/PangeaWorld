@@ -38,8 +38,20 @@ class MilitaryPosture(str, enum.Enum):
     RECONNAISSANCE = "reconnaissance"
 
 
+class MilitaryOperationType(str, enum.Enum):
+    """The deliberately small direct-conflict contract for Phase 3 Sprint 2."""
+
+    ATTACK = "attack"
+    BLOCKADE = "blockade"
+    INTELLIGENCE = "intelligence"
+
+
 class EventType(str, enum.Enum):
     NATURAL_DISASTER = "natural_disaster"
+    POLITICAL_CRISIS = "political_crisis"
+    MARKET_SHOCK = "market_shock"
+    HEALTH_EMERGENCY = "health_emergency"
+    TECHNOLOGY_BREAKTHROUGH = "technology_breakthrough"
 
 
 class EventScope(str, enum.Enum):
@@ -51,6 +63,8 @@ class GameSession(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     seed = Column(String, nullable=False)
+    ruleset_version = Column(String, nullable=False, default="legacy-v1")
+    phase3_settings = Column(JSON, nullable=False, default=dict)
     map_snapshot = Column(JSON, nullable=True) # Validated map state
     current_round = Column(Integer, default=1)
     phase = Column(Enum(PhaseEnum), default=PhaseEnum.PLANNING)
@@ -179,6 +193,9 @@ class Nation(Base):
     military_def = Column(Integer, default=1)
     military_readiness = Column(Float, default=0.0, nullable=False)
     emergency_preparedness_balance = Column(Float, default=0.0, nullable=False)
+    # Unit counts are public strategic capacity.  Specific planned deployments
+    # remain inside a president's private decision until round processing.
+    military_inventory = Column(JSON, default=dict, nullable=False)
     
     # Policies (JSON for flexible schema)
     policies = Column(JSON, default=dict)
@@ -332,3 +349,14 @@ class CompanyRecoveryFunding(Base):
         CheckConstraint("private_fund_amount >= 0", name="ck_recovery_private_fund_nonnegative"),
         CheckConstraint("private_financing_cost >= 0", name="ck_recovery_financing_cost_nonnegative"),
     )
+
+
+class DecisionReview(Base):
+    """Append-only human submission snapshots, including alternatives and rationale."""
+    __tablename__ = "decision_reviews"
+    id = Column(Integer, primary_key=True)
+    round_id = Column(Integer, ForeignKey("rounds.id"), nullable=False, index=True)
+    player_type = Column(String, nullable=False)
+    entity_id = Column(Integer, nullable=False)
+    record = Column(JSON, nullable=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())

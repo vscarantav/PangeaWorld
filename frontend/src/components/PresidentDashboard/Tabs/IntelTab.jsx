@@ -5,6 +5,7 @@ import { Radar } from 'react-chartjs-2';
 import GameMap from '../../GameMap';
 import { useGame } from '../../../context/GameContext';
 import Phase3Results from '../Widgets/Phase3Results';
+import NewsFeed from '../../ExecutiveDashboard/Widgets/NewsFeed';
 
 ChartJS.register(RadialLinearScale, PointElement, LineElement, Filler, Tooltip, Legend);
 
@@ -15,9 +16,20 @@ export default function IntelTab({ onOpenProjectModal }) {
   const [covertBudget, setCovertBudget] = useState(50);
   const [posture, setPosture] = useState('defend');
   const [preparednessBudget, setPreparednessBudget] = useState(200);
+  const [procurement, setProcurement] = useState({ infantry: 0, navy: 0, air_force: 0 });
+  const [operationType, setOperationType] = useState('attack');
+  const [engagementLimit, setEngagementLimit] = useState(1);
+  const [retreatThreshold, setRetreatThreshold] = useState(0.5);
+  const [launchAttack, setLaunchAttack] = useState(false);
+  const [targetNationId, setTargetNationId] = useState('');
+  const [attackUnits, setAttackUnits] = useState({ infantry: 0, navy: 0, air_force: 0 });
   const [message, setMessage] = useState('');
   const militaryInvestment = troopBudget + intelBudget + covertBudget;
-  const remainingTreasury = Math.max(0, (nation?.treasury || 0) - militaryInvestment - preparednessBudget);
+  const procurementCost = procurement.infantry * 100 + procurement.navy * 250 + procurement.air_force * 350;
+  const missionCost = launchAttack ? ({ blockade: 50, intelligence: 25 }[operationType] || 0) : 0;
+  const totalCommitment = militaryInvestment + preparednessBudget + procurementCost + missionCost;
+  const remainingTreasury = Math.max(0, (nation?.treasury || 0) - totalCommitment);
+  const updateUnits = (setter, units, type, value) => setter({ ...units, [type]: Math.max(0, Number(value) || 0) });
 
   const radarData = {
     labels: ['Army Size', 'Naval Power', 'Air Superiority', 'Intel Network', 'Defense Infra', 'Cyber'],
@@ -60,6 +72,7 @@ export default function IntelTab({ onOpenProjectModal }) {
   return (
     <section className="dashboard-grid">
       <Phase3Results />
+      <details className="card col-12"><summary>Pangea Times: market reports and source exercises</summary><NewsFeed /></details>
       <div className="card col-4">
         <div className="card-header">
           <h3 className="card-title"><Target /> Threat Assessment</h3>
@@ -73,7 +86,7 @@ export default function IntelTab({ onOpenProjectModal }) {
         <div className="card-header">
           <h3 className="card-title"><UserCheck /> Intelligence Reports</h3>
         </div>
-        <div className="data-list">{(nations || []).filter((item) => item.id !== nation?.id).map((item) => <div className="data-item" key={item.id}><div className="data-item-info"><h4>{item.name}</h4><p>Public military indices: ATK {item.military_atk} · DEF {item.military_def}</p></div><div className="data-item-value">PUBLIC</div></div>)}</div>
+        <div className="data-list">{(nations || []).filter((item) => item.id !== nation?.id).map((item) => <div className="data-item" key={item.id}><div className="data-item-info"><h4>{item.name}</h4><p>Public military indices: ATK {item.military_atk} · DEF {item.military_def}</p><p>Public inventory: {item.military_inventory?.infantry || 0} infantry · {item.military_inventory?.navy || 0} navy · {item.military_inventory?.air_force || 0} air force</p></div><div className="data-item-value">PUBLIC</div></div>)}</div>
       </div>
 
       {/* NEW: Military Map Integration */}
@@ -147,11 +160,22 @@ export default function IntelTab({ onOpenProjectModal }) {
               </div>
               <small className="text-muted">Natural-disaster recovery uses this public fund first. Uncovered companies pay costly private emergency financing, reducing approval and GDP.</small>
             </div>
-            <p className="text-muted">Military + preparedness: ${militaryInvestment + preparednessBudget}M · Remaining treasury: ${remainingTreasury.toFixed(0)}M</p>
+            <div className="input-group">
+              <label>Unit procurement ($100M infantry · $250M navy · $350M air force)</label>
+              <div style={{ display: 'flex', gap: 8 }}>
+                {['infantry', 'navy', 'air_force'].map((type) => <label key={type} style={{ flex: 1, fontSize: 12 }}>{type.replace('_', ' ')}<input disabled={session?.phase !== 'presidential'} aria-label={`Procure ${type}`} type="number" min="0" max="1000" value={procurement[type]} onChange={(event) => updateUnits(setProcurement, procurement, type, event.target.value)} /></label>)}
+              </div>
+              <small className="text-muted">Inventory: infantry {nation?.military_inventory?.infantry || 0} · navy {nation?.military_inventory?.navy || 0} · air force {nation?.military_inventory?.air_force || 0}. Procurement cost: ${procurementCost}M.</small>
+            </div>
+            <div className="input-group">
+              <label><input disabled={session?.phase !== 'presidential'} type="checkbox" checked={launchAttack} onChange={(event) => setLaunchAttack(event.target.checked)} /> Submit a direct attack order</label>
+              {launchAttack && <>{session?.ruleset_version === 'phase3-closure-v1' && <><label>Operation<select aria-label="Operation type" value={operationType} onChange={(e) => setOperationType(e.target.value)}><option value="attack">Attack</option><option value="blockade">Naval blockade ($50M; requires navy)</option><option value="intelligence">Intelligence mission ($25M)</option></select></label>{operationType === 'attack' && <><label>Maximum engagements<input aria-label="Maximum engagements" type="number" min="1" max="3" value={engagementLimit} onChange={(e) => setEngagementLimit(Number(e.target.value))} /></label><label>Retreat after fraction lost<input aria-label="Retreat threshold" type="number" min="0" max="1" step="0.1" value={retreatThreshold} onChange={(e) => setRetreatThreshold(Number(e.target.value))} /></label></>}<p>One operation per round: a blockade or intelligence mission gives up an attack. Blockades stop foreign sea orders this round while a naval force survives. Intelligence reveals a private resolved-round observation. War raises consumer prices, insurance costs and displacement losses.</p></>}<select aria-label="Attack target" value={targetNationId} onChange={(event) => setTargetNationId(event.target.value)}><option value="">Select target nation</option>{nations.filter((item) => item.id !== nation?.id).map((item) => <option key={item.id} value={item.id}>{item.name} · ATK {item.military_atk} / DEF {item.military_def}</option>)}</select><div style={{ display: 'flex', gap: 8, marginTop: 8 }}>{['infantry', 'navy', 'air_force'].map((type) => <label key={type} style={{ flex: 1, fontSize: 12 }}>Deploy {type.replace('_', ' ')}<input aria-label={`Deploy ${type}`} type="number" min="0" max={nation?.military_inventory?.[type] || 0} value={attackUnits[type]} onChange={(event) => updateUnits(setAttackUnits, attackUnits, type, event.target.value)} /></label>)}</div><small className="text-muted">Attack deployments use existing inventory; newly procured units arrive after this round's operation. Attacks resolve by nation ID. Earlier losses reduce committed forces; an order with no surviving committed units is cancelled.</small></>}
+            </div>
+            <p className="text-muted">Military + preparedness + procurement + mission: ${totalCommitment}M · Remaining treasury: ${remainingTreasury.toFixed(0)}M</p>
             <p className="text-muted">This plan leaves ${remainingTreasury.toFixed(0)}M for civilian services, infrastructure, and tax relief this round.</p>
-            <button className="btn" disabled={session?.phase !== 'presidential' || militaryInvestment + preparednessBudget > (nation?.treasury || 0)} onClick={async () => {
+            <button className="btn" disabled={session?.phase !== 'presidential' || totalCommitment > (nation?.treasury || 0) || (launchAttack && (!targetNationId || !Object.values(attackUnits).some(Boolean)))} onClick={async () => {
               try {
-                const receipt = await savePresidentialReadiness({ military_posture: posture, military_investment: militaryInvestment, emergency_preparedness_investment: preparednessBudget });
+                const receipt = await savePresidentialReadiness({ military_posture: posture, military_investment: militaryInvestment, emergency_preparedness_investment: preparednessBudget, military_procurement: procurement, military_operation: launchAttack ? { operation_type: operationType, engagement_limit: engagementLimit, retreat_threshold: retreatThreshold, target_nation_id: Number(targetNationId), units: attackUnits } : null });
                 setMessage(`Readiness plan saved for Round ${receipt.round_id}.`);
               } catch (error) { setMessage(error.message); }
             }}>Save readiness plan</button>

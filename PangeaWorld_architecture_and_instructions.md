@@ -78,14 +78,14 @@ PangeaWorld/
 - **Macro/Micro Economy Engine**: GDP, CPI, inflation, unemployment, pricing, production, R&D, company financials, market share, and policy decisions process on the server.
 - **Resources and Logistics**: Production, depletion, scarcity pricing, supplier selection, map-distance routing previews, shipping modes, tariffs, insurance, stock transfers, COGS, and trade balances are connected to round processing.
 - **Connected Dashboards**: President and Company Executive dashboards load live API data, submit authoritative decisions, display results/history/news, and distinguish local drafts from server-confirmed submissions.
-- **Event Engine**: Seeded events modify production, CPI, approval, and eligible persisted railroad infrastructure.
+- **Opportunity-Cost Decision Framework**: New `phase3-closure-v1` games enforce shared treasury/cash/capacity constraints, server-quoted alternatives, a selected next-best foregone choice, a written rationale, immutable review history, labeled post-round feedback, and an instructor evidence scorecard.
+- **Military and Conflict**: Unit procurement, readiness, deterministic multi-engagement attacks, retreat thresholds, abstract strategic control, naval blockades, private intelligence, conflict-driven prices/insurance/GDP/approval effects, and Drakmoor's instructor-controlled scripted behavior resolve authoritatively.
+- **Event and News Engine**: The seven-round schedule contains 3 major and 11 minor seeded incidents, supports reactive unrest and bounded instructor scenarios, and persists market reporting, opinion, and source-verification exercises. Gemini-written market summaries use public facts only and fall back safely when the provider is unavailable.
 
 ### ⏳ Not Yet Applied (Later Phase 2 and Beyond)
 - **Multiplayer Expansion**: Phase 2 Sprint 1 is complete: authentication, instructor assignment, role enforcement, readiness, enforced deadlines, conservative automatic submissions, session-scoped real-time synchronization, and the four-player one-round vertical slice are implemented. Trade, diplomacy, sanctions, FMI, and AI backfill remain in later Phase 2 sprints.
-- **Opportunity-Cost Decision Framework**: The cross-role budget/capacity constraints, pre-submission trade-off comparison, foregone-alternative ledger fields, post-round feedback, and instructor analytics required by the Opportunity-Cost Contract remain to be implemented. Existing isolated trade-offs do not satisfy the complete contract.
-- **AI Agent Integration**: The embedded Gemini AI Advisor and the Drakmoor AI antagonist bot are not yet wired up.
+- **AI Agent Integration**: Phase 3 supplies the private decision-review prompt adapter, public Gemini newsroom integration, and deterministic Drakmoor behavior. The interactive per-user Gemini advisor, persistent chat history, AI-usage grading, and general AI seat takeover remain Phase 4 work.
 - **Future Portals**: The FMI portal and Pangea Assembly remain planned product features.
-- **Military Mechanics**: Attack/Defense indices, troop deployments, and intelligence operations are pending.
 - **Advanced Logistics Construction**: Dedicated sea-lane/airway path records, chokepoint blockades, project approval/lobbying, construction timeframes, and wartime destruction are later-phase systems.
 
 
@@ -1183,7 +1183,7 @@ The sprint is complete only when every Progress Tracker item is checked and the 
 - [ ] Sanctions proposals, voting, enforcement, and lifting
 - [ ] FMI quotas, lending products, conditionality, repayment, and default
 - [ ] General AI seat backfill and mid-game human takeover
-- [ ] Drakmoor's randomized diplomatic/war AI and instructor behavior overrides
+- [x] Drakmoor's deterministic military timeline and instructor behavior override (delivered in the Phase 3 closure ruleset)
 - [ ] Production deployment with PostgreSQL, Redis, university SSO, TLS, email verification, and password recovery
 
 ---
@@ -1227,9 +1227,9 @@ The sprint is complete only when every Progress Tracker item is checked and the 
 
 ### Explicitly Deferred Beyond Phase 3 Sprint 1
 
-- [ ] Direct attacks, territory capture, blockade routes, multiple engagement rounds, retreat, and military unit inventories.
-- [ ] Drakmoor's autonomous aggression timeline, instructor behavior overrides, and AI seat backfill.
-- [ ] Reactive event chains, misinformation/opinion systems, AI-written articles, and full instructor scenario authoring.
+- [x] Direct attacks, abstract strategic territory control, blockade effects, multiple engagement rounds, retreat, and military unit inventories (delivered by Sprint 2 plus the closure sprint).
+- [x] Drakmoor's deterministic aggression timeline and instructor behavior override. General AI seat backfill remains Phase 4 scope.
+- [x] Reactive events, labeled misinformation/opinion exercises, Gemini-written articles with fallback, and bounded instructor scenario authoring.
 - [ ] Phase 2 trade, treaty, sanctions, FMI, and production-deployment work listed above.
 
 ### Sprint Verification Commands
@@ -1248,6 +1248,342 @@ npm run build
 # Real browser acceptance path (starts isolated local servers and database)
 npm run test:e2e
 ```
+
+> [!IMPORTANT]
+> When work is verified, change its checkbox from `[ ]` to `[x]` immediately. Mark a day complete in the Progress Tracker only after all of that day's acceptance checks pass; update the sprint status count at the same time.
+
+---
+
+## Phase 3 Sprint 2 — Direct Conflict Foundation
+
+> **Status:** ✅ Complete as the bounded Sprint 2 delivery. Later Phase 3 closure work is recorded separately below.
+
+> **Goal:** Add one bounded, authoritative direct-conflict decision to the four-player game. A President can procure named units and submit at most one attack against another nation in the same session; processing resolves the clash exactly once from persisted inputs and publishes a privacy-safe result and Pangea Times article to every player.
+
+### Sprint Scope and Guardrails
+
+- Keep Sprint 1 readiness and disaster recovery intact. Procurement is an additional presidential commitment, counted against the same treasury alongside civilian spending, readiness, and preparedness.
+- Unit inventory is limited to `infantry`, `navy`, and `air_force`, with fixed visible procurement costs and public aggregate inventory. A submitted deployment cannot exceed inventory, and newly procured units arrive after that round's operation.
+- The only executable operation in this slice is `attack`. Target validation is session-scoped, a nation cannot target itself, and each President still has one canonical decision per round.
+- Combat uses a pure seeded resolver: attack and defence indices set one to five dice; equal scores favor the higher index. The attacker's stable nation ID defines the documented order for multiple attacks in the same processing phase.
+- Persist only intentional public combat disclosures: outcome, indices, and aggregate losses. Planned deployment, rolls, and pre-processing decisions remain private.
+- This slice has no territory capture, blockade route effects, retreat, multi-engagement battles, intelligence operations, Drakmoor autonomy, or trade disruption. Those remain later Phase 3 work.
+
+### Progress Tracker
+
+- [x] **Day 1 — Unit and order contract:** Typed unit allocations and attack orders, backwards-compatible national inventory migration, fixed procurement pricing, session/self/inventory validators, and regression tests.
+- [x] **Day 2 — Authorized command and President UI:** Extended the canonical readiness command and Intel & Military panel with inventory, procurement cost, target selection, deployment bounds, and civilian opportunity cost. Verified by frontend lint and production build.
+- [x] **Day 3 — Deterministic resolver:** Resolve each accepted attack once during processing, return surviving units, persist a public immutable effect, and prove repeatability and duplicate-processing protection.
+- [x] **Day 4 — Results and news:** Publish sanitized cross-role combat results and a deterministic Pangea Times article without leaking deployments or rolls.
+- [x] **Day 5 — Multiplayer rehearsal and balancing:** Exercised two presidents attacking each other in one round with a concurrent coastal-storm event. All four isolated roles received the same sanitized results and Pangea Times articles, and the President retained the canonical state after sign-out/sign-in and reload. Confirmed fixed procurement pricing and deterministic losses; verified with 53 backend tests, 3 frontend unit tests, clean lint, a production build, and the Playwright rehearsal (1 passed).
+
+### Acceptance Criteria
+
+- [x] A President cannot target another session, target itself, deploy unavailable units, or exceed the shared treasury commitment.
+- [x] Procurement, attacks, casualties, and public effects are committed exactly once during processing and resolve identically from identical persisted state.
+- [x] All assigned roles receive the same public outcome/news after processing and after reload, while deployment counts and dice remain undisclosed.
+- [x] Existing Sprint 1 readiness, disaster, privacy, authorization, and real-time behavior remains regression-tested.
+
+---
+
+### Sprint 2 audit and continuation — September 10, 2026
+
+- [x] Reproduced and repaired a processing failure when an earlier clash destroys units committed to a later attack. Preserve stable nation-ID ordering: cap each later deployment by surviving inventory; publish `attack_cancelled` when no committed units survive. Validate original orders against pre-combat inventory so invalid orders are still rejected. Procurement remains unavailable until all operations finish.
+- [x] Explain casualty-driven reduction/cancellation before submission and show cancelled operations in public news without disclosing deployment counts or dice.
+- [x] Add regression coverage for partial and total prior losses, conservation of units, sanitized effects, cancellation news, and duplicate processing rejection.
+- [x] Complete the mandatory opportunity-cost decision loop through the Phase 3 closure ruleset: persist considered feasible alternatives, the selected next-best foregone alternative, rationale, and submission assumptions; surface marginal comparisons and post-round feedback; and provide instructor evidence summaries plus the Phase 4 advisor prompt contract.
+
+Verification: 55 backend tests, 3 deterministic map tests, frontend lint, and production build pass. Backend tests must run from `backend` using `.venv/bin/python -m pytest tests -q`. The isolated four-player Chrome rehearsal also passes (1 test, 1.7 minutes), covering two direct attacks, shared results, and reload.
+
+---
+
+## Phase 3 closure sprint — September 10, 2026
+
+> **Status:** ✅ COMPLETE. New games use the versioned `phase3-closure-v1` ruleset. Existing games retain `legacy-v1` behavior. Live Gemini prose requires backend credentials; provider-independent fallback news remains available without them.
+
+- [x] Opportunity-cost comparisons, authoritative constraints, immutable reasoning receipts, private feedback, instructor evidence scorecard, and the Phase 4 advisor prompt adapter.
+- [x] Multiple engagements, retreat orders, abstract strategic territory control, blockade and intelligence operations, sustained readiness with diminishing returns, and documented war consequences.
+- [x] Seeded seven-round schedule (3 major and 11 minor events), CPI-triggered unrest, five scenario categories, and bounded instructor controls.
+- [x] Persisted Gemini news using a server-side key, factual fallback, CPI reporting, opinion labeling, and source-verification exercises. Success/failure transports are tested; live credentials are external configuration.
+- [x] Instructor-controlled scripted Drakmoor behavior; reserved Drakmoor seats; eight-nation automatic and seven-human-nation/Drakmoor seven-round rehearsals; role privacy regression checks.
+- [x] Setup and implementation handoff, backward-compatible local SQLite migration, fresh full verification, and explicit external configuration.
+
+**Final verification (September 10, 2026):** 70 backend tests and 3 deterministic frontend map tests pass; frontend lint and production build succeed; and the isolated four-browser Chrome rehearsal passes (1 test, 1.4 minutes). The build reports one non-blocking bundle-size warning at approximately 510 kB. Live Gemini credentials are not configured in this workspace, so mocked provider success/failure and the provider-independent factual fallback were verified instead.
+
+**Phase 4 readiness:** ready to start the major Phase 4 AI Integration & Analytics roadmap. The separate post-launch map roadmap below also contains internally numbered phases; its “Phase 4” means road and city construction and is not the next active product phase.
+
+---
+
+## Phase 4 Sprint 1 (Sep 11–14, 2026) — AI Integration & Analytics
+
+> **Goal:** Deliver a per-user Gemini AI advisor with persistent chat history, AI-usage logging and grading, an instructor analytics dashboard, post-game debrief tools, and general AI seat backfill — completing the Phase 4 roadmap items and making the product classroom-ready.
+
+> **Prerequisites:** The Phase 3 closure sprint delivered the Phase 4 advisor prompt adapter, the opportunity-cost decision-review contract, the deterministic Drakmoor behavior engine, and the Gemini newsroom integration with fallback. This sprint builds the interactive, per-user advisory layer and instructor analytics on top of those foundations.
+
+### Sprint Scope and Guardrails
+
+- The Gemini advisor proxies through the backend. The client never holds API keys or sends prompts directly to Gemini.
+- The advisor is strictly partitioned from Confidential Intel Vaults. It can access only the Global Event Ledger (public decisions, events, news, diplomacy, and Pangea Assembly messages) plus the requesting user's own game data. It must not reveal other players' secret decisions, private deployments, or unreleased intelligence.
+- The advisor uses a Socratic method: it guides thinking, asks clarifying questions, and surfaces trade-offs. It must not prescribe optimal solutions or produce direct "do X" commands.
+- AI-usage logging is immutable. Every prompt, response, timestamp, token count, and session context is persisted for instructor review and grading.
+- AI seat backfill reuses the existing conservative auto-decision engine for unfilled seats. A human can take over a backfilled seat mid-game; the AI ceases control immediately upon assignment.
+- Instructor analytics read from persisted, immutable round data and AI-usage logs. They do not modify game state.
+- All new endpoints require authentication and role-based authorization. Instructor-only routes reject non-instructor access.
+
+### Progress Tracker
+
+- [ ] **Day 1:** Gemini advisor backend — per-user chat service, system prompt engineering, guardrails, and persistent conversation history
+- [ ] **Day 2:** Frontend AI chat panel, real-time streaming, and AI-usage logging pipeline
+- [ ] **Day 3:** Instructor analytics dashboard and AI-usage grading
+- [ ] **Day 4:** Post-game debrief tools, AI seat backfill, end-to-end verification, and hardening
+
+### Day 1 (Sep 11) — Gemini Advisor Backend
+
+**Theme:** _"Give every player a private, context-aware AI strategist that teaches without giving answers."_
+
+#### Backend
+
+- [ ] `backend/engines/advisor.py` — Gemini advisor service
+  - Per-user chat session management with persistent conversation history (stored in SQLite, keyed by user + game session + role)
+  - System prompt template engine with role-specific prompts:
+    - **Company Executive advisor**: business strategy, supply chain optimization, finance, pricing, R&D trade-offs, market share analysis
+    - **President advisor**: macroeconomics, geopolitics, military strategy, infrastructure planning, diplomacy, fiscal policy
+  - Global Event Ledger query interface: the advisor can retrieve public decisions, round results, news articles, Pangea Assembly messages, market data, and event history for the current game session
+  - User-context injection: the advisor receives the requesting player's current financials, decisions, results, and opportunity-cost feedback from prior rounds
+  - Guardrail enforcement layer:
+    - Block queries that attempt to extract other players' private data
+    - Prevent direct optimal-solution prescriptions (Socratic method enforcement via system prompt)
+    - Redact any Confidential Intel Vault references from the context window
+    - Rate limiting per user per round (configurable, default 20 prompts per phase)
+
+- [ ] `backend/models/ai_chat.py` — AI conversation models
+  - `AIConversation` — id, user_id, session_id, role, created_at, message_count
+  - `AIMessage` — id, conversation_id, role (user/assistant/system), content, token_count, timestamp, round_number, phase
+  - `AIUsageLog` — id, user_id, session_id, round_number, prompt_text, response_text, token_count, latency_ms, guardrail_flags, timestamp
+
+- [ ] `backend/routes/advisor.py` — AI advisor API endpoints
+  - `POST /api/sessions/{id}/advisor/chat` — send a prompt, receive a streamed Gemini response
+  - `GET /api/sessions/{id}/advisor/history` — retrieve the user's conversation history for the current session
+  - `DELETE /api/sessions/{id}/advisor/history` — clear conversation history (user-initiated, with audit log)
+  - All routes require authentication and enforce role-entity ownership
+
+- [ ] Backend tests for advisor service:
+  - Guardrail rejection of cross-player data queries
+  - Rate limiting enforcement
+  - Conversation persistence and retrieval
+  - System prompt correctness per role
+  - Graceful fallback when Gemini provider is unavailable (return a structured "advisor unavailable" message)
+  - Authorization rejection for unauthenticated, wrong-session, and wrong-role requests
+
+#### Day 1 Acceptance
+
+- [ ] A Company Executive and a President can each initiate an advisory conversation; their histories are isolated and persist across browser sessions.
+- [ ] The advisor contextualizes responses using the player's live game data and public Global Event Ledger.
+- [ ] Guardrails reject attempts to extract private data or bypass Socratic guidance.
+- [ ] Provider unavailability returns a graceful, user-friendly fallback message.
+
+### Day 2 (Sep 12) — Frontend AI Chat Panel & Usage Logging
+
+**Theme:** _"Every student gets a polished, embedded AI advisor — and every interaction is recorded."_
+
+#### Frontend
+
+- [ ] `frontend/src/components/AIAdvisor/ChatPanel.jsx` — embedded AI chat panel
+  - Persistent sidebar or modal panel accessible from both President and Executive dashboards
+  - Message history display with user/assistant message bubbles, timestamps, and round context
+  - Streamed response rendering (tokens appear progressively as the Gemini response streams)
+  - Suggested starter prompts based on current game phase and role (e.g., "What are the trade-offs of raising tariffs this round?", "Should I prioritize R&D or marketing?")
+  - Rate-limit indicator showing remaining prompts for the current phase
+  - Conversation clear/reset control with confirmation dialog
+  - Loading, error, and provider-unavailable states with clear messaging
+  - Mobile-responsive layout
+
+- [ ] `frontend/src/components/AIAdvisor/ContextBadge.jsx` — visual indicator of what context the advisor is using
+  - Shows "Using: Round 3 data, your financials, public market data" to build trust and transparency
+  - Highlights when the advisor is working with limited context (e.g., Round 1 with minimal history)
+
+#### Backend — Usage Logging Pipeline
+
+- [ ] `backend/engines/ai_logger.py` — immutable AI-usage logging
+  - Every prompt/response pair is logged with: user_id, session_id, round_number, phase, prompt_text, response_text, input_token_count, output_token_count, total_token_count, latency_ms, guardrail_flags (any triggered), timestamp
+  - Logs are append-only and immutable — no deletion or modification permitted
+  - Batch write for efficiency; flush on phase transition
+
+- [ ] `backend/routes/ai_logs.py` — instructor-only AI usage endpoints
+  - `GET /api/sessions/{id}/ai-usage` — aggregated AI usage statistics per student/team
+  - `GET /api/sessions/{id}/ai-usage/{user_id}` — detailed conversation log for a specific student
+  - Both routes require instructor role authorization
+
+- [ ] Integration tests for usage logging:
+  - Log immutability (reject deletion/modification attempts)
+  - Correct token counting and latency recording
+  - Instructor-only access enforcement
+  - Aggregation correctness across rounds
+
+#### Day 2 Acceptance
+
+- [ ] The AI advisor panel is embedded and functional in both President and Executive dashboards with streamed responses.
+- [ ] Conversation history persists after page refresh, sign-out/sign-in, and across rounds.
+- [ ] Every AI interaction is logged immutably with full metadata.
+- [ ] Instructors can retrieve per-student AI usage logs; non-instructors are rejected.
+
+### Day 3 (Sep 13) — Instructor Analytics Dashboard & AI Grading
+
+**Theme:** _"Give instructors the visibility they need to grade, balance, and intervene."_
+
+#### Frontend
+
+- [ ] `frontend/src/components/InstructorDashboard/AnalyticsPanel.jsx` — instructor analytics dashboard
+  - **Engagement Metrics** per student/team:
+    - Decisions submitted vs. auto-decided (per round, cumulative)
+    - Login frequency and session duration
+    - AI advisor usage (prompt count, token consumption, rounds used vs. not used)
+    - Pangea Assembly participation (messages posted, resolutions proposed)
+  - **Decision Quality Tracking**:
+    - Opportunity-cost reasoning quality across rounds (from the immutable reasoning receipts)
+    - Trend lines: did the team's decision rationale improve over the 7 rounds?
+    - Comparison of stated alternatives vs. realized outcomes
+  - **Game Balance Monitoring**:
+    - GDP, military index, and market-share leaderboards across all nations
+    - Drakmoor threat level and engagement history
+    - Early warning indicators for runaway leaders or disengaged teams
+  - **AI Usage Grading Module**:
+    - Per-student AI usage summary: total prompts, quality of prompts (length, specificity, follow-up depth), diversity of topics queried
+    - Flagged interactions: guardrail triggers, repeated low-effort prompts, copy-paste behavior
+    - Configurable rubric: instructors can weight prompt quality, usage frequency, and evidence of critical thinking
+    - Suggested grade component (instructor can override)
+  - **Export Functionality**:
+    - CSV/JSON export of all analytics, AI usage logs, decision receipts, and scores
+    - Per-round and cumulative report generation
+    - Print-friendly summary for each team
+
+#### Backend
+
+- [ ] `backend/routes/analytics.py` — instructor analytics API
+  - `GET /api/sessions/{id}/analytics/engagement` — per-student engagement metrics
+  - `GET /api/sessions/{id}/analytics/decisions` — decision quality and opportunity-cost reasoning summaries
+  - `GET /api/sessions/{id}/analytics/balance` — game balance indicators
+  - `GET /api/sessions/{id}/analytics/ai-grading` — AI usage grading with configurable rubric
+  - `GET /api/sessions/{id}/analytics/export` — full data export (CSV or JSON, query-param selectable)
+  - All routes require instructor role authorization
+
+- [ ] `backend/engines/grading.py` — AI-usage grading engine
+  - Analyze prompt quality: length, specificity, follow-up chains, topic diversity
+  - Detect low-effort patterns: single-word prompts, repeated identical queries, copy-paste detection
+  - Apply configurable rubric weights and produce a suggested score per student
+  - Flag notable interactions for instructor review
+
+- [ ] Backend tests for analytics and grading:
+  - Engagement metric accuracy against known test data
+  - Grading engine rubric application and edge cases
+  - Export format correctness (CSV and JSON)
+  - Instructor-only authorization enforcement
+
+#### Day 3 Acceptance
+
+- [ ] The instructor analytics dashboard displays engagement, decision quality, game balance, and AI grading data for all students in the session.
+- [ ] The AI grading module produces configurable, rubric-based scores with flagged interactions.
+- [ ] Full data export works in both CSV and JSON formats.
+- [ ] All analytics routes reject non-instructor access.
+
+### Day 4 (Sep 14) — Debrief Tools, AI Backfill & Hardening
+
+**Theme:** _"Close the learning loop and prove the full AI layer end-to-end."_
+
+#### Backend — Post-Game Debrief Tools
+
+- [ ] `backend/engines/debrief.py` — post-game analysis engine
+  - **Historical Playback**: reconstruct the complete game timeline from the immutable decision ledger, round results, and event log; serve a round-by-round or chronological playback feed
+  - **"What-If" Analysis**: for a given round and decision, re-run the deterministic engine with the recorded next-best foregone alternative and compare outcomes; clearly label the counterfactual as an estimate, not a historical fact
+  - **Real-World Connections**: map game events to a curated catalog of real-world parallels (e.g., "Your nation experienced hyperinflation — here's what happened in Venezuela 2016–2020"); catalog is instructor-extensible
+
+- [ ] `backend/routes/debrief.py` — debrief API endpoints
+  - `GET /api/sessions/{id}/debrief/timeline` — full game timeline playback data
+  - `POST /api/sessions/{id}/debrief/what-if` — submit a decision + alternative for counterfactual comparison
+  - `GET /api/sessions/{id}/debrief/connections` — real-world event parallels for the session's history
+  - Timeline and connections are available to all session members post-game; what-if is available to instructors and the decision's owner
+
+#### Backend — AI Seat Backfill
+
+- [ ] `backend/engines/ai_backfill.py` — general AI seat management
+  - Identify unfilled seats (no human assigned) at game start and mid-game
+  - Generate conservative auto-decisions using the existing engine for each unfilled seat, every round
+  - When an instructor assigns a human to a previously AI-backfilled seat, immediately cease AI control; the human inherits the current nation/company state
+  - Backfilled seats are visually distinguished in the lobby and dashboards (labeled "AI-controlled")
+  - AI backfill decisions are logged with the same immutability as human decisions for instructor review
+
+- [ ] `backend/routes/backfill.py` — backfill management endpoints
+  - `GET /api/sessions/{id}/backfill/status` — list of AI-controlled vs. human-controlled seats
+  - `POST /api/sessions/{id}/backfill/{seat_id}/takeover` — instructor assigns a human to an AI seat (mid-game handover)
+  - Instructor-only authorization
+
+#### Frontend — Debrief & Backfill UI
+
+- [ ] `frontend/src/components/Debrief/TimelineView.jsx` — post-game timeline playback
+  - Round-by-round chronological view with expandable decision details, events, and results
+  - Visual indicators for major turning points (wars, disasters, market shocks)
+
+- [ ] `frontend/src/components/Debrief/WhatIfPanel.jsx` — counterfactual analysis
+  - Select a past decision, view the recorded alternative, and compare projected vs. actual outcomes
+  - Clear labeling: "Estimated counterfactual — not a guaranteed outcome"
+
+- [ ] `frontend/src/components/Debrief/RealWorldPanel.jsx` — real-world connections
+  - Display curated parallels with brief descriptions and optional links to further reading
+
+- [ ] Lobby and dashboard updates for AI backfill:
+  - AI-controlled seats display a distinct badge/icon
+  - Instructor can initiate mid-game takeover from the lobby
+
+#### End-to-End Verification
+
+- [ ] Full seven-round game with four human players + AI backfill for remaining seats:
+  - AI advisor conversations for both President and Executive roles across multiple rounds
+  - Guardrail enforcement verified (cross-player data blocked, Socratic method maintained)
+  - AI usage logged and visible in instructor analytics
+  - AI grading rubric produces scores for all human players
+  - Backfilled seats submit conservative decisions each round; one seat is handed over to a human mid-game
+  - Post-game debrief timeline, what-if, and real-world connections functional
+  - Export produces valid CSV and JSON
+- [ ] Backend regression: all existing Phase 1–3 tests pass with no regressions
+- [ ] Frontend lint and production build pass
+- [ ] Browser acceptance test: four isolated clients complete one round with AI advisor usage, instructor reviews analytics, and debrief tools load after game completion
+
+#### Day 4 Acceptance
+
+- [ ] The post-game debrief timeline, what-if analysis, and real-world connections are functional and accessible to all session members.
+- [ ] AI seat backfill covers unfilled seats; mid-game human takeover works without data loss.
+- [ ] The full Phase 4 layer (advisor, logging, grading, analytics, debrief, backfill) is regression-tested end-to-end.
+- [ ] All existing Phase 1–3 tests, frontend lint, and production build pass.
+
+### Sprint Verification Commands
+
+```bash
+# Backend regression and Phase 4 tests
+cd backend
+.venv/bin/python -m pytest tests -v
+
+# Frontend regression suite
+cd ../frontend
+npm test
+npm run lint
+npm run build
+
+# Real browser acceptance path
+npm run test:e2e
+```
+
+### Definition of Done
+
+The sprint is complete only when every Progress Tracker item is checked, the instructor analytics dashboard renders live data, the AI advisor is functional in both dashboards, AI usage is graded, the debrief tools work post-game, backfilled seats submit decisions autonomously, and the browser acceptance test passes from separate sessions.
+
+### Explicitly Deferred Beyond Phase 4 Sprint 1
+
+- [ ] University SSO integration, production PostgreSQL/Redis deployment, TLS, email verification, and password recovery
+- [ ] Full Pangea Assembly (UN-style forum) with live chat, resolutions, and voting
+- [ ] FMI portal with lending products, conditionality, and repayment workflows
+- [ ] Bilateral trade proposals, treaties, and sanctions enforcement
+- [ ] Advanced logistics construction (sea-lane/airway path records, chokepoint blockades, construction timeframes, wartime destruction)
+- [ ] Post-launch map improvement roadmap (3D rendering, road/city construction tools)
 
 > [!IMPORTANT]
 > When work is verified, change its checkbox from `[ ]` to `[x]` immediately. Mark a day complete in the Progress Tracker only after all of that day's acceptance checks pass; update the sprint status count at the same time.

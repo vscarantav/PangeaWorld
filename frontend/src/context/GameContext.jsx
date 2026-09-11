@@ -1,5 +1,7 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import * as api from '../api/client';
+import DecisionReviewDialog from '../components/DecisionReviewDialog';
+import DecisionFeedback from '../components/DecisionFeedback';
 import { useSessionEvents } from '../hooks/useSessionEvents';
 
 const GameContext = createContext(null);
@@ -14,7 +16,9 @@ function compareRoundPhase(left, right) {
 
 function newestSession(current, incoming) {
   if (!current) return incoming;
-  return compareRoundPhase(incoming, current) >= 0 ? incoming : current;
+  return compareRoundPhase(incoming, current) >= 0
+    ? { ...current, ...incoming, map_snapshot: incoming.map_snapshot ?? current.map_snapshot }
+    : current;
 }
 
 function newestReadiness(current, incoming) {
@@ -154,9 +158,17 @@ export function GameProvider({ children, sessionId, membership }) {
     setResourceMarket(result);
     return result;
   }, [session]);
-  const submitNation = useCallback(async (data) => { const result = await api.submitNationDecision(session.id, selectedNationId, data); await refresh(session.id); return result; }, [refresh, selectedNationId, session]);
-  const savePresidentialReadiness = useCallback(async (data) => { const result = await api.savePresidentialReadiness(session.id, selectedNationId, data); await refresh(session.id); return result; }, [refresh, selectedNationId, session]);
-  const submitCompany = useCallback(async (data) => { const result = await api.submitCompanyDecision(session.id, selectedCompanyId, data); await refresh(session.id); return result; }, [refresh, selectedCompanyId, session]);
+  const [reviewRequest, setReviewRequest] = useState(null);
+  const reviewDecision = useCallback(async (data, role, entityId, readinessOnly = false) => {
+    if (session.ruleset_version === 'legacy-v1') return data;
+    if (reviewRequest) throw new Error('Finish the open decision comparison first.');
+    const review = await api.previewDecision(session.id, role, entityId, data, readinessOnly);
+    const evidence = await new Promise((resolve, reject) => setReviewRequest({ review, resolve, reject }));
+    return { ...data, opportunity_cost: evidence };
+  }, [session, reviewRequest]);
+  const submitNation = useCallback(async (data) => { const result = await api.submitNationDecision(session.id, selectedNationId, await reviewDecision(data, 'president', selectedNationId)); await refresh(session.id); return result; }, [refresh, selectedNationId, session, reviewDecision]);
+  const savePresidentialReadiness = useCallback(async (data) => { const result = await api.savePresidentialReadiness(session.id, selectedNationId, await reviewDecision(data, 'president', selectedNationId, true)); await refresh(session.id); return result; }, [refresh, selectedNationId, session, reviewDecision]);
+  const submitCompany = useCallback(async (data) => { const result = await api.submitCompanyDecision(session.id, selectedCompanyId, await reviewDecision(data, 'company', selectedCompanyId)); await refresh(session.id); return result; }, [refresh, selectedCompanyId, session, reviewDecision]);
   const saveCompanyDraft = useCallback(async (data) => { const result = await api.saveCompanyDraft(session.id, selectedCompanyId, data); await refresh(session.id); return result; }, [refresh, selectedCompanyId, session]);
   const value = useMemo(() => ({ session, nations, companies, market, resourceMarket, news, phase3Results, readiness,
     nation: nations.find((item) => item.id === selectedNationId) || null,
@@ -164,7 +176,7 @@ export function GameProvider({ children, sessionId, membership }) {
     selectedNationId, setSelectedNationId, selectedCompanyId, setSelectedCompanyId,
     membership, loading, error, realtimeConnected, refresh, advance, submitNation, savePresidentialReadiness, submitCompany, saveCompanyDraft, saveMapSnapshot, loadMapSnapshot, loadResourceMarket }),
     [session, nations, companies, market, resourceMarket, news, phase3Results, readiness, selectedNationId, selectedCompanyId, membership, loading, error, realtimeConnected, refresh, advance, loadMapSnapshot, loadResourceMarket, saveCompanyDraft, saveMapSnapshot, savePresidentialReadiness, submitCompany, submitNation]);
-  return <GameContext.Provider value={value}>{children}</GameContext.Provider>;
+  return <GameContext.Provider value={value}>{children}{session && <DecisionFeedback sessionId={session.id} round={session.current_round} />}{reviewRequest && <DecisionReviewDialog request={reviewRequest} onClose={() => setReviewRequest(null)} />}</GameContext.Provider>;
 }
 
 // This module deliberately exports both the provider component and its hook.

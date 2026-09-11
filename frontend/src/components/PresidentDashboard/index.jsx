@@ -6,7 +6,7 @@ import IntelTab from './Tabs/IntelTab';
 import IndexesTab from './Tabs/IndexesTab';
 import FinancingTab from './Tabs/FinancingTab';
 import DiplomacyTab from './Tabs/DiplomacyTab';
-import AIAdvisor from './Widgets/AIAdvisor';
+import AIAdvisor from '../AIAdvisor';
 import ProjectModal from './Widgets/ProjectModal';
 
 export default function PresidentDashboard() {

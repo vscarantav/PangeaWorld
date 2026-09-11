@@ -34,6 +34,22 @@ browser developer console and run:
 localStorage.removeItem('pangeaworld.sessionId');
 ```
 
+## Gemini newsroom configuration
+
+Phase 3 can write one Gemini-generated market report when each round resolves.
+Set both values in the backend process environment before starting the game:
+
+```powershell
+$env:GEMINI_API_KEY = "your-server-side-key"
+$env:GEMINI_NEWS_MODEL = "a-generateContent-compatible-model-enabled-for-your-account"
+.\start-game.ps1
+```
+
+Keep the key out of frontend `VITE_` variables and committed files. If either
+value is absent or the provider request fails, the round completes with a
+persisted factual fallback article. See `PHASE3_HANDOFF.md` for the public data
+sent to Gemini and the privacy boundary.
+
 The first registered local account becomes the instructor. Existing Phase 1
 games appear as recoverable games on that instructor's welcome screen; mapless
 legacy games are returned to a lobby and receive a new validated map before

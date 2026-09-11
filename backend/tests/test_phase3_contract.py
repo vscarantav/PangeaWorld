@@ -14,6 +14,7 @@ from models.schemas import PresidentDecisionData
 from engines.round_manager import process_round, submit_decision
 from engines.phase3_contract import validate_event_severity, validate_event_target
 from engines.phase3_resolver import resolve_natural_disaster
+from engines.phase3_military import procurement_cost, resolve_attack, validate_attack_order, public_attack_article
 from seed_data import seed_game_session
 from main import app
 from tests.test_authorization import setup_game
@@ -224,3 +225,165 @@ def test_phase3_results_are_public_deterministic_and_do_not_expose_private_recov
         assert "military_posture" not in str(result)
     finally:
         app.dependency_overrides.clear()
+
+
+def test_phase3_attack_contract_is_bounded_and_only_targets_its_session():
+    db = make_db()
+    session = GameSession(seed="phase3-attack-contract", phase=PhaseEnum.PRESIDENTIAL)
+    foreign_session = GameSession(seed="phase3-foreign")
+    db.add_all([session, foreign_session]); db.commit()
+    seed_game_session(db, session.id); seed_game_session(db, foreign_session.id)
+    attacker, target = db.query(Nation).filter_by(session_id=session.id).limit(2).all()
+    foreign_target = db.query(Nation).filter_by(session_id=foreign_session.id).first()
+    attacker.treasury = 1_000.0; db.commit()
+
+    with pytest.raises(ValueError, match="cannot target itself"):
+        validate_attack_order(attacker_nation_id=attacker.id, target_nation_id=attacker.id,
+                              units={"infantry": 1}, inventory=attacker.military_inventory)
+    with pytest.raises(ValueError, match="cannot deploy more"):
+        validate_attack_order(attacker_nation_id=attacker.id, target_nation_id=target.id,
+                              units={"infantry": 99}, inventory=attacker.military_inventory)
+    with pytest.raises(ValueError, match="does not belong"):
+        submit_decision(db, session, "president", attacker.id, {
+            "military_operation": {"operation_type": "attack", "target_nation_id": foreign_target.id,
+                                   "units": {"infantry": 1}},
+        })
+    decision = submit_decision(db, session, "president", attacker.id, {
+        "military_procurement": {"infantry": 1, "navy": 1, "air_force": 0},
+        "military_operation": {"operation_type": "attack", "target_nation_id": target.id,
+                               "units": {"infantry": 2, "navy": 0, "air_force": 0}},
+    })
+    assert decision.decision_data["military_operation"]["target_nation_id"] == target.id
+    assert procurement_cost(decision.decision_data["military_procurement"]) == 350.0
+
+
+def test_phase3_attack_resolver_is_repeatable_and_persists_public_effect_once():
+    inputs = {
+        "session_seed": "combat-seed", "round_number": 2, "attacker_id": 3, "target_id": 9,
+        "deployment": {"infantry": 2, "navy": 1, "air_force": 0},
+        "attacker_inventory": {"infantry": 6, "navy": 2, "air_force": 1},
+        "defender_inventory": {"infantry": 6, "navy": 2, "air_force": 1},
+        "attacker_atk": 3, "defender_def": 4, "attacker_readiness": 5.0,
+        "defender_readiness": 2.0, "defender_posture": "defend",
+    }
+    first = resolve_attack(**inputs)
+    assert first == resolve_attack(**inputs)
+    assert first["attack_index"] >= 1 and first["defense_index"] >= 1
+    assert sum(first["attacker_inventory_after"].values()) < sum(inputs["attacker_inventory"].values())
+
+    db = make_db()
+    session = GameSession(seed="combat-process", phase=PhaseEnum.PROCESSING)
+    db.add(session); db.commit(); seed_game_session(db, session.id)
+    round_ = db.query(Round).filter_by(session_id=session.id, number=1).one()
+    attacker, target = db.query(Nation).filter_by(session_id=session.id).limit(2).all()
+    db.add(Decision(round_id=round_.id, player_type="president", entity_id=attacker.id, decision_data={
+        "military_operation": {"operation_type": "attack", "target_nation_id": target.id,
+                               "units": {"infantry": 2, "navy": 0, "air_force": 0}},
+    }))
+    db.commit()
+
+    process_round(db, session, commit=False); db.flush()
+    effect = db.query(RoundEffect).filter_by(round_id=round_.id, entity_id=attacker.id, effect_type="military_attack").one()
+    assert effect.scope == EventScope.PUBLIC
+    assert "deployment" not in effect.effect_data
+    assert effect.effect_data["target_id"] == target.id
+    with pytest.raises(ValueError, match="processing phase"):
+        process_round(db, session, commit=False)
+
+
+def test_phase3_procurement_arrives_after_operations():
+    db = make_db()
+    session = GameSession(seed="combat-procurement", phase=PhaseEnum.PROCESSING)
+    db.add(session); db.commit(); seed_game_session(db, session.id)
+    round_ = db.query(Round).filter_by(session_id=session.id, number=1).one()
+    attacker, defender = db.query(Nation).filter_by(session_id=session.id).limit(2).all()
+    attacker.military_inventory = {"infantry": 1, "navy": 0, "air_force": 0}
+    defender.military_inventory = {"infantry": 0, "navy": 0, "air_force": 0}
+    db.add(Decision(round_id=round_.id, player_type="president", entity_id=attacker.id, decision_data={
+        "military_procurement": {"infantry": 5, "navy": 0, "air_force": 0},
+        "military_operation": {"operation_type": "attack", "target_nation_id": defender.id,
+                               "units": {"infantry": 1, "navy": 0, "air_force": 0}},
+    }))
+    db.commit()
+
+    process_round(db, session, commit=False)
+    # The single deployed unit can be lost, but this round's five purchases
+    # are added only after that operation resolves.
+    assert attacker.military_inventory["infantry"] == 5
+
+
+def test_phase3_readiness_api_can_withdraw_a_saved_attack_order():
+    instructor, president, _, game_id, nation_id, _ = setup_game()
+    try:
+        target_id = next(item["id"] for item in instructor.get(f"/api/sessions/{game_id}/nations").json()
+                         if item["id"] != nation_id)
+        assert instructor.post(f"/api/sessions/{game_id}/advance", json={"expected_phase": "planning"}).status_code == 200
+        endpoint = f"/api/sessions/{game_id}/nations/{nation_id}/readiness"
+        created = president.put(endpoint, json={"decision_data": {
+            "military_operation": {"operation_type": "attack", "target_nation_id": target_id,
+                                   "units": {"infantry": 1, "navy": 0, "air_force": 0}},
+        }})
+        assert created.status_code == 200
+        withdrawn = president.put(endpoint, json={"decision_data": {"military_operation": None}})
+        assert withdrawn.status_code == 200
+        assert "military_operation" not in withdrawn.json()["decision_data"]
+    finally:
+        app.dependency_overrides.clear()
+
+
+def test_phase3_attack_results_are_identical_cross_role_and_hide_deployment():
+    instructor, president, executive, game_id, nation_id, company_id = setup_game()
+    try:
+        target_id = next(item["id"] for item in instructor.get(f"/api/sessions/{game_id}/nations").json()
+                         if item["id"] != nation_id)
+        assert instructor.post(f"/api/sessions/{game_id}/advance", json={"expected_phase": "planning"}).status_code == 200
+        saved = president.put(f"/api/sessions/{game_id}/nations/{nation_id}/readiness", json={"decision_data": {
+            "military_operation": {"operation_type": "attack", "target_nation_id": target_id,
+                                   "units": {"infantry": 1, "navy": 0, "air_force": 0}},
+        }})
+        assert saved.status_code == 200, saved.text
+        assert instructor.post(f"/api/sessions/{game_id}/advance", json={"expected_phase": "presidential"}).status_code == 200
+        assert executive.post(f"/api/sessions/{game_id}/companies/{company_id}/decisions", json={"decision_data": {}}).status_code == 200
+        assert instructor.post(f"/api/sessions/{game_id}/advance", json={"expected_phase": "company"}).status_code == 200
+        assert instructor.post(f"/api/sessions/{game_id}/advance", json={"expected_phase": "processing"}).status_code == 200
+        president_result = president.get(f"/api/sessions/{game_id}/phase3/results")
+        executive_result = executive.get(f"/api/sessions/{game_id}/phase3/results")
+        assert president_result.status_code == executive_result.status_code == 200
+        assert president_result.json() == executive_result.json()
+        combat = next(item for item in president_result.json()["results"] if item["event_type"] == "military_attack")
+        assert combat["effects"]["target_id"] == target_id
+        assert "deployment" not in str(combat) and "rolls" not in str(combat)
+    finally:
+        app.dependency_overrides.clear()
+
+
+@pytest.mark.parametrize("remaining", [1, 6])
+def test_cross_attacks_survive_prior_casualties(remaining):
+    db = make_db()
+    session = GameSession(seed="cross-attack-audit", phase=PhaseEnum.PROCESSING)
+    db.add(session); db.commit(); seed_game_session(db, session.id)
+    round_ = db.query(Round).filter_by(session_id=session.id, number=1).one()
+    first, second = db.query(Nation).filter_by(session_id=session.id).order_by(Nation.id).limit(2).all()
+    first.military_inventory = {"infantry": 6, "navy": 0, "air_force": 0}
+    second.military_inventory = {"infantry": remaining, "navy": 0, "air_force": 0}
+    for attacker, target in [(first, second), (second, first)]:
+        db.add(Decision(round_id=round_.id, player_type="president", entity_id=attacker.id,
+                        decision_data={"military_operation": {"operation_type": "attack",
+                            "target_nation_id": target.id, "units": dict(attacker.military_inventory)}}))
+    db.commit()
+    process_round(db, session, commit=False); db.flush()
+    effects = db.query(RoundEffect).filter_by(round_id=round_.id, effect_type="military_attack").order_by(RoundEffect.entity_id).all()
+    assert len(effects) == 2
+    assert all(count >= 0 for nation in [first, second] for count in nation.military_inventory.values())
+    assert sum(first.military_inventory.values()) + sum(second.military_inventory.values()) == 6 + remaining - sum(
+        effect.effect_data["attacker_losses"] + effect.effect_data["defender_losses"] for effect in effects)
+    if remaining == 1:
+        assert effects[1].effect_data["outcome"] == "attack_cancelled"
+        article = public_attack_article(effect_id=effects[1].id, round_number=1,
+            attacker_name=second.name, target_name=first.name, outcome="attack_cancelled",
+            attacker_losses=0, defender_losses=0)
+        assert "cancelled" in article["headline"]
+        assert "No additional losses" in article["summary"]
+    assert all("deployment" not in effect.effect_data and "rolls" not in effect.effect_data for effect in effects)
+    with pytest.raises(ValueError, match="processing phase"):
+        process_round(db, session, commit=False)

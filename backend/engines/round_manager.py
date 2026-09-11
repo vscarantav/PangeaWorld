@@ -1,21 +1,26 @@
 """Authoritative phase transitions and deterministic round processing."""
 
 from copy import deepcopy
+from types import SimpleNamespace
 
 from sqlalchemy.orm import Session
 
 try:
-    from ..models.domain import Company, CompanyRecoveryFunding, Decision, EventScope, EventType, GameSession, Nation, PhaseEnum, Resource, Round, RoundEffect, RoundStatus
+    from ..models.domain import Company, CompanyRecoveryFunding, Decision, DecisionReview, EventScope, EventType, GameSession, Nation, PhaseEnum, Resource, Round, RoundEffect, RoundStatus
     from ..models.schemas import CompanyDecisionData, PresidentDecisionData
 except ImportError:
-    from models.domain import Company, CompanyRecoveryFunding, Decision, EventScope, EventType, GameSession, Nation, PhaseEnum, Resource, Round, RoundEffect, RoundStatus
+    from models.domain import Company, CompanyRecoveryFunding, Decision, DecisionReview, EventScope, EventType, GameSession, Nation, PhaseEnum, Resource, Round, RoundEffect, RoundStatus
     from models.schemas import CompanyDecisionData, PresidentDecisionData
 
 from .economy import calculate_cpi, calculate_gdp, calculate_inflation, calculate_unemployment
 from .events import event_effects, generate_round_events
+from .news import generate_news
+from .phase3_agents import drakmoor_order
+from .opportunity_cost import RULESET, build_review, validate_reasoning, readiness_bonus
 from .logistics import calculate_landed_cost, estimate_route
 from .resources import BASE_PRICES, calculate_scarcity, process_trade, produce_resources
 from .phase3_resolver import resolve_natural_disaster
+from .phase3_military import apply_strategic_control, procurement_cost, normalized_units, resolve_battle, validate_attack_order, operation_cost
 
 
 def _current_round(session: GameSession) -> Round:
@@ -46,6 +51,7 @@ def apply_auto_decisions(entity, player_type: str) -> dict:
             "tax_rate": policies.get("tax_rate", 0.15),
             "tariffs": policies.get("tariffs", 0.05),
             "resource_consumption": {},
+            "military_procurement": {"infantry": 0, "navy": 0, "air_force": 0},
             "auto_decision": True,
         }
     if player_type == "company":
@@ -61,7 +67,7 @@ def apply_auto_decisions(entity, player_type: str) -> dict:
     raise ValueError("player_type must be 'president' or 'company'")
 
 
-def _validate_company_sourcing(db: Session, session: GameSession, company: Company, decision: dict) -> None:
+def _validate_company_sourcing(db: Session, session: GameSession, company: Company, decision: dict) -> float:
     """Reject impossible orders while the company can still edit its decision."""
     rnd_investment = float(decision.get("rnd_investment", 0.0))
     if rnd_investment > float(company.cash or 0.0):
@@ -69,6 +75,10 @@ def _validate_company_sourcing(db: Session, session: GameSession, company: Compa
     resources = db.query(Resource).join(Nation).filter(Nation.session_id == session.id).all()
     reserved_stock = {}
     estimated_total = rnd_investment
+    if session.ruleset_version == RULESET:
+        if float(decision.get("production_units", 1)) > 2 or int(decision.get("headcount", 0)) > 100:
+            raise ValueError("production is limited to 2x capacity and hiring to 100 workers")
+        estimated_total += 0.1 * max(0, float(company.cogs or 0)) * float(decision.get("production_units", 1)) + int(decision.get("headcount", 0)) * 0.05
     for order in decision.get("sourcing") or []:
         resource_type = getattr(order.get("resource_type"), "value", order.get("resource_type"))
         mode = str(order.get("mode", "rail")).lower()
@@ -97,7 +107,56 @@ def _validate_company_sourcing(db: Session, session: GameSession, company: Compa
         )
         estimated_total += float(preview["unit_cost"]) * float(order["quantity"])
     if estimated_total > float(company.cash or 0.0):
-        raise ValueError(f"R&D and sourcing commitments (${estimated_total:.2f}) cannot exceed company cash")
+        raise ValueError(f"company commitments (${estimated_total:.2f}) cannot exceed company cash")
+    return estimated_total
+
+
+def decision_commitment(db, session, player_type, entity, normalized):
+    if player_type == "president":
+        procurement = normalized_units(normalized.get("military_procurement"))
+        operation = normalized.get("military_operation")
+        if operation is not None:
+            if session.ruleset_version != RULESET and (operation["operation_type"] != "attack" or operation.get("engagement_limit", 1) != 1):
+                raise ValueError("this operation requires the Phase 3 closure ruleset")
+            if operation["operation_type"] == "blockade" and operation["units"].get("navy", 0) < 1:
+                raise ValueError("a blockade requires at least one naval unit")
+            target_id = int(operation["target_nation_id"])
+            if db.query(Nation).filter_by(id=target_id, session_id=session.id).first() is None:
+                raise ValueError("attack target does not belong to this session")
+            validate_attack_order(attacker_nation_id=entity.id, target_nation_id=target_id,
+                                  units=operation["units"], inventory=entity.military_inventory)
+        committed_budget = sum(float(normalized.get(field, 0.0)) for field in (
+            "government_spending", "military_investment", "emergency_preparedness_investment",
+        )) + procurement_cost(procurement) + operation_cost(operation)
+        if committed_budget > float(entity.treasury or 0.0):
+            raise ValueError("government, military, and emergency investments plus procurement cannot exceed the nation's treasury")
+    if player_type == "company":
+        committed_budget = _validate_company_sourcing(db, session, entity, normalized)
+    return committed_budget
+
+
+def preview_decision(db, session, player_type, entity, decision_data):
+    normalized = _validated_decision(player_type, decision_data)
+    normalized.pop("opportunity_cost", None)
+    cost = decision_commitment(db, session, player_type, entity, normalized)
+    available = float(entity.treasury if player_type == "president" else entity.cash)
+    def project(allocation, commitment):
+        if player_type == "president":
+            return {"civilian_gdp_contribution": allocation.get("government_spending", 0),
+                "preparedness_fund_after_investment": float(entity.emergency_preparedness_balance or 0) + allocation.get("emergency_preparedness_investment", 0),
+                "military_bonus_after_investment": readiness_bonus(float(entity.military_readiness or 0) + allocation.get("military_investment", 0) / 100),
+                "next_100_readiness_bonus_gain": readiness_bonus(float(entity.military_readiness or 0) + (allocation.get("military_investment", 0) + 100) / 100) - readiness_bonus(float(entity.military_readiness or 0) + allocation.get("military_investment", 0) / 100)}
+        working_capital = 0.1 * max(0, float(entity.cogs or 0)) * float(allocation.get("production_units", 1))
+        sourcing_cost = max(0, commitment - allocation.get("rnd_investment", 0) - working_capital - allocation.get("headcount", 0) * 0.05)
+        snapshot = SimpleNamespace(id=entity.id, products=deepcopy(entity.products or {}), revenue=entity.revenue,
+                                   cogs=entity.cogs, cash=entity.cash)
+        result = _process_company(snapshot, {**allocation, "ruleset_version": RULESET}, float((entity.nation.policies or {}).get("tax_rate", 0.15)), [{"total_cost": sourcing_cost, "shipping_cost": 0}])
+        return {key: result[key] for key in ("revenue", "net_profit", "quality", "cash")}
+    return build_review(player_type, normalized, available, cost,
+                        lambda allocation: decision_commitment(db, session, player_type, entity, allocation),
+                        lambda allocation: _validated_decision(player_type, allocation),
+                        {"session_id": session.id, "round": session.current_round, "entity_id": entity.id,
+                         "inventory": entity.military_inventory if player_type == "president" else None}, project)
 
 
 def submit_decision(db: Session, session: GameSession, player_type: str, entity_id: int, decision_data: dict) -> Decision:
@@ -117,20 +176,18 @@ def submit_decision(db: Session, session: GameSession, player_type: str, entity_
         raise ValueError(f"{player_type} entity does not belong to this session")
 
     normalized = _validated_decision(player_type, decision_data)
-    if player_type == "president":
-        committed_budget = sum(float(normalized.get(field, 0.0)) for field in (
-            "government_spending", "military_investment", "emergency_preparedness_investment",
-        ))
-        if committed_budget > float(entity.treasury or 0.0):
-            raise ValueError("government, military, and emergency investments cannot exceed the nation's treasury")
-    if player_type == "company":
-        _validate_company_sourcing(db, session, entity, normalized)
+    review = preview_decision(db, session, player_type, entity, normalized)
+    record = None
+    if session.ruleset_version == RULESET:
+        record = validate_reasoning(normalized.get("opportunity_cost"), review)
 
     current_round = _current_round(session)
     decision = db.query(Decision).filter_by(round_id=current_round.id, player_type=player_type, entity_id=entity_id).first()
     if decision is None:
         decision = Decision(round_id=current_round.id, player_type=player_type, entity_id=entity_id)
         db.add(decision)
+    if record is not None:
+        db.add(DecisionReview(round_id=current_round.id, player_type=player_type, entity_id=entity_id, record=record))
     decision.decision_data = normalized
     decision.submission_kind = "human"
     decision.auto_reason = None
@@ -161,7 +218,8 @@ def _process_company(company: Company, decision: dict, tax_rate: float, sourcing
     gross_profit = revenue - cogs
     operating_profit = gross_profit * 0.8 - headcount * 0.05 - rnd_investment
     net_profit = round(operating_profit * (1.0 - tax_rate), 4) if operating_profit > 0 else round(operating_profit, 4)
-    quality = round(float(product.get("quality", 5.0)) + rnd_investment / 10000.0, 4)
+    quality_gain = ((1 + rnd_investment / 100.0) ** 0.5 - 1) / 100 if decision.get("ruleset_version") == RULESET else rnd_investment / 10000.0
+    quality = round(float(product.get("quality", 5.0)) + quality_gain, 4)
     company.products = {**(company.products or {}), "Widget": {**product, "price": round(new_price, 4), "production_units": volume, "quality": quality}}
     company.revenue = revenue
     company.cogs = cogs
@@ -187,7 +245,7 @@ def _process_company(company: Company, decision: dict, tax_rate: float, sourcing
     }
 
 
-def _process_sourcing(session: GameSession, company: Company, orders: list[dict], resources: list[Resource], available_cash: float | None = None) -> list[dict]:
+def _process_sourcing(session: GameSession, company: Company, orders: list[dict], resources: list[Resource], available_cash: float | None = None, blockaded=frozenset(), war_nations=frozenset()) -> list[dict]:
     """Validate and execute a company's resource orders at round-time prices."""
     completed = []
     committed_cost = 0.0
@@ -207,12 +265,17 @@ def _process_sourcing(session: GameSession, company: Company, orders: list[dict]
         market_price = BASE_PRICES[resource_type] * float(scarcity["price_multiplier"])
         route = estimate_route(session.map_snapshot, supplier.nation.name, company.nation.name, mode)
         foreign = supplier.nation_id != company.nation_id
+        if foreign and mode == "sea" and (supplier.nation_id in blockaded or company.nation_id in blockaded):
+            completed.append({"resource_type": resource_type, "supplier_nation_id": supplier.nation_id,
+                "quantity": 0.0, "requested_quantity": float(order["quantity"]), "mode": mode,
+                "status": "blockaded", "total_cost": 0.0, "shipping_cost": 0.0})
+            continue
         route_cost = {
             "base_price": market_price,
             "distance_edges": route["distance_edges"],
             "mode": mode,
             "tariff_rate": float((company.nation.policies or {}).get("tariffs", 0.0)) if foreign else 0.0,
-            "insurance_rate": 0.02 if foreign else 0.0,
+            "insurance_rate": (0.07 if supplier.nation_id in war_nations or company.nation_id in war_nations else 0.02) if foreign else 0.0,
             "port_fees": 2.0 if mode == "sea" else 0.0,
         }
         preview = calculate_landed_cost(**route_cost)
@@ -298,7 +361,9 @@ def _resolve_phase3_event(db: Session, current_round: Round, nation_state: dict,
     if len(scheduled) > 1:
         raise ValueError("only one Phase 3 event may be resolved in a round")
     event = scheduled[0]
-    if event.event_type != EventType.NATURAL_DISASTER or event.target_nation_id is None:
+    if event.event_type != EventType.NATURAL_DISASTER:
+        return {}
+    if event.target_nation_id is None:
         raise ValueError("unsupported Phase 3 event")
     nation = next((item for item in current_round.session.nations if item.id == event.target_nation_id), None)
     if nation is None:
@@ -341,6 +406,89 @@ def _resolve_phase3_event(db: Session, current_round: Round, nation_state: dict,
     return {nation.id: plan}
 
 
+def _resolve_phase3_attacks(db: Session, current_round: Round, nation_state: dict) -> dict[int, dict]:
+    """Resolve submitted attacks in stable attacker-ID order and persist public effects.
+
+    Simultaneous cross-attacks deliberately use the inventory remaining after
+    earlier canonical resolution; ordering is explicit and reproducible rather
+    than depending on client arrival or database row order.
+    """
+    plans = {}
+    nations = {nation.id: nation for nation in current_round.session.nations}
+    initial_inventory = {key: normalized_units(nation.military_inventory) for key, nation in nations.items()}
+    for attacker_id in sorted(nations):
+        operation = (nation_state[attacker_id]["presidential"] or {}).get("military_operation")
+        if not operation:
+            continue
+        target_id = int(operation["target_nation_id"])
+        attacker, defender = nations[attacker_id], nations.get(target_id)
+        if defender is None:
+            raise ValueError("attack target does not belong to this session")
+        defender_decision = nation_state[target_id]["presidential"]
+        # Validate the saved order against the pre-combat inventory, then apply
+        # casualties from earlier engagements without invalidating that order.
+        requested = validate_attack_order(
+            attacker_nation_id=attacker.id, target_nation_id=defender.id,
+            units=operation["units"], inventory=initial_inventory[attacker.id],
+        )
+        available = normalized_units(attacker.military_inventory)
+        deployment = {kind: min(count, available[kind]) for kind, count in requested.items()}
+        kind = operation.get("operation_type", "attack")
+        if kind in {"blockade", "intelligence"} and any(deployment.values()):
+            public_effect = {"attacker_id": attacker.id, "target_id": defender.id,
+                "outcome": kind, "operation_cost": operation_cost(operation),
+                "attacker_losses": 0, "defender_losses": 0}
+            if kind == "blockade" and deployment.get("navy", 0) == 0:
+                public_effect["outcome"] = "blockade_failed"
+            if kind == "intelligence":
+                db.add(RoundEffect(round_id=current_round.id, entity_type="nation", entity_id=attacker.id,
+                    effect_type="intelligence_report", scope=EventScope.PRIVATE,
+                    effect_data={"target_id": defender.id, "observed_round": current_round.number,
+                        "readiness": defender.military_readiness, "posture": defender_decision.get("military_posture", "defend"),
+                        "limitation": "A resolved-round observation, not a forecast of future decisions."},
+                    reproducibility_key=f"intel:{current_round.id}:{attacker.id}:{defender.id}"))
+            db.add(RoundEffect(round_id=current_round.id, entity_type="nation", entity_id=attacker.id,
+                effect_type="military_operation", scope=EventScope.PUBLIC, effect_data=public_effect,
+                reproducibility_key=f"operation:{current_round.id}:{attacker.id}:{defender.id}"))
+            plans[attacker.id] = public_effect
+            continue
+        if not any(deployment.values()):
+            plan = {
+                "attacker_id": attacker.id, "target_id": defender.id,
+                "outcome": "attack_cancelled", "attack_index": None, "defense_index": None,
+                "attacker_losses": 0, "defender_losses": 0,
+                "attacker_inventory_after": available,
+                "defender_inventory_after": normalized_units(defender.military_inventory),
+                "reproducibility_key": f"phase3-attack:{current_round.session.seed}:{current_round.number}:{attacker.id}:{defender.id}:cancelled",
+            }
+        else:
+            plan = resolve_battle(
+                engagement_limit=operation.get("engagement_limit", 1), retreat_threshold=operation.get("retreat_threshold", 0.5),
+                session_seed=current_round.session.seed, round_number=current_round.number,
+                attacker_id=attacker.id, target_id=defender.id, deployment=deployment,
+                attacker_inventory=attacker.military_inventory, defender_inventory=defender.military_inventory,
+                attacker_atk=min(10, attacker.military_atk + readiness_bonus(attacker.military_readiness)) if current_round.session.ruleset_version == RULESET else attacker.military_atk,
+                defender_def=min(10, defender.military_def + readiness_bonus(defender.military_readiness)) if current_round.session.ruleset_version == RULESET else defender.military_def,
+                attacker_readiness=attacker.military_readiness, defender_readiness=defender.military_readiness,
+                defender_posture=str(defender_decision.get("military_posture", "defend")),
+            )
+        attacker.military_inventory = plan["attacker_inventory_after"]
+        defender.military_inventory = plan["defender_inventory_after"]
+        public_effect = {key: plan[key] for key in (
+            "attacker_id", "target_id", "outcome", "attack_index", "defense_index",
+            "attacker_losses", "defender_losses",
+        )}
+        if current_round.session.ruleset_version == RULESET:
+            public_effect.update(apply_strategic_control(attacker, defender, plan["outcome"]))
+        db.add(RoundEffect(
+            round_id=current_round.id, entity_type="nation", entity_id=attacker.id,
+            effect_type="military_attack", scope=EventScope.PUBLIC, effect_data=public_effect,
+            reproducibility_key=plan["reproducibility_key"],
+        ))
+        plans[attacker.id] = public_effect
+    return plans
+
+
 def process_round(db: Session, session: GameSession, commit: bool = True) -> dict:
     """Run the authoritative economy/resource loop for the active round."""
     if session.phase != PhaseEnum.PROCESSING:
@@ -348,7 +496,28 @@ def process_round(db: Session, session: GameSession, commit: bool = True) -> dic
     current_round = _current_round(session)
     current_round.status = RoundStatus.PROCESSING
     decisions = _decision_map(current_round)
+    if session.ruleset_version == RULESET:
+        for nation in sorted(session.nations, key=lambda item: item.id):
+            for role, entity in [("president", nation), *[("company", company) for company in sorted(nation.companies, key=lambda item: item.id)]]:
+                if (role, entity.id) in decisions:
+                    continue
+                automatic = apply_auto_decisions(entity, role)
+                reason = "vacant seat: conservative allocation"
+                if role == "president" and nation.archetype == "Marginalized military state":
+                    automatic.update(drakmoor_order(session, nation))
+                    reason = "Drakmoor scripted behavior"
+                decisions[(role, entity.id)] = automatic
+                db.add(Decision(round_id=current_round.id, player_type=role, entity_id=entity.id,
+                    decision_data=automatic, submission_kind="automatic", auto_reason=reason))
     current_round.events = generate_round_events(session, current_round)
+    for injected in current_round.phase3_events:
+        if injected.event_type != EventType.NATURAL_DISASTER:
+            definition = injected.event_data or {}
+            current_round.events = [*current_round.events, {"id": f"injected-{injected.id}",
+                "round": current_round.number, "nation_id": injected.target_nation_id,
+                "headline": definition.get("title", "Instructor scenario"), "summary": definition.get("summary", ""),
+                "category": injected.event_type.value, "impact": "High" if injected.severity == 3 else "Medium",
+                "source": "instructor", "cpi_delta": definition.get("cpi_delta", 0), "approval_delta": definition.get("approval_delta", 0)}]
     nation_results = []
     company_results = []
     nation_state = {}
@@ -362,9 +531,11 @@ def process_round(db: Session, session: GameSession, commit: bool = True) -> dic
         government_spending = float(presidential.get("government_spending", 0.0))
         military_investment = float(presidential.get("military_investment", 0.0))
         preparedness_investment = float(presidential.get("emergency_preparedness_investment", 0.0))
-        total_commitment = government_spending + military_investment + preparedness_investment
+        procurement = normalized_units(presidential.get("military_procurement"))
+        procurement_spending = procurement_cost(procurement)
+        total_commitment = government_spending + military_investment + preparedness_investment + procurement_spending + operation_cost(presidential.get("military_operation"))
         if total_commitment > float(nation.treasury or 0.0):
-            raise ValueError("government, military, and emergency investments cannot exceed the nation's treasury")
+            raise ValueError("government, military, and emergency investments plus procurement cannot exceed the nation's treasury")
         nation.policies = {
             **(nation.policies or {}),
             **{key: presidential[key] for key in ("tax_rate", "income_tax", "tariffs", "immigration") if key in presidential},
@@ -386,6 +557,8 @@ def process_round(db: Session, session: GameSession, commit: bool = True) -> dic
             "government_spending": government_spending,
             "military_investment": military_investment,
             "preparedness_investment": preparedness_investment,
+            "procurement_spending": procurement_spending,
+            "procurement": procurement,
             "previous_cpi": previous_cpi,
             "cpi_delta": effects["cpi_delta"],
             "resource_result": resource_result,
@@ -393,6 +566,27 @@ def process_round(db: Session, session: GameSession, commit: bool = True) -> dic
         }
 
     _apply_infrastructure_events(session, current_round.events)
+    attack_plans = _resolve_phase3_attacks(db, current_round, nation_state)
+    for actor_id, plan in attack_plans.items():
+        if plan["outcome"] in {"blockade", "blockade_failed", "intelligence"}:
+            current_round.events = [*current_round.events, {"id": f"r{current_round.number}-operation-{actor_id}",
+                "round": current_round.number, "nation_id": plan["target_id"], "category": "Security",
+                "headline": f"Nation {actor_id} conducts {plan['outcome']} against nation {plan['target_id']}",
+                "summary": f"Recorded mission commitment: ${plan['operation_cost']}M. Intelligence observations remain private.",
+                "impact": "Medium", "source": "resolved_operation"}]
+    blockaded = {plan["target_id"] for attacker_id, plan in attack_plans.items()
+                 if plan["outcome"] == "blockade" and normalized_units(next(n for n in session.nations if n.id == attacker_id).military_inventory)["navy"] > 0}
+    war_nations = {key for plan in attack_plans.values() if plan["outcome"] in {"attacker_victory", "defender_holds", "attacker_retreats"}
+                   for key in (plan["attacker_id"], plan["target_id"])} if session.ruleset_version == RULESET else set()
+    for nation_id in war_nations:
+        nation_state[nation_id]["cpi_delta"] += 2.0
+        affected = next(n for n in session.nations if n.id == nation_id)
+        affected.approval_rating = max(0, affected.approval_rating - 2)
+        current_round.events = [*current_round.events, {"id": f"r{current_round.number}-humanitarian-{nation_id}",
+            "round": current_round.number, "nation_id": nation_id, "category": "humanitarian",
+            "headline": "Conflict displaces households and raises trade costs", "impact": "High",
+            "summary": "Consumer prices rise by 2 index points; disrupted output reduces GDP by 1%. Foreign freight insurance increases this round.", "source": "reactive"}]
+
 
     # Execute every sourcing order and feed its landed cost into the owning
     # company's financial results.
@@ -403,8 +597,9 @@ def process_round(db: Session, session: GameSession, commit: bool = True) -> dic
             rnd_investment = float(company_decision.get("rnd_investment", 0.0))
             if rnd_investment > float(company.cash or 0.0):
                 raise ValueError(f"company {company.id} cannot afford its R&D investment")
-            sourcing = _process_sourcing(session, company, company_decision.get("sourcing") or [], all_resources, float(company.cash or 0.0) - rnd_investment)
-            company_results.append(_process_company(company, {**company_decision, "round_number": current_round.number}, tax_rate, sourcing))
+            working_capital = (0.1 * max(0, float(company.cogs or 0)) * float(company_decision.get("production_units", 1)) + int(company_decision.get("headcount", 0)) * 0.05) if session.ruleset_version == RULESET else 0.0
+            sourcing = _process_sourcing(session, company, company_decision.get("sourcing") or [], all_resources, max(0, float(company.cash or 0.0) - rnd_investment - working_capital), blockaded=blockaded, war_nations=war_nations)
+            company_results.append(_process_company(company, {**company_decision, "round_number": current_round.number, "ruleset_version": session.ruleset_version}, tax_rate, sourcing))
 
     # Market share is global because all companies sell into the same virtual
     # consumer market.
@@ -417,12 +612,25 @@ def process_round(db: Session, session: GameSession, commit: bool = True) -> dic
 
     phase3_plans = _resolve_phase3_event(db, current_round, nation_state, company_results)
 
+    # A procurement is paid for during this round, but it becomes usable only
+    # after every submitted operation has resolved.  In particular, it cannot
+    # strengthen a defender or absorb casualties in the round it is ordered.
+    for nation in session.nations:
+        procurement = nation_state[nation.id]["procurement"]
+        inventory = normalized_units(nation.military_inventory)
+        nation.military_inventory = {
+            unit_type: inventory[unit_type] + procurement[unit_type]
+            for unit_type in procurement
+        }
+
     for nation in session.nations:
         state = nation_state[nation.id]
         nation.gdp = round(calculate_gdp(nation, state["government_spending"]), 4)
         phase3_plan = phase3_plans.get(nation.id)
         if phase3_plan:
             nation.gdp = round(max(0.0, nation.gdp + phase3_plan["gdp_delta"]), 4)
+        if nation.id in war_nations:
+            nation.gdp = round(nation.gdp * 0.99, 4)
         nation.cpi = round(calculate_cpi(nation, state["resource_demands"]) + state["cpi_delta"], 4)
         nation.inflation = calculate_inflation(nation.cpi, state["previous_cpi"])
         labor_pool = sum(float(r.stockpile or 0.0) for r in nation.resources if getattr(r.type, "value", r.type) == "Labor")
@@ -441,13 +649,18 @@ def process_round(db: Session, session: GameSession, commit: bool = True) -> dic
             "trade_balance": nation.trade_balance,
             "treasury": nation.treasury,
             "military_readiness": nation.military_readiness,
+            "military_inventory": nation.military_inventory,
+            "strategic_control_points": int((nation.policies or {}).get("strategic_control_points", 3)),
+            "military_procurement_spending": state["procurement_spending"],
             "emergency_preparedness_balance": nation.emergency_preparedness_balance,
             "resources": state["resource_result"],
             "events": [event for event in current_round.events if event.get("nation_id") == nation.id],
             "phase3_effect": ({key: phase3_plan[key] for key in ("gross_impact", "public_fund_used", "private_recovery_total", "approval_delta", "gdp_delta", "reproducibility_key")} if phase3_plan else None),
+            "military_operation": attack_plans.get(nation.id),
         })
 
     current_round.results = generate_round_results(session, nation_results, company_results)
+    current_round.results = {**current_round.results, "news": generate_news(current_round.number, nation_results, current_round.events)}
     current_round.status = RoundStatus.COMPLETE
     completed_number = current_round.number
     if completed_number < 7:

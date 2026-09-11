@@ -5,7 +5,7 @@ import FinancialsTab from './Tabs/FinancialsTab';
 import SourcingTab from './Tabs/SourcingTab';
 import MarketTab from './Tabs/MarketTab';
 import DecisionsTab from './Tabs/DecisionsTab';
-import AIAdvisor from './Widgets/AIAdvisor';
+import AIAdvisor from '../AIAdvisor';
 
 export default function ExecutiveDashboard() {
   const [activeTab, setActiveTab] = useState('financials');
