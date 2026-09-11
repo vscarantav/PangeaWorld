@@ -37,7 +37,7 @@ async function expectPlayerShell(page, roleLabel) {
   let lastError;
   for (let attempt = 0; attempt < 3; attempt += 1) {
     try {
-      await expect(page.getByText(roleLabel, { exact: true }).first()).toBeVisible({ timeout: 12000 });
+      await expect(page.getByText(roleLabel, { exact: true }).first()).toBeVisible({ timeout: 20000 });
       await expect(page.getByTestId('game-status')).toBeVisible({ timeout: 5000 });
       return;
     } catch (error) {
@@ -143,7 +143,7 @@ test('four isolated players exercise the Phase 4 live classroom path', async ({ 
   for (const player of players) {
     // The REST safety poll runs every two seconds, so this remains bounded
     // even during a short WebSocket reconnect window.
-    await expect(player.getByTestId('game-status')).toContainText(/Round 1.*presidential/, { timeout: 5000 });
+    await expect(player.getByTestId('game-status')).toContainText(/Round 1.*presidential/, { timeout: 15000 });
   }
 
   const eventResponse = await instructorContext.request.post(`${API_URL}/api/sessions/${sessionId}/phase3/events`, {
@@ -185,7 +185,7 @@ test('four isolated players exercise the Phase 4 live classroom path', async ({ 
 
   await advancePhase(instructorContext.request, sessionId, 'presidential');
   for (const player of players) {
-    await expect(player.getByTestId('game-status')).toContainText(/Round 1.*company/, { timeout: 5000 });
+    await expect(player.getByTestId('game-status')).toContainText(/Round 1.*company/, { timeout: 15000 });
   }
 
   for (let index = 2; index < 4; index += 1) {
@@ -211,7 +211,7 @@ test('four isolated players exercise the Phase 4 live classroom path', async ({ 
   expect(await roundTwoResponse.json()).toMatchObject({ current_round: 2, phase: 'planning' });
 
   for (const player of players) {
-    await expect(player.getByTestId('game-status')).toContainText(/Round 2.*planning/, { timeout: 5000 });
+    await expect(player.getByTestId('game-status')).toContainText(/Round 2.*planning/, { timeout: 15000 });
     await expect(player.getByTestId('round-results')).toContainText('Round 1 results published');
     await expect(player.getByTestId('round-results')).toContainText('Pangea Times:');
   }

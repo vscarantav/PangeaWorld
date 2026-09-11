@@ -42,6 +42,21 @@ function isOlderLobbyStatus(current, incoming) {
     && (rank[incoming.status] ?? -1) < (rank[current.status] ?? -1);
 }
 
+async function getCurrentUserWithRetry() {
+  let latestError;
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    try {
+      return await api.getMe();
+    } catch (error) {
+      latestError = error;
+      const transient = /did not respond|failed to fetch|network/i.test(error.message);
+      if (!transient || attempt === 2) throw error;
+      await new Promise((resolve) => window.setTimeout(resolve, 250 * (attempt + 1)));
+    }
+  }
+  throw latestError;
+}
+
 function GameShell({ onSignOut }) {
   const { loading, error, session, nation, company, membership, news, readiness, realtimeConnected, refresh, loadMapSnapshot } = useGame();
   const dashboardRole = membership?.role === 'president' ? 'president' : 'executive';
@@ -55,7 +70,7 @@ function GameShell({ onSignOut }) {
   }, [session?.id, refresh]);
 
   if (loading) return <div style={{ padding: '3rem', color: 'white' }}>Connecting to PangeaWorld server…</div>;
-  if (error) return <div style={{ padding: '3rem', color: '#f87171' }}>Unable to connect to the game server: {error}</div>;
+  if (error && !session) return <div style={{ padding: '3rem', color: '#f87171' }}>Unable to connect to the game server: {error}</div>;
   if (!session) return <div style={{ padding: '3rem', color: 'white' }}>Connecting to PangeaWorld server…</div>;
   const latestCompletedRound = [...(session.rounds || [])].reverse().find((round) => round.status === 'complete' && round.results?.nations);
   return (
@@ -107,16 +122,27 @@ function AuthAndLobby() {
   const [registering, setRegistering] = useState(false);
   const [loadingAuth, setLoadingAuth] = useState(true);
   const [phaseDurationSeconds, setPhaseDurationSeconds] = useState(172800);
+  const lobbyRequestInFlight = useRef(null);
 
   const applyLobby = useCallback((next) => {
     setLobby((current) => isOlderLobbyStatus(current, next) ? current : next);
   }, []);
 
   const loadLobby = useCallback(async (id) => {
-    const next = await api.getLobby(id);
-    applyLobby(next);
-    window.localStorage.setItem('pangeaworld.sessionId', id);
-    return next;
+    const requestId = String(id);
+    if (lobbyRequestInFlight.current?.id === requestId) return lobbyRequestInFlight.current.promise;
+    const request = (async () => {
+      const next = await api.getLobby(id);
+      applyLobby(next);
+      window.localStorage.setItem('pangeaworld.sessionId', id);
+      return next;
+    })();
+    lobbyRequestInFlight.current = { id: requestId, promise: request };
+    try {
+      return await request;
+    } finally {
+      if (lobbyRequestInFlight.current?.promise === request) lobbyRequestInFlight.current = null;
+    }
   }, [applyLobby]);
 
   const loadRecoverable = useCallback(async (currentUser) => {
@@ -138,7 +164,7 @@ function AuthAndLobby() {
 
   useEffect(() => {
     let active = true;
-    api.getMe()
+    getCurrentUserWithRetry()
       .then(async ({ user: current }) => {
         if (!active) return;
         setUser(current);

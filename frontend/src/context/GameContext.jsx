@@ -51,6 +51,7 @@ export function GameProvider({ children, sessionId, membership }) {
   const [error, setError] = useState('');
   const [hydratedSessionId, setHydratedSessionId] = useState(null);
   const refreshInFlight = useRef(null);
+  const liveStateRefreshInFlight = useRef(null);
   const refresh = useCallback(async (targetSessionId) => {
     if (!targetSessionId) return;
     if (refreshInFlight.current) return refreshInFlight.current;
@@ -93,12 +94,21 @@ export function GameProvider({ children, sessionId, membership }) {
     // Phase events are authoritative identifiers from the server. Apply them
     // immediately, then hydrate the rest of the canonical state by REST.
     applySessionEvent(event);
-    const nextReadiness = await api.getReadiness(targetSessionId);
-    setReadiness((current) => newestReadiness(current, nextReadiness));
-    setSession((current) => current && newestSession(current, {
-      ...current, current_round: nextReadiness.round, phase: nextReadiness.phase,
-    }));
-    return nextReadiness;
+    if (liveStateRefreshInFlight.current) return liveStateRefreshInFlight.current;
+    const request = (async () => {
+      const nextReadiness = await api.getReadiness(targetSessionId);
+      setReadiness((current) => newestReadiness(current, nextReadiness));
+      setSession((current) => current && newestSession(current, {
+        ...current, current_round: nextReadiness.round, phase: nextReadiness.phase,
+      }));
+      return nextReadiness;
+    })();
+    liveStateRefreshInFlight.current = request;
+    try {
+      return await request;
+    } finally {
+      if (liveStateRefreshInFlight.current === request) liveStateRefreshInFlight.current = null;
+    }
   }, [applySessionEvent]);
 
   useEffect(() => {
@@ -139,7 +149,9 @@ export function GameProvider({ children, sessionId, membership }) {
         }
         return undefined;
       })
-      .catch((refreshError) => setError(refreshError.message));
+      // Socket/REST reconciliation is a background recovery path. A transient
+      // timeout must not replace an already usable dashboard with an error page.
+      .catch(() => {});
   });
 
   useEffect(() => {
@@ -157,7 +169,7 @@ export function GameProvider({ children, sessionId, membership }) {
           if (hydratedSessionId !== String(sessionId) || compareRoundPhase(nextReadiness, before) > 0) return refresh(sessionId);
           return undefined;
         })
-        .catch((refreshError) => setError(refreshError.message));
+        .catch(() => {});
     };
     const timer = window.setInterval(pollReadiness, 2000);
     return () => window.clearInterval(timer);
