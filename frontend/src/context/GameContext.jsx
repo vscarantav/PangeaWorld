@@ -32,6 +32,11 @@ function newestReadiness(current, incoming) {
 }
 
 export function GameProvider({ children, sessionId, membership }) {
+  // A player is assigned exactly one entity. Keep that identity authoritative
+  // through hydration so a response that finishes before React commits the
+  // initial selection cannot briefly assign every player the first nation.
+  const assignedNationId = membership?.role === 'president' && membership.entity_id != null ? Number(membership.entity_id) : null;
+  const assignedCompanyId = membership?.role === 'executive' && membership.entity_id != null ? Number(membership.entity_id) : null;
   const [session, setSession] = useState(null);
   const [nations, setNations] = useState([]);
   const [companies, setCompanies] = useState([]);
@@ -59,8 +64,8 @@ export function GameProvider({ children, sessionId, membership }) {
       setSession((current) => newestSession(current, nextSession));
       setNations(nextNations); setCompanies(nextCompanies); setMarket(nextMarket); setNews(nextNews.articles || []);
       setReadiness((current) => newestReadiness(current, nextReadiness)); setPhase3Results(nextPhase3Results.results || []);
-      setSelectedNationId((current) => current || nextNations[0]?.id || null);
-      setSelectedCompanyId((current) => current || nextCompanies[0]?.id || null);
+      setSelectedNationId((current) => assignedNationId ?? current ?? nextNations[0]?.id ?? null);
+      setSelectedCompanyId((current) => assignedCompanyId ?? current ?? nextCompanies[0]?.id ?? null);
       setHydratedSessionId(String(targetSessionId));
       setError('');
       return nextSession;
@@ -71,7 +76,7 @@ export function GameProvider({ children, sessionId, membership }) {
     } finally {
       if (refreshInFlight.current === request) refreshInFlight.current = null;
     }
-  }, []);
+  }, [assignedNationId, assignedCompanyId]);
 
   const applySessionEvent = useCallback((event) => {
     if (!event?.round || !event.phase) return;
@@ -112,8 +117,8 @@ export function GameProvider({ children, sessionId, membership }) {
             current_round: initialReadiness.round,
             phase: initialReadiness.phase,
           }));
-          if (membership?.role === 'president') setSelectedNationId(membership.entity_id);
-          if (membership?.role === 'executive') setSelectedCompanyId(membership.entity_id);
+          if (assignedNationId !== null) setSelectedNationId(assignedNationId);
+          if (assignedCompanyId !== null) setSelectedCompanyId(assignedCompanyId);
           setLoading(false);
         }
         await refresh(sessionId);
@@ -121,7 +126,7 @@ export function GameProvider({ children, sessionId, membership }) {
       finally { if (active) setLoading(false); }
     })();
     return () => { active = false; };
-  }, [sessionId, membership?.role, membership?.entity_id, refresh]);
+  }, [sessionId, assignedNationId, assignedCompanyId, refresh]);
 
   const realtimeConnected = useSessionEvents(sessionId, (event) => {
     // A lightweight authoritative phase/readiness fetch updates controls

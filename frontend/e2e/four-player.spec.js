@@ -120,8 +120,10 @@ test('four isolated players exercise the Phase 4 live classroom path', async ({ 
 
   for (let index = 0; index < players.length; index += 1) {
     const roleLabel = index < 2 ? 'President' : 'Company Executive';
+    const assignedNation = index === 0 || index === 2 ? firstNation : secondNation;
     await expectPlayerShell(players[index], roleLabel);
     await expect(players[index].getByTestId('game-status')).toContainText(/Decision:.*Live/);
+    await expect(players[index].getByTestId('game-status')).toContainText(assignedNation.name);
   }
 
   await players[0].getByTitle('Open AI Advisor').click();
@@ -166,7 +168,10 @@ test('four isolated players exercise the Phase 4 live classroom path', async ({ 
       await players[index].getByLabel('Emergency preparedness fund').fill('500');
     }
     await players[index].getByLabel('Submit a direct attack order').check();
-    await players[index].getByLabel('Attack target').selectOption(String(index === 0 ? secondNation.id : firstNation.id));
+    const targetNationId = String(index === 0 ? secondNation.id : firstNation.id);
+    const attackTarget = players[index].getByLabel('Attack target');
+    await expect(attackTarget.locator(`option[value="${targetNationId}"]`)).toHaveCount(1, { timeout: 10000 });
+    await attackTarget.selectOption(targetNationId);
     await players[index].getByLabel('Deploy infantry').fill('1');
     await players[index].getByRole('button', { name: 'Save readiness plan' }).click();
     await confirmReview(players[index]);
