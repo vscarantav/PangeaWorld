@@ -14,7 +14,7 @@ config = context.config
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 
-database_url = os.getenv("PANGEAWORLD_DATABASE_URL")
+database_url = os.getenv("PANGEAWORLD_MIGRATION_DATABASE_URL") or os.getenv("PANGEAWORLD_DATABASE_URL")
 if database_url:
     config.set_main_option("sqlalchemy.url", database_url.replace("%", "%%"))
 
@@ -49,4 +49,3 @@ if context.is_offline_mode():
     run_migrations_offline()
 else:
     run_migrations_online()
-

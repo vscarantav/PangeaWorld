@@ -12,6 +12,8 @@ services:
         value: production
       - key: PANGEAWORLD_DATABASE_URL
         sync: false
+      - key: PANGEAWORLD_MIGRATION_DATABASE_URL
+        sync: false
       - key: PANGEAWORLD_CORS_ORIGINS
         sync: false
       - key: PANGEAWORLD_COOKIE_SECURE
@@ -45,4 +47,3 @@ services:
     envVars:
       - key: PANGEAWORLD_HEALTH_URL
         sync: false
-

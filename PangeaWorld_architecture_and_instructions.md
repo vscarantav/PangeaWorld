@@ -147,7 +147,8 @@ PangeaWorld/
 VITE_API_URL=https://<pangeaworld-api>.onrender.com
 
 # Render FastAPI service
-PANGEAWORLD_DATABASE_URL=postgresql+psycopg://<neon-user>:<password>@<neon-host>/<database>?sslmode=require
+PANGEAWORLD_DATABASE_URL=postgresql+psycopg://<neon-user>:<password>@<neon-pooler-host>/<database>?sslmode=require
+PANGEAWORLD_MIGRATION_DATABASE_URL=postgresql+psycopg://<neon-user>:<password>@<neon-direct-host>/<database>?sslmode=require
 PANGEAWORLD_CORS_ORIGINS=https://<pangeaworld-frontend>.onrender.com
 PANGEAWORLD_COOKIE_SECURE=1
 GEMINI_API_KEY=<render-secret>

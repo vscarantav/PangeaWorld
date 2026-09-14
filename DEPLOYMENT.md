@@ -6,9 +6,10 @@ Cron Job that checks `/healthz`, and Gemini calls proxied only by FastAPI.
 
 ## 1. Create the external services
 
-1. Create a Neon project and database. Copy its pooled connection string and
-   require TLS. For SQLAlchemy with the installed Psycopg driver, use the form
-   `postgresql+psycopg://USER:PASSWORD@HOST/DATABASE?sslmode=require`.
+1. Create a Neon project and database. Copy both its pooled connection string
+   for application traffic and its direct connection string for Alembic. Both
+   must require TLS. For SQLAlchemy with the installed Psycopg driver, use the
+   form `postgresql+psycopg://USER:PASSWORD@HOST/DATABASE?sslmode=require`.
 2. Create a Gemini API key and select explicit advisor and newsroom model IDs.
 3. In Render, create a Blueprint from this repository's `render.yaml`.
 
@@ -26,6 +27,7 @@ Set these values when the Blueprint prompts for unsynchronized variables:
 | Service | Variable | Value |
 | --- | --- | --- |
 | `pangeaworld-api` | `PANGEAWORLD_DATABASE_URL` | Neon pooled URL with `sslmode=require` |
+| `pangeaworld-api` | `PANGEAWORLD_MIGRATION_DATABASE_URL` | Neon direct (non-pooler) URL with `sslmode=require` |
 | `pangeaworld-api` | `PANGEAWORLD_CORS_ORIGINS` | Final static-site HTTPS origin, with no trailing slash |
 | `pangeaworld-api` | `GEMINI_API_KEY` | Gemini secret key |
 | `pangeaworld-api` | `GEMINI_ADVISOR_MODEL` | Approved Gemini model ID |
