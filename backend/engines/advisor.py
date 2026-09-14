@@ -103,7 +103,10 @@ def _provider_response(prompt: str, context: str, system_prompt: str) -> str | N
 
 async def generate_advisor_stream(prompt: str, context: str, system_prompt: str) -> AsyncGenerator[str, None]:
     """Use Gemini when configured; otherwise retain the offline teaching fallback."""
-    response = _provider_response(prompt, context, system_prompt)
+    # The Gemini client is currently synchronous. Keep that network wait off
+    # FastAPI's event loop so one slow provider response cannot stall game
+    # updates, WebSocket traffic, or another student's advisor request.
+    response = await asyncio.to_thread(_provider_response, prompt, context, system_prompt)
     if response is None:
         async for chunk in generate_mock_stream(prompt, context, system_prompt):
             yield chunk
@@ -263,7 +266,7 @@ async def chat_stream(
         response_text=full_response.strip(),
         input_token_count=user_msg.token_count,
         output_token_count=assistant_msg.token_count,
-        latency_ms=10
+        latency_ms=max(0, int(time.monotonic() * 1000) - start_ms)
     )
     
     conversation.message_count += 1

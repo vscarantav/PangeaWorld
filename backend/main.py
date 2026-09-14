@@ -23,7 +23,9 @@ try:
     from .routes.analytics import router as analytics_router
     from .routes.debrief import router as debrief_router
     from .routes.backfill import router as backfill_router
+    from .routes.health import router as health_router
     from .realtime import router as realtime_router
+    from .config import is_production, validate_production_config
 except ImportError:  # Allows `uvicorn main:app` from inside backend.
     from database import engine, Base, get_db, ensure_schema
     from models.domain import GameSession, PhaseEnum
@@ -40,11 +42,19 @@ except ImportError:  # Allows `uvicorn main:app` from inside backend.
     from routes.analytics import router as analytics_router
     from routes.debrief import router as debrief_router
     from routes.backfill import router as backfill_router
+    from routes.health import router as health_router
     from realtime import router as realtime_router
+    from config import is_production, validate_production_config
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
     """Prepare the local schema and seed the development session once."""
+    validate_production_config()
+    if is_production():
+        # Alembic owns production schema changes. Startup deliberately avoids
+        # create_all and SQLite-oriented compatibility alterations on Neon.
+        yield
+        return
     Base.metadata.create_all(bind=engine)
     ensure_schema()
     db = next(get_db())
@@ -75,6 +85,7 @@ app.include_router(analytics_router)
 app.include_router(debrief_router)
 app.include_router(backfill_router)
 app.include_router(realtime_router)
+app.include_router(health_router)
 
 # Configure CORS so the React frontend can communicate with this API
 cors_origins = [origin.strip() for origin in os.getenv(

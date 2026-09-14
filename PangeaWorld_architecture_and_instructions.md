@@ -82,9 +82,9 @@ PangeaWorld/
 - **Military and Conflict**: Unit procurement, readiness, deterministic multi-engagement attacks, retreat thresholds, abstract strategic control, naval blockades, private intelligence, conflict-driven prices/insurance/GDP/approval effects, and Drakmoor's instructor-controlled scripted behavior resolve authoritatively.
 - **Event and News Engine**: The seven-round schedule contains 3 major and 11 minor seeded incidents, supports reactive unrest and bounded instructor scenarios, and persists market reporting, opinion, and source-verification exercises. Gemini-written market summaries use public facts only and fall back safely when the provider is unavailable.
 
-### ⏳ Not Yet Applied (Later Phase 2 and Beyond)
+### ⏳ Remaining Later Work and Deployment Validation
 - **Multiplayer Expansion**: Phase 2 Sprint 1 is complete: authentication, instructor assignment, role enforcement, readiness, enforced deadlines, conservative automatic submissions, session-scoped real-time synchronization, and the four-player one-round vertical slice are implemented. Trade, diplomacy, sanctions, FMI, and AI backfill remain in later Phase 2 sprints.
-- **AI Agent Integration**: Phase 3 supplies the private decision-review prompt adapter, public Gemini newsroom integration, and deterministic Drakmoor behavior. The interactive per-user Gemini advisor, persistent chat history, AI-usage grading, and general AI seat takeover remain Phase 4 work.
+- **AI Agent Integration**: Phase 4 is complete: the private per-user Gemini advisor, persistent chat history, immutable AI-usage logging and grading, instructor analytics, post-game debrief, deterministic Drakmoor behavior, and general AI seat backfill/takeover are implemented. Live Gemini credentials and provider quality/cost validation remain release-readiness work.
 - **Future Portals**: The FMI portal and Pangea Assembly remain planned product features.
 - **Advanced Logistics Construction**: Dedicated sea-lane/airway path records, chokepoint blockades, project approval/lobbying, construction timeframes, and wartime destruction are later-phase systems.
 
@@ -111,7 +111,6 @@ PangeaWorld/
 - Should the visual theme lean toward a **stylized/illustrated map** aesthetic (Risk-like), a **clean data-dashboard** feel (Bloomberg terminal), or a **hybrid** with both?
 
 ### Deployment & Infrastructure
-- Where will this be hosted? University servers, cloud (GCP/AWS/Azure), or a simpler platform like Vercel/Railway?
 - How many concurrent students do you anticipate? (This impacts architecture decisions — 50 students vs. 500 is very different)
 - Will instructors need a **Game Master (GM) panel** to inject events, pause rounds, and override decisions?
 
@@ -122,6 +121,41 @@ PangeaWorld/
 ### Authentication & Access
 - Will students log in with university SSO (e.g., Google Workspace, Microsoft Entra), or is a simple email/password system acceptable?
 - Should teams be able to self-organize, or does the instructor assign roles?
+
+### Confirmed Hosting and AI Services ✅
+
+- **Application hosting:** Render.com is the canonical production host. Deploy the React/Vite frontend as a Render Static Site and the FastAPI backend as a Render Web Service.
+- **Production database:** Neon PostgreSQL is the authoritative production database. SQLite remains local-development and isolated-test storage only; production game state must never depend on a Render service filesystem.
+- **Availability:** Configure a scheduled keep-alive request to the backend health endpoint when the selected Render service plan can suspend after inactivity. Prefer an always-on Render instance for classroom sessions; the cron ping is a deployment safeguard, not a substitute for capacity and uptime guarantees.
+- **AI provider:** Gemini is the production AI provider. All Gemini requests proxy through FastAPI, and the API key and model names are server-side secrets. They must never be embedded in the Vite bundle, committed to Git, logged, or returned by an API response.
+- **Initial scaling boundary:** Run one FastAPI instance while WebSocket fan-out remains in process memory. Before scaling to multiple backend instances, move real-time pub/sub to a shared service such as Redis so every connected classroom receives the same notifications.
+
+#### Canonical production service layout
+
+| Component | Provider | Required configuration |
+| --- | --- | --- |
+| React/Vite frontend | Render Static Site | Build from `frontend`; publish `frontend/dist`; set `VITE_API_URL` to the public FastAPI URL before building. |
+| FastAPI API and WebSockets | Render Web Service | Build/install `backend/requirements.txt`; start Uvicorn on Render's assigned `PORT`; allow the frontend origin; expose `/healthz`; initially run one instance. |
+| Relational game state | Neon PostgreSQL | Use Neon's pooled PostgreSQL connection string with TLS; store it only as `PANGEAWORLD_DATABASE_URL`; apply migrations before serving traffic. |
+| Keep-alive scheduler | Render Cron Job or approved external monitor | Request `GET /healthz` on the interval permitted by the selected hosting plan; alert after repeated failures. Do not mutate game state from this job. |
+| AI advisor and newsroom | Google Gemini API | Set `GEMINI_API_KEY`, `GEMINI_ADVISOR_MODEL`, and `GEMINI_NEWS_MODEL` only on the backend service. |
+
+#### Required production environment variables
+
+```text
+# Render frontend build
+VITE_API_URL=https://<pangeaworld-api>.onrender.com
+
+# Render FastAPI service
+PANGEAWORLD_DATABASE_URL=postgresql+psycopg://<neon-user>:<password>@<neon-host>/<database>?sslmode=require
+PANGEAWORLD_CORS_ORIGINS=https://<pangeaworld-frontend>.onrender.com
+PANGEAWORLD_COOKIE_SECURE=1
+GEMINI_API_KEY=<render-secret>
+GEMINI_ADVISOR_MODEL=<approved-gemini-model>
+GEMINI_NEWS_MODEL=<approved-gemini-model>
+```
+
+Use Render and Neon secret/environment-variable controls for all credentials. The keep-alive URL contains no secret and must call a read-only health route. Live Gemini validation must verify quota behavior, latency, provider failure fallback, privacy guardrails, and usage-cost monitoring before the first student pilot.
 
 ---
 
@@ -785,8 +819,8 @@ graph TB
     end
     
     subgraph Data
-        N["PostgreSQL (Game State + Map Data)"]
-        O["Redis (Sessions / Real-time)"]
+        N["Neon PostgreSQL (Game State + Map Data)"]
+        O["Shared Pub/Sub (required before multi-instance scaling)"]
     end
     
     subgraph AI
@@ -803,8 +837,8 @@ graph TB
 ### Why This Stack?
 - **Backend (Python + FastAPI)**: FastAPI is lightning-fast, uses modern Python type hints (Pydantic), and is ideal for complex game logic, mathematical simulations, and AI integrations.
 - **Frontend (React + Vite)**: A decoupled React single-page application built with Vite provides a fast, interactive user experience for the complex dashboards.
-- **PostgreSQL**: Complex relational data (nations, companies, rounds, decisions) demands a relational DB
-- **Redis**: Fast session management and real-time pub/sub for live updates
+- **Neon PostgreSQL**: Complex relational data (nations, companies, rounds, decisions) uses managed PostgreSQL outside Render's ephemeral service filesystem.
+- **Shared Pub/Sub**: The first Render deployment stays on one backend instance. Redis or equivalent shared pub/sub becomes mandatory before horizontal scaling.
 - **D3.js/Mapbox**: Required for the interactive world map and complex data visualizations
 - **Socket.io**: Real-time notifications when events fire or trade proposals arrive
 
@@ -905,8 +939,8 @@ Full data schema from the architecture (lines 294–342):
 - `Decision` — id, round_id, player_type (president/company), entity_id, decision_data (JSON), submitted_at
 
 #### [x] `backend/database.py` — Database connection & session management
-- SQLite for local development (swap to PostgreSQL for deployment later)
-- Synchronous SQLAlchemy engine with FastAPI dependency injection for the local SQLite MVP (async/PostgreSQL migration deferred to deployment work)
+- SQLite for local development and isolated tests; Neon PostgreSQL is required for Render deployment.
+- Synchronous SQLAlchemy with FastAPI dependency injection remains the initial production path. Add the PostgreSQL driver and managed schema migrations during release readiness; do not run SQLite-specific schema alteration logic against Neon.
 
 #### [x] `backend/seed_data.py` — Nation starting profiles
 - All 8 nations with resource profiles, starting GDP, military indices, and geographic data
@@ -1318,6 +1352,8 @@ Verification: 55 backend tests, 3 deterministic map tests, frontend lint, and pr
 
 > **Goal:** Deliver a per-user Gemini AI advisor with persistent chat history, AI-usage logging and grading, an instructor analytics dashboard, post-game debrief tools, and general AI seat backfill — completing the Phase 4 roadmap items and making the product classroom-ready.
 
+> **Sprint status (Sep 14, 2026): ✅ COMPLETE — 4/4 days complete.** The complete seven-round mixed human/AI classroom path, post-game debrief, advisor/analytics workflow, and mid-game AI-seat takeover are covered by automated acceptance tests. Production hosting and live Gemini credential validation remain release-readiness work rather than Phase 4 scope.
+
 > **Prerequisites:** The Phase 3 closure sprint delivered the Phase 4 advisor prompt adapter, the opportunity-cost decision-review contract, the deterministic Drakmoor behavior engine, and the Gemini newsroom integration with fallback. This sprint builds the interactive, per-user advisory layer and instructor analytics on top of those foundations.
 
 ### Sprint Scope and Guardrails
@@ -1335,7 +1371,7 @@ Verification: 55 backend tests, 3 deterministic map tests, frontend lint, and pr
 - [x] **Day 1:** Gemini advisor backend — per-user chat service, system prompt engineering, guardrails, and persistent conversation history
 - [x] **Day 2:** Frontend AI chat panel, real-time streaming, and AI-usage logging pipeline
 - [x] **Day 3:** Instructor analytics dashboard and AI-usage grading
-- [ ] **Day 4:** Post-game debrief tools, AI seat backfill, end-to-end verification, and hardening
+- [x] **Day 4:** Post-game debrief tools, AI seat backfill, end-to-end verification, and hardening
 
 ### Day 1 (Sep 11) — Gemini Advisor Backend
 
@@ -1343,7 +1379,7 @@ Verification: 55 backend tests, 3 deterministic map tests, frontend lint, and pr
 
 #### Backend
 
-- [ ] `backend/engines/advisor.py` — Gemini advisor service
+- [x] `backend/engines/advisor.py` — Gemini advisor service
   - Per-user chat session management with persistent conversation history (stored in SQLite, keyed by user + game session + role)
   - System prompt template engine with role-specific prompts:
     - **Company Executive advisor**: business strategy, supply chain optimization, finance, pricing, R&D trade-offs, market share analysis
@@ -1356,18 +1392,18 @@ Verification: 55 backend tests, 3 deterministic map tests, frontend lint, and pr
     - Redact any Confidential Intel Vault references from the context window
     - Rate limiting per user per round (configurable, default 20 prompts per phase)
 
-- [ ] `backend/models/ai_chat.py` — AI conversation models
+- [x] `backend/models/ai_chat.py` — AI conversation models
   - `AIConversation` — id, user_id, session_id, role, created_at, message_count
   - `AIMessage` — id, conversation_id, role (user/assistant/system), content, token_count, timestamp, round_number, phase
   - `AIUsageLog` — id, user_id, session_id, round_number, prompt_text, response_text, token_count, latency_ms, guardrail_flags, timestamp
 
-- [ ] `backend/routes/advisor.py` — AI advisor API endpoints
+- [x] `backend/routes/advisor.py` — AI advisor API endpoints
   - `POST /api/sessions/{id}/advisor/chat` — send a prompt, receive a streamed Gemini response
   - `GET /api/sessions/{id}/advisor/history` — retrieve the user's conversation history for the current session
   - `DELETE /api/sessions/{id}/advisor/history` — clear conversation history (user-initiated, with audit log)
   - All routes require authentication and enforce role-entity ownership
 
-- [ ] Backend tests for advisor service:
+- [x] Backend tests for advisor service:
   - Guardrail rejection of cross-player data queries
   - Rate limiting enforcement
   - Conversation persistence and retrieval
@@ -1377,10 +1413,10 @@ Verification: 55 backend tests, 3 deterministic map tests, frontend lint, and pr
 
 #### Day 1 Acceptance
 
-- [ ] A Company Executive and a President can each initiate an advisory conversation; their histories are isolated and persist across browser sessions.
-- [ ] The advisor contextualizes responses using the player's live game data and public Global Event Ledger.
-- [ ] Guardrails reject attempts to extract private data or bypass Socratic guidance.
-- [ ] Provider unavailability returns a graceful, user-friendly fallback message.
+- [x] A Company Executive and a President can each initiate an advisory conversation; their histories are isolated and persist across browser sessions.
+- [x] The advisor contextualizes responses using the player's live game data and public Global Event Ledger.
+- [x] Guardrails reject attempts to extract private data or bypass Socratic guidance.
+- [x] Provider unavailability returns a graceful, user-friendly fallback message.
 
 ### Day 2 (Sep 12) — Frontend AI Chat Panel & Usage Logging
 
@@ -1388,7 +1424,7 @@ Verification: 55 backend tests, 3 deterministic map tests, frontend lint, and pr
 
 #### Frontend
 
-- [ ] `frontend/src/components/AIAdvisor/ChatPanel.jsx` — embedded AI chat panel
+- [x] `frontend/src/components/AIAdvisor/ChatPanel.jsx` — embedded AI chat panel
   - Persistent sidebar or modal panel accessible from both President and Executive dashboards
   - Message history display with user/assistant message bubbles, timestamps, and round context
   - Streamed response rendering (tokens appear progressively as the Gemini response streams)
@@ -1398,23 +1434,23 @@ Verification: 55 backend tests, 3 deterministic map tests, frontend lint, and pr
   - Loading, error, and provider-unavailable states with clear messaging
   - Mobile-responsive layout
 
-- [ ] `frontend/src/components/AIAdvisor/ContextBadge.jsx` — visual indicator of what context the advisor is using
+- [x] `frontend/src/components/AIAdvisor/ContextBadge.jsx` — visual indicator of what context the advisor is using
   - Shows "Using: Round 3 data, your financials, public market data" to build trust and transparency
   - Highlights when the advisor is working with limited context (e.g., Round 1 with minimal history)
 
 #### Backend — Usage Logging Pipeline
 
-- [ ] `backend/engines/ai_logger.py` — immutable AI-usage logging
+- [x] `backend/engines/ai_logger.py` — immutable AI-usage logging
   - Every prompt/response pair is logged with: user_id, session_id, round_number, phase, prompt_text, response_text, input_token_count, output_token_count, total_token_count, latency_ms, guardrail_flags (any triggered), timestamp
   - Logs are append-only and immutable — no deletion or modification permitted
   - Batch write for efficiency; flush on phase transition
 
-- [ ] `backend/routes/ai_logs.py` — instructor-only AI usage endpoints
+- [x] `backend/routes/ai_logs.py` — instructor-only AI usage endpoints
   - `GET /api/sessions/{id}/ai-usage` — aggregated AI usage statistics per student/team
   - `GET /api/sessions/{id}/ai-usage/{user_id}` — detailed conversation log for a specific student
   - Both routes require instructor role authorization
 
-- [ ] Integration tests for usage logging:
+- [x] Integration tests for usage logging:
   - Log immutability (reject deletion/modification attempts)
   - Correct token counting and latency recording
   - Instructor-only access enforcement
@@ -1422,10 +1458,10 @@ Verification: 55 backend tests, 3 deterministic map tests, frontend lint, and pr
 
 #### Day 2 Acceptance
 
-- [ ] The AI advisor panel is embedded and functional in both President and Executive dashboards with streamed responses.
-- [ ] Conversation history persists after page refresh, sign-out/sign-in, and across rounds.
-- [ ] Every AI interaction is logged immutably with full metadata.
-- [ ] Instructors can retrieve per-student AI usage logs; non-instructors are rejected.
+- [x] The AI advisor panel is embedded and functional in both President and Executive dashboards with streamed responses.
+- [x] Conversation history persists after page refresh, sign-out/sign-in, and across rounds.
+- [x] Every AI interaction is logged immutably with full metadata.
+- [x] Instructors can retrieve per-student AI usage logs; non-instructors are rejected.
 
 ### Day 3 (Sep 13) — Instructor Analytics Dashboard & AI Grading
 
@@ -1492,7 +1528,7 @@ Verification: 55 backend tests, 3 deterministic map tests, frontend lint, and pr
 
 #### Backend — Post-Game Debrief Tools
 
-- [ ] `backend/engines/debrief.py` — post-game analysis engine
+- [x] `backend/engines/debrief.py` — post-game analysis engine
   - **Historical Playback**: reconstruct the complete game timeline from the immutable decision ledger, round results, and event log; serve a round-by-round or chronological playback feed
   - **"What-If" Analysis**: for a given round and decision, re-run the deterministic engine with the recorded next-best foregone alternative and compare outcomes; clearly label the counterfactual as an estimate, not a historical fact
   - **Real-World Connections**: map game events to a curated catalog of real-world parallels (e.g., "Your nation experienced hyperinflation — here's what happened in Venezuela 2016–2020"); catalog is instructor-extensible
@@ -1519,24 +1555,24 @@ Verification: 55 backend tests, 3 deterministic map tests, frontend lint, and pr
 
 #### Frontend — Debrief & Backfill UI
 
-- [ ] `frontend/src/components/Debrief/TimelineView.jsx` — post-game timeline playback
+- [x] `frontend/src/components/Debrief/DebriefPanel.jsx` — post-game timeline playback
   - Round-by-round chronological view with expandable decision details, events, and results
   - Visual indicators for major turning points (wars, disasters, market shocks)
 
-- [ ] `frontend/src/components/Debrief/WhatIfPanel.jsx` — counterfactual analysis
+- [x] `frontend/src/components/Debrief/DebriefPanel.jsx` — counterfactual analysis
   - Select a past decision, view the recorded alternative, and compare projected vs. actual outcomes
   - Clear labeling: "Estimated counterfactual — not a guaranteed outcome"
 
-- [ ] `frontend/src/components/Debrief/RealWorldPanel.jsx` — real-world connections
+- [x] `frontend/src/components/Debrief/DebriefPanel.jsx` — real-world connections
   - Display curated parallels with brief descriptions and optional links to further reading
 
-- [ ] Lobby and dashboard updates for AI backfill:
+- [x] Lobby and dashboard updates for AI backfill:
   - AI-controlled seats display a distinct badge/icon
   - Instructor can initiate mid-game takeover from the lobby
 
 #### End-to-End Verification
 
-- [ ] Full seven-round game with four human players + AI backfill for remaining seats:
+- [x] Full seven-round game with four human players + AI backfill for remaining seats:
   - AI advisor conversations for both President and Executive roles across multiple rounds
   - Guardrail enforcement verified (cross-player data blocked, Socratic method maintained)
   - AI usage logged and visible in instructor analytics
@@ -1546,13 +1582,15 @@ Verification: 55 backend tests, 3 deterministic map tests, frontend lint, and pr
   - Export produces valid CSV and JSON
 - [x] Backend regression: all existing Phase 1–3 tests pass with no regressions
 - [x] Frontend lint and production build pass
-- [ ] Browser acceptance test: four isolated clients complete one round with AI advisor usage, instructor reviews analytics, and debrief tools load after game completion
+- [x] Browser acceptance test: four isolated clients complete all seven rounds with AI advisor usage, instructor analytics, AI backfill for vacant seats, reload recovery, and player/instructor debrief tools after game completion
+
+**Final verification (Sep 14, 2026):** 86 backend tests and 3 deterministic frontend map tests pass; frontend lint completes without errors; the production build succeeds; and the isolated four-browser Phase 4 rehearsal passes (1 test, 2.3 minutes). The browser path covers all seven rounds, reviewed human decisions, conservative AI backfill for vacant seats, advisor use by both roles across multiple rounds, instructor analytics, identical authoritative results, sign-out/sign-in, map restoration, transient phase-advance reconciliation, and player/instructor post-game debrief with a labeled What-If estimate. Backend coverage separately verifies guardrails, immutable AI logs, exports, provider fallback, full AI grading, and mid-game human takeover of an AI-controlled seat.
 
 #### Day 4 Acceptance
 
 - [x] The post-game debrief timeline, what-if analysis, and real-world connections are functional and accessible to all session members.
 - [x] AI seat backfill covers unfilled seats; mid-game human takeover works without data loss.
-- [ ] The full Phase 4 layer (advisor, logging, grading, analytics, debrief, backfill) is regression-tested end-to-end.
+- [x] The full Phase 4 layer (advisor, logging, grading, analytics, debrief, backfill) is regression-tested end-to-end.
 - [x] All existing Phase 1–3 tests, frontend lint, and production build pass.
 
 ### Sprint Verification Commands
@@ -1576,9 +1614,29 @@ npm run test:e2e
 
 The sprint is complete only when every Progress Tracker item is checked, the instructor analytics dashboard renders live data, the AI advisor is functional in both dashboards, AI usage is graded, the debrief tools work post-game, backfilled seats submit decisions autonomously, and the browser acceptance test passes from separate sessions.
 
+### Release Readiness — Render, Neon, Keep-Alive, and Gemini
+
+> **Status (Sep 14, 2026): implementation-ready; external provisioning pending.** Repository-owned deployment configuration is complete and regression-tested. Actual production activation requires the owner's Neon database, Render account/repository connection, public service URLs, and Gemini API credentials.
+
+- [x] Add a Render Blueprint for the Vite Static Site, single-instance FastAPI Web Service, pre-deploy database migration, health check, and scheduled keep-alive job.
+- [x] Add Neon-compatible Psycopg support and keep SQLite isolated to local development and tests.
+- [x] Add an Alembic Phase 4 schema baseline and verify it upgrades and stamps a fresh disposable database.
+- [x] Prevent production startup with SQLite, non-TLS PostgreSQL, insecure cookies, HTTP CORS origins, or missing Gemini configuration.
+- [x] Add the read-only `GET /healthz` database readiness endpoint and a keep-alive client that accepts only an HTTPS `/healthz` URL.
+- [x] Document deployment order, required secrets, initial single-instance WebSocket boundary, smoke checks, and operating constraints in `DEPLOYMENT.md`.
+- [ ] Create the Neon project, copy its pooled TLS connection string into Render, and run the Alembic migration against the real database.
+- [ ] Create/select the Gemini API key and advisor/news model IDs, store them on the Render backend, and verify live quota, latency, fallback, privacy, and cost behavior.
+- [ ] Connect the repository to Render, supply all unsynchronized Blueprint variables, and deploy the API, static site, and cron service.
+- [ ] Run the public-URL smoke test: health, secure authentication cookie, lobby, WebSocket, reviewed President/Executive decisions, Gemini advisor/history, analytics, and keep-alive logs.
+- [ ] Confirm expected concurrent enrollment before increasing API instances; shared pub/sub is required before horizontal scaling.
+
+**Repository verification (Sep 14, 2026):** 93 backend tests and 3 deterministic frontend tests pass; frontend lint completes without errors; the production frontend build succeeds; Python deployment modules compile; and the Alembic baseline upgrades a fresh database to `20260914_0001 (head)`. The previously verified seven-round four-browser Phase 4 rehearsal remains the gameplay acceptance baseline.
+
 ### Explicitly Deferred Beyond Phase 4 Sprint 1
 
-- [ ] University SSO integration, production PostgreSQL/Redis deployment, TLS, email verification, and password recovery
+- [ ] Render production deployment: Static Site frontend, FastAPI Web Service, Neon PostgreSQL migration, secure cookies/TLS, production CORS, health endpoint, and keep-alive cron/monitor
+- [ ] Live Gemini credential, quota, latency, fallback, privacy, and cost validation on the Render backend
+- [ ] University SSO integration, email verification, and password recovery
 - [ ] Full Pangea Assembly (UN-style forum) with live chat, resolutions, and voting
 - [ ] FMI portal with lending products, conditionality, and repayment workflows
 - [ ] Bilateral trade proposals, treaties, and sanctions enforcement

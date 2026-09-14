@@ -3,14 +3,25 @@ import os
 
 from sqlalchemy import create_engine, inspect, text
 from sqlalchemy.orm import declarative_base, sessionmaker
+from sqlalchemy.pool import NullPool
 
 DATABASE_PATH = Path(__file__).resolve().with_name("pangeaworld.db")
 SQLALCHEMY_DATABASE_URL = os.getenv("PANGEAWORLD_DATABASE_URL", f"sqlite:///{DATABASE_PATH.as_posix()}")
 
-# Setting check_same_thread=False is needed for SQLite when used with FastAPI
-engine = create_engine(
-    SQLALCHEMY_DATABASE_URL, connect_args={"check_same_thread": False}
-)
+if SQLALCHEMY_DATABASE_URL.startswith("sqlite"):
+    # A WebSocket stays connected for hours. NullPool ensures the short
+    # authentication transaction used to accept it cannot consume a slot in a
+    # small process-wide QueuePool during reconnect or phase-refresh bursts.
+    engine = create_engine(
+        SQLALCHEMY_DATABASE_URL,
+        connect_args={"check_same_thread": False},
+        poolclass=NullPool,
+    )
+else:
+    # PostgreSQL and other production databases reject SQLite-only connection
+    # arguments. Verify pooled connections before use so a recycled managed-DB
+    # connection does not surface as a failed classroom request.
+    engine = create_engine(SQLALCHEMY_DATABASE_URL, pool_pre_ping=True)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 Base = declarative_base()

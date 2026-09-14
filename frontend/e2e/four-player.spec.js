@@ -27,9 +27,56 @@ async function confirmReview(page) {
 }
 
 async function advancePhase(request, sessionId, expectedPhase) {
-  const response = await request.post(`${API_URL}/api/sessions/${sessionId}/advance`, {
-    data: { expected_phase: expectedPhase },
-  });
+  let lastError;
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    try {
+      const response = await request.post(`${API_URL}/api/sessions/${sessionId}/advance`, {
+        data: { expected_phase: expectedPhase },
+      });
+      if (response.ok()) return;
+      lastError = new Error(await response.text());
+    } catch (error) {
+      lastError = error;
+    }
+
+    // A connection can reset after the server commits but before the client
+    // receives the response. Reconcile before retrying so an accepted advance
+    // is never applied twice.
+    try {
+      const readiness = await request.get(`${API_URL}/api/sessions/${sessionId}/readiness`);
+      if (readiness.ok() && (await readiness.json()).phase !== expectedPhase) return;
+    } catch {
+      // Retry below; REST is authoritative once it is reachable again.
+    }
+    await new Promise((resolve) => setTimeout(resolve, 250 * (attempt + 1)));
+  }
+  throw lastError;
+}
+
+async function submitReviewedDecision(request, sessionId, role, entityId) {
+  const decisionData = role === 'president'
+    ? { government_spending: 25 }
+    : { production_units: 1, rnd_investment: 10 };
+  const previewResponse = await request.post(
+    `${API_URL}/api/sessions/${sessionId}/decision-review/${role}/${entityId}`,
+    { data: { decision_data: decisionData } },
+  );
+  expect(previewResponse.ok(), await previewResponse.text()).toBeTruthy();
+  const preview = await previewResponse.json();
+  expect(preview.alternatives.length).toBeGreaterThan(0);
+  const reviewedData = {
+    ...decisionData,
+    opportunity_cost: {
+      preview_token: preview.preview_token,
+      alternative_id: preview.alternatives[0].id,
+      rationale: 'I prefer this constrained allocation to the recorded alternative because it preserves flexibility while meeting the immediate need.',
+    },
+  };
+  const collection = role === 'president' ? 'nations' : 'companies';
+  const response = await request.post(
+    `${API_URL}/api/sessions/${sessionId}/${collection}/${entityId}/decisions`,
+    { data: { decision_data: reviewedData } },
+  );
   expect(response.ok(), await response.text()).toBeTruthy();
 }
 
@@ -270,6 +317,60 @@ test('four isolated players exercise the Phase 4 live classroom path', async ({ 
   await expect(players[0].getByTestId('game-status')).toContainText(/Round 2.*planning/);
   await players[0].getByRole('button', { name: 'Map View' }).click();
   await expect(players[0].locator('canvas').first()).toBeVisible();
+
+  // The four live dashboards have already proved cross-client synchronization
+  // for a complete round. Keep their authenticated contexts for subsequent
+  // human decisions, but close three idle pages so background polling does not
+  // add artificial load to the seven-year engine rehearsal.
+  await Promise.all(players.slice(1).map((page) => page.close()));
+
+  // Finish the remaining six years through the same authenticated player
+  // sessions. This keeps four seats human-controlled while the server's
+  // conservative backfill engine owns every vacant seat.
+  for (let round = 2; round <= 7; round += 1) {
+    await advancePhase(instructorContext.request, sessionId, 'planning');
+    await Promise.all([
+      submitReviewedDecision(playerContexts[0].request, sessionId, 'president', Number(seats[0].split(':')[1])),
+      submitReviewedDecision(playerContexts[1].request, sessionId, 'president', Number(seats[1].split(':')[1])),
+    ]);
+    if (round === 4) {
+      const advisorResponse = await playerContexts[1].request.post(
+        `${API_URL}/api/sessions/${sessionId}/advisor/chat`,
+        { data: { prompt: 'How should I compare readiness spending with civilian investment this round?' } },
+      );
+      expect(advisorResponse.ok(), await advisorResponse.text()).toBeTruthy();
+    }
+    await advancePhase(instructorContext.request, sessionId, 'presidential');
+    await Promise.all([
+      submitReviewedDecision(playerContexts[2].request, sessionId, 'company', Number(seats[2].split(':')[1])),
+      submitReviewedDecision(playerContexts[3].request, sessionId, 'company', Number(seats[3].split(':')[1])),
+    ]);
+    if (round === 4) {
+      const advisorResponse = await playerContexts[2].request.post(
+        `${API_URL}/api/sessions/${sessionId}/advisor/chat`,
+        { data: { prompt: 'What trade-off does this production level create for research and cash reserves?' } },
+      );
+      expect(advisorResponse.ok(), await advisorResponse.text()).toBeTruthy();
+    }
+    await advancePhase(instructorContext.request, sessionId, 'company');
+    await advancePhase(instructorContext.request, sessionId, 'processing');
+  }
+
+  const completedResponse = await instructorContext.request.get(`${API_URL}/api/sessions/${sessionId}`);
+  expect(completedResponse.ok(), await completedResponse.text()).toBeTruthy();
+  expect(await completedResponse.json()).toMatchObject({ current_round: 7, phase: 'complete' });
+
+  await players[0].reload();
+  await expect(players[0].getByRole('heading', { name: 'Post-game debrief' })).toBeVisible({ timeout: 30000 });
+  await expect(players[0].getByText('Round 7', { exact: true })).toBeVisible();
+  const whatIfButton = players[0].getByRole('button', { name: /Compare your Round .* recorded alternative/ }).first();
+  await expect(whatIfButton).toBeVisible();
+  await whatIfButton.click();
+  await expect(players[0].getByText(/Estimated counterfactual .* not a guaranteed outcome/)).toBeVisible();
+
+  await instructor.reload();
+  await expect(instructor.getByRole('heading', { name: 'Post-game debrief' })).toBeVisible({ timeout: 30000 });
+  await expect(instructor.getByRole('button', { name: 'Compare your Round 7 recorded alternative' }).first()).toBeVisible();
 
   await Promise.all(playerContexts.map((context) => context.close()));
   await instructorContext.close();
