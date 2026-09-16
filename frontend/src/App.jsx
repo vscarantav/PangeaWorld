@@ -4,6 +4,19 @@ import BackfillPanel from './components/InstructorDashboard/BackfillPanel';
 import DebriefPanel from './components/Debrief/DebriefPanel';
 import DecisionFeedback from './components/DecisionFeedback';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
+import {
+  ArrowRight,
+  Building2,
+  Eye,
+  EyeOff,
+  Globe2,
+  Landmark,
+  LockKeyhole,
+  Mail,
+  ShieldCheck,
+  Sparkles,
+  TrendingUp,
+} from 'lucide-react';
 import PresidentDashboard from './components/PresidentDashboard';
 import ExecutiveDashboard from './components/ExecutiveDashboard';
 import GameMap from './components/GameMap';
@@ -55,6 +68,150 @@ async function getCurrentUserWithRetry() {
     }
   }
   throw latestError;
+}
+
+function AuthLoadingScreen() {
+  return (
+    <main className="auth-portal auth-portal-loading">
+      <div className="auth-loading-mark" aria-hidden="true"><Globe2 /></div>
+      <div className="auth-loading-copy">
+        <span>PangeaWorld</span>
+        <p>Restoring your secure session…</p>
+      </div>
+    </main>
+  );
+}
+
+function AuthenticationPage({
+  email,
+  error,
+  onAuthenticate,
+  onEmailChange,
+  onPasswordChange,
+  onToggleMode,
+  password,
+  registering,
+  submitting,
+}) {
+  const [showPassword, setShowPassword] = useState(false);
+
+  return (
+    <main className="auth-portal">
+      <section className="auth-story" aria-label="About PangeaWorld">
+        <div className="auth-story-glow auth-story-glow-one" />
+        <div className="auth-story-glow auth-story-glow-two" />
+        <header className="auth-brand">
+          <span className="auth-brand-mark"><Globe2 aria-hidden="true" /></span>
+          <span>Pangea<span>World</span></span>
+        </header>
+
+        <div className="auth-story-content">
+          <div className="auth-kicker"><Sparkles aria-hidden="true" /> Global strategy simulation</div>
+          <h1>Lead a nation.<br /><span>Shape a world.</span></h1>
+          <p>
+            Navigate markets, diplomacy, and difficult trade-offs in a living
+            classroom simulation where every decision changes the story.
+          </p>
+
+          <div className="auth-capabilities" aria-label="Simulation features">
+            <div><span><Landmark aria-hidden="true" /></span><strong>Govern nations</strong><small>Policy and diplomacy</small></div>
+            <div><span><Building2 aria-hidden="true" /></span><strong>Lead companies</strong><small>Markets and strategy</small></div>
+            <div><span><TrendingUp aria-hidden="true" /></span><strong>Shape outcomes</strong><small>Seven dynamic rounds</small></div>
+          </div>
+        </div>
+
+        <div className="auth-world-art" aria-hidden="true">
+          <div className="auth-orbit auth-orbit-one" />
+          <div className="auth-orbit auth-orbit-two" />
+          <div className="auth-world-sphere">
+            <span className="auth-world-line auth-world-line-one" />
+            <span className="auth-world-line auth-world-line-two" />
+            <span className="auth-world-meridian" />
+          </div>
+        </div>
+
+        <footer className="auth-story-footer">
+          <span>Economic leadership</span><i />
+          <span>Strategic thinking</span><i />
+          <span>AI-supported learning</span>
+        </footer>
+      </section>
+
+      <section className="auth-access">
+        <div className="auth-mobile-brand">
+          <span className="auth-brand-mark"><Globe2 aria-hidden="true" /></span>
+          <span>Pangea<span>World</span></span>
+        </div>
+
+        <div className="auth-card">
+          <div className="auth-card-heading">
+            <span className="auth-overline">Player portal</span>
+            <h2>{registering ? 'Create your account' : 'Welcome back'}</h2>
+            <p>{registering ? 'Join your class and prepare to take your seat.' : 'Sign in to return to your nation or company.'}</p>
+          </div>
+
+          <form className="auth-form" onSubmit={onAuthenticate}>
+            <label className="auth-field">
+              <span>Email address</span>
+              <div className="auth-input-wrap">
+                <Mail aria-hidden="true" />
+                <input
+                  type="email"
+                  placeholder="Email"
+                  value={email}
+                  onChange={onEmailChange}
+                  autoComplete="email"
+                  required
+                />
+              </div>
+            </label>
+
+            <label className="auth-field">
+              <span>Password</span>
+              <div className="auth-input-wrap">
+                <LockKeyhole aria-hidden="true" />
+                <input
+                  type={showPassword ? 'text' : 'password'}
+                  placeholder="Password (8+ characters)"
+                  value={password}
+                  onChange={onPasswordChange}
+                  autoComplete={registering ? 'new-password' : 'current-password'}
+                  minLength={8}
+                  required
+                />
+                <button
+                  type="button"
+                  className="auth-password-toggle"
+                  onClick={() => setShowPassword((visible) => !visible)}
+                  aria-label={showPassword ? 'Hide password' : 'Show password'}
+                >
+                  {showPassword ? <EyeOff aria-hidden="true" /> : <Eye aria-hidden="true" />}
+                </button>
+              </div>
+            </label>
+
+            {error && <div className="auth-error" role="alert">{error}</div>}
+
+            <button className="auth-submit" type="submit" disabled={submitting}>
+              <span>{submitting ? (registering ? 'Creating account…' : 'Signing in…') : (registering ? 'Create account' : 'Sign in')}</span>
+              {!submitting && <ArrowRight aria-hidden="true" />}
+            </button>
+          </form>
+
+          <div className="auth-mode-switch">
+            <span>{registering ? 'Already part of PangeaWorld?' : 'New to PangeaWorld?'}</span>
+            <button type="button" onClick={onToggleMode} disabled={submitting}>
+              {registering ? 'Already have an account?' : 'Need an account?'}
+            </button>
+          </div>
+
+          <div className="auth-trust"><ShieldCheck aria-hidden="true" /> Secure classroom access</div>
+        </div>
+
+        <p className="auth-access-footer">PangeaWorld · Decisions today, consequences tomorrow.</p>
+      </section>
+    </main>
+  );
 }
 
 function GameShell({ onSignOut }) {
@@ -121,6 +278,7 @@ function AuthAndLobby() {
   const [error, setError] = useState('');
   const [registering, setRegistering] = useState(false);
   const [loadingAuth, setLoadingAuth] = useState(true);
+  const [authSubmitting, setAuthSubmitting] = useState(false);
   const [phaseDurationSeconds, setPhaseDurationSeconds] = useState(172800);
   const lobbyRequestInFlight = useRef(null);
 
@@ -192,6 +350,7 @@ function AuthAndLobby() {
   const authenticate = async (event) => {
     event.preventDefault();
     setError('');
+    setAuthSubmitting(true);
     try {
       const result = registering ? await api.register({ email, password }) : await api.login({ email, password });
       setUser(result.user);
@@ -199,6 +358,8 @@ function AuthAndLobby() {
       if (!restored) await loadRecoverable(result.user);
     } catch (err) {
       setError(err.message);
+    } finally {
+      setAuthSubmitting(false);
     }
   };
 
@@ -256,8 +417,20 @@ function AuthAndLobby() {
     }
   };
 
-  if (loadingAuth) return <main className="auth-page"><h1>PangeaWorld</h1><p>Restoring your secure session…</p></main>;
-  if (!user) return <main className="auth-page"><h1>PangeaWorld</h1><form onSubmit={authenticate}><input placeholder="Email" value={email} onChange={(event) => setEmail(event.target.value)} /><input type="password" placeholder="Password (8+ characters)" value={password} onChange={(event) => setPassword(event.target.value)} /><button>{registering ? 'Create account' : 'Sign in'}</button></form><button onClick={() => setRegistering(!registering)}>{registering ? 'Already have an account?' : 'Need an account?'}</button>{error && <p>{error}</p>}</main>;
+  if (loadingAuth) return <AuthLoadingScreen />;
+  if (!user) return (
+    <AuthenticationPage
+      email={email}
+      error={error}
+      onAuthenticate={authenticate}
+      onEmailChange={(event) => setEmail(event.target.value)}
+      onPasswordChange={(event) => setPassword(event.target.value)}
+      onToggleMode={() => { setRegistering(!registering); setError(''); }}
+      password={password}
+      registering={registering}
+      submitting={authSubmitting}
+    />
+  );
   if (!lobby) return <main className="auth-page"><h1>Welcome, {user.display_name || user.email}</h1>{user.is_instructor && <div><label>Phase deadline <select aria-label="Phase deadline" value={phaseDurationSeconds} onChange={(event) => setPhaseDurationSeconds(Number(event.target.value))}><option value={172800}>48 hours</option><option value={300}>5 minutes (testing)</option><option value={30}>30 seconds (testing)</option><option value={5}>5 seconds (automated testing)</option></select></label><button onClick={createGame}>Create instructor game</button></div>}{recoverable.map((legacy) => <button key={legacy.id} onClick={() => recoverGame(legacy)}>Recover legacy game #{legacy.id}</button>)}<div><input placeholder="Lobby join code" value={joinCode} onChange={(event) => setJoinCode(event.target.value)} /><button onClick={joinGame}>Join game</button></div>{!user.is_instructor && <p>Ask your instructor for a lobby join code.</p>}<button onClick={signOut}>Sign out</button>{error && <p>{error}</p>}</main>;
 
   const mine = lobby.my_membership;
