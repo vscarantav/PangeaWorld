@@ -71,14 +71,15 @@ def create_auth_session(db: Session, user: User, response: Response, revoke_exis
     db.add(session)
     db.commit()
     db.refresh(session)
+    secure_cookie = os.getenv("PANGEAWORLD_COOKIE_SECURE", "0") == "1"
     response.set_cookie(
         SESSION_COOKIE,
         raw_token,
         max_age=SESSION_DAYS * 24 * 60 * 60,
         expires=expires_at,
         httponly=True,
-        secure=os.getenv("PANGEAWORLD_COOKIE_SECURE", "0") == "1",
-        samesite="lax",
+        secure=secure_cookie,
+        samesite="none" if secure_cookie else "lax",
         path="/",
     )
     return session

@@ -88,6 +88,36 @@ def test_login_revokes_the_previous_session_token():
     assert old_client.get("/api/auth/me").status_code == 401
 
 
+def test_session_cookie_allows_cross_origin_requests_in_production(monkeypatch):
+    monkeypatch.setenv("PANGEAWORLD_COOKIE_SECURE", "1")
+    client, _, _ = make_client()
+
+    response = client.post(
+        "/api/auth/register",
+        json={"email": "production-cookie@example.com", "password": "valid password"},
+    )
+
+    assert response.status_code == 201
+    cookie = response.headers["set-cookie"].lower()
+    assert "secure" in cookie
+    assert "samesite=none" in cookie
+
+
+def test_session_cookie_remains_compatible_with_local_http(monkeypatch):
+    monkeypatch.delenv("PANGEAWORLD_COOKIE_SECURE", raising=False)
+    client, _, _ = make_client()
+
+    response = client.post(
+        "/api/auth/register",
+        json={"email": "local-cookie@example.com", "password": "valid password"},
+    )
+
+    assert response.status_code == 201
+    cookie = response.headers["set-cookie"].lower()
+    assert "secure" not in cookie
+    assert "samesite=lax" in cookie
+
+
 def test_phase1_schema_and_new_auth_tables_are_created_together():
     _, _, engine = make_client()
     tables = set(inspect(engine).get_table_names())
