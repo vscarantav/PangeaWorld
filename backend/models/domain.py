@@ -75,6 +75,7 @@ class GameSession(Base):
     presidential_deadline_at = Column(DateTime(timezone=True), nullable=True)
     company_deadline_at = Column(DateTime(timezone=True), nullable=True)
     phase_duration_seconds = Column(Integer, default=172800, nullable=False)
+    owner_user_id = Column(Integer, ForeignKey("users.id"), nullable=True, index=True)
 
     rounds = relationship("Round", back_populates="session")
     nations = relationship("Nation", back_populates="session")
@@ -90,6 +91,8 @@ class User(Base):
     password_hash = Column(String, nullable=False)
     display_name = Column(String, nullable=True)
     is_instructor = Column(Integer, default=0, nullable=False)
+    account_type = Column(String, default="student", nullable=False, index=True)
+    managed_by_user_id = Column(Integer, ForeignKey("users.id"), nullable=True, index=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
     memberships = relationship("GameMembership", back_populates="user", cascade="all, delete-orphan")

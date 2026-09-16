@@ -3,6 +3,7 @@ import AnalyticsPanel from './components/InstructorDashboard/AnalyticsPanel';
 import BackfillPanel from './components/InstructorDashboard/BackfillPanel';
 import DebriefPanel from './components/Debrief/DebriefPanel';
 import DecisionFeedback from './components/DecisionFeedback';
+import AccountDashboard from './components/AccountDashboard';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ArrowRight,
@@ -14,7 +15,6 @@ import {
   LockKeyhole,
   Mail,
   ShieldCheck,
-  Sparkles,
   TrendingUp,
 } from 'lucide-react';
 import PresidentDashboard from './components/PresidentDashboard';
@@ -106,7 +106,6 @@ function AuthenticationPage({
         </header>
 
         <div className="auth-story-content">
-          <div className="auth-kicker"><Sparkles aria-hidden="true" /> Global strategy simulation</div>
           <h1>Lead a nation.<br /><span>Shape a world.</span></h1>
           <p>
             Navigate markets, diplomacy, and difficult trade-offs in a living
@@ -268,6 +267,19 @@ function GameShell({ onSignOut }) {
   );
 }
 
+function FacilitatorControls({ sessionId }) {
+  const [summary, setSummary] = useState(null);
+  const [error, setError] = useState('');
+  const refresh = useCallback(() => api.getReadiness(sessionId).then(setSummary).catch((err) => setError(err.message)), [sessionId]);
+  useEffect(() => { refresh(); }, [refresh]);
+  useSessionEvents(sessionId, refresh);
+  const advance = async () => {
+    setError('');
+    try { await api.advanceRound(sessionId, summary.phase); await refresh(); } catch (err) { setError(err.message); }
+  };
+  return <aside className="facilitator-dock"><div><strong>Professor controls</strong><span>{summary ? `Round ${summary.round} · ${summary.phase}` : 'Loading…'}</span></div>{summary?.total !== undefined && <small>{summary.submitted}/{summary.total} seats submitted</small>}<button type="button" disabled={!summary || summary.phase === 'complete'} onClick={advance}>Advance phase</button>{error && <p role="alert">{error}</p>}</aside>;
+}
+
 function AuthAndLobby() {
   const [user, setUser] = useState(null);
   const [email, setEmail] = useState('');
@@ -377,10 +389,10 @@ function AuthAndLobby() {
     }
   };
 
-  const createGame = async () => {
+  const createGame = async (ownerRole = null) => {
     setError('');
     try {
-      const game = await api.createSession(phaseDurationSeconds);
+      const game = await api.createSession(phaseDurationSeconds, ownerRole);
       await generateAndPersistMap(game.id, game.seed);
       await loadLobby(game.id);
     } catch (err) {
@@ -431,13 +443,13 @@ function AuthAndLobby() {
       submitting={authSubmitting}
     />
   );
-  if (!lobby) return <main className="auth-page"><h1>Welcome, {user.display_name || user.email}</h1>{user.is_instructor && <div><label>Phase deadline <select aria-label="Phase deadline" value={phaseDurationSeconds} onChange={(event) => setPhaseDurationSeconds(Number(event.target.value))}><option value={172800}>48 hours</option><option value={300}>5 minutes (testing)</option><option value={30}>30 seconds (testing)</option><option value={5}>5 seconds (automated testing)</option></select></label><button onClick={createGame}>Create instructor game</button></div>}{recoverable.map((legacy) => <button key={legacy.id} onClick={() => recoverGame(legacy)}>Recover legacy game #{legacy.id}</button>)}<div><input placeholder="Lobby join code" value={joinCode} onChange={(event) => setJoinCode(event.target.value)} /><button onClick={joinGame}>Join game</button></div>{!user.is_instructor && <p>Ask your instructor for a lobby join code.</p>}<button onClick={signOut}>Sign out</button>{error && <p>{error}</p>}</main>;
+  if (!lobby) return <AccountDashboard user={user} error={error} joinCode={joinCode} onCreateGame={createGame} onJoinCodeChange={(event) => setJoinCode(event.target.value)} onJoinGame={joinGame} onOpenSession={loadLobby} onRecoverGame={recoverGame} onSignOut={signOut} phaseDurationSeconds={phaseDurationSeconds} recoverable={recoverable} setPhaseDurationSeconds={setPhaseDurationSeconds} />;
 
   const mine = lobby.my_membership;
-  if (lobby.status === 'lobby') return <main className="auth-page"><h1>Game lobby</h1><p data-testid="lobby-connection">{lobbyRealtimeConnected ? 'Live' : 'Reconnecting…'}</p>{mine.role === 'instructor' ? <InstructorLobby lobby={lobby} refresh={() => loadLobby(lobby.session_id)} generateMap={() => generateAndPersistMap(lobby.session_id, lobby.seed).then(() => loadLobby(lobby.session_id))} /> : <PlayerLobby lobby={lobby} refresh={() => loadLobby(lobby.session_id)} />}<button onClick={signOut}>Sign out</button></main>;
+  if (lobby.status === 'lobby') return <main className="auth-page"><h1>Game lobby</h1><p data-testid="lobby-connection">{lobbyRealtimeConnected ? 'Live' : 'Reconnecting…'}</p>{lobby.can_manage ? <InstructorLobby lobby={lobby} refresh={() => loadLobby(lobby.session_id)} generateMap={() => generateAndPersistMap(lobby.session_id, lobby.seed).then(() => loadLobby(lobby.session_id))} /> : <PlayerLobby lobby={lobby} refresh={() => loadLobby(lobby.session_id)} />}<button onClick={signOut}>Sign out</button></main>;
   if (mine.role === 'instructor') return <InstructorGame sessionId={lobby.session_id} onSignOut={signOut} />;
   if (!mine.entity_id) return <main className="auth-page"><p>This game has started, but you do not have an assigned seat.</p><button onClick={signOut}>Sign out</button></main>;
-  return <GameProvider sessionId={lobby.session_id} membership={mine}><GameShell onSignOut={signOut} /></GameProvider>;
+  return <GameProvider sessionId={lobby.session_id} membership={mine}><GameShell onSignOut={signOut} />{lobby.can_manage && <FacilitatorControls sessionId={lobby.session_id} />}</GameProvider>;
 }
 
 function PlayerLobby({ lobby, refresh }) {

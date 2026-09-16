@@ -74,12 +74,30 @@ def ensure_schema():
     if "is_instructor" not in user_columns:
         with engine.begin() as connection:
             connection.execute(text("ALTER TABLE users ADD COLUMN is_instructor INTEGER DEFAULT 0"))
+    if "account_type" not in user_columns:
+        with engine.begin() as connection:
+            connection.execute(text("ALTER TABLE users ADD COLUMN account_type VARCHAR NOT NULL DEFAULT 'student'"))
+            connection.execute(text("UPDATE users SET account_type = 'professor' WHERE is_instructor = 1"))
+            connection.execute(text("UPDATE users SET account_type = 'admin' WHERE id = (SELECT MIN(id) FROM users)"))
+    if "managed_by_user_id" not in user_columns:
+        with engine.begin() as connection:
+            connection.execute(text("ALTER TABLE users ADD COLUMN managed_by_user_id INTEGER"))
     # Preserve local Day 1 installations: when accounts predate the instructor
     # flag, promote the earliest account once so it can recover old sessions.
     with engine.begin() as connection:
         has_instructor = connection.execute(text("SELECT 1 FROM users WHERE is_instructor = 1 LIMIT 1")).first()
         if has_instructor is None:
             connection.execute(text("UPDATE users SET is_instructor = 1 WHERE id = (SELECT MIN(id) FROM users)"))
+        connection.execute(text("UPDATE users SET is_instructor = 1 WHERE account_type IN ('admin', 'professor')"))
+    session_columns = {column["name"] for column in inspect(engine).get_columns("game_sessions")}
+    if "owner_user_id" not in session_columns:
+        with engine.begin() as connection:
+            connection.execute(text("ALTER TABLE game_sessions ADD COLUMN owner_user_id INTEGER"))
+            connection.execute(text(
+                "UPDATE game_sessions SET owner_user_id = ("
+                "SELECT user_id FROM game_memberships WHERE game_memberships.session_id = game_sessions.id "
+                "AND role = 'instructor' ORDER BY id LIMIT 1) WHERE owner_user_id IS NULL"
+            ))
     decision_columns = {column["name"] for column in inspect(engine).get_columns("decisions")}
     with engine.begin() as connection:
         if "submission_kind" not in decision_columns:

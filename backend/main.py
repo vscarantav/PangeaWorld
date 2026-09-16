@@ -24,6 +24,7 @@ try:
     from .routes.debrief import router as debrief_router
     from .routes.backfill import router as backfill_router
     from .routes.health import router as health_router
+    from .routes.accounts import router as accounts_router
     from .realtime import router as realtime_router
     from .config import is_production, validate_production_config
 except ImportError:  # Allows `uvicorn main:app` from inside backend.
@@ -43,6 +44,7 @@ except ImportError:  # Allows `uvicorn main:app` from inside backend.
     from routes.debrief import router as debrief_router
     from routes.backfill import router as backfill_router
     from routes.health import router as health_router
+    from routes.accounts import router as accounts_router
     from realtime import router as realtime_router
     from config import is_production, validate_production_config
 
@@ -86,6 +88,7 @@ app.include_router(debrief_router)
 app.include_router(backfill_router)
 app.include_router(realtime_router)
 app.include_router(health_router)
+app.include_router(accounts_router)
 
 # Configure CORS so the React frontend can communicate with this API
 cors_origins = [origin.strip() for origin in os.getenv(

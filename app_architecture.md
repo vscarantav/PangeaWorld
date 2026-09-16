@@ -6,7 +6,7 @@ The current structure of the PangeaWorld repository:
 
 ```
 PangeaWorld/
-├── PangeaWorld_architecture_and_instructions.md (Canonical architecture and roadmap)
+├── app_architecture.md                         (Canonical architecture and roadmap)
 ├── backend/
 │   └── main.py                                (Initial FastAPI backend setup)
 └── frontend/
@@ -27,8 +27,9 @@ PangeaWorld/
 
 - `backend/database.py` owns the local SQLite connection. The canonical local development database is `backend/pangeaworld.db`; root-level `.db` copies are disposable and ignored.
 - `backend/auth.py`, `backend/deadlines.py`, and `backend/realtime.py` support multiplayer authentication, phase timing, and session-scoped real-time updates.
+- `backend/routes/accounts.py` owns installation-level Admin, Professor, and Student account management plus the role-aware landing-dashboard API. `backend/migrations/versions/20260916_0002_account_roles.py` upgrades existing installations with persisted account roles, Professor-managed students, and stable session ownership.
 - `backend/engines/`, `backend/models/`, `backend/routes/`, and `backend/tests/` contain the authoritative game engines, domain/schema layer, API routes (including Phase 3), and regression suites.
-- `frontend/src/api/client.js`, `context/GameContext.jsx`, `hooks/useSessionEvents.js`, and the President/Executive dashboard component trees provide the API-backed gameplay interface.
+- `frontend/src/api/client.js`, `context/GameContext.jsx`, `hooks/useSessionEvents.js`, `components/AccountDashboard/`, and the President/Executive dashboard component trees provide the API-backed account, session-management, and gameplay interfaces.
 
 ## Tools Used
 - **Map Prototype**: Built entirely with Vanilla JavaScript, HTML5 `<canvas>`, and CSS.
@@ -52,6 +53,8 @@ PangeaWorld/
 - **Procedural Generation Contract**: The procedural map remains seed-driven and may generate different layouts for different games, but every generated map must satisfy the locked gameplay invariants below. Corrective changes to generation or validation logic are permitted when required to enforce those invariants; changes must be covered by deterministic seed-based tests and must not silently change unrelated terrain rules.
 - **Canonical Frontend Contract**: React + Vite is the only application frontend. HTML Canvas is the canonical map renderer. The standalone HTML map remains a development preview, not a second game client.
 - **Server Authority Contract**: FastAPI owns authoritative game state, decision validation, round transitions, economy calculations, random seeds, and persisted results. React renders server state and submits commands; client calculations may be previews only and cannot determine official outcomes.
+- **Identity and Authorization Contract**: Installation account types (`admin`, `professor`, and `student`) are persisted separately from session memberships (`instructor`, `player`, `president`, and `executive`). FastAPI enforces both layers. Hiding a control in React is never an authorization boundary.
+- **Session Ownership Contract**: Every newly created game records an `owner_user_id`. An Admin may manage any session; a Professor may manage sessions they own. That authority survives the owner taking a President or Executive seat, so teaching controls and gameplay identity do not depend on the same membership label.
 - **Deterministic Simulation Contract**: A stored ruleset version, session seed, starting snapshot, and ordered decision ledger must reproduce the same round results. Authoritative randomness is seeded and executed on the server.
 - **Opportunity-Cost Contract (Required)**: Every material Presidential and Company Executive decision must consume or commit a scarce resource (for example treasury/cash, borrowing capacity, labor, production capacity, inventory, political capital, diplomatic leverage, military readiness, or time) and therefore rule out, delay, or weaken at least one feasible alternative. The product must make that trade-off visible before submission and report it after resolution. A feature is not complete if it presents benefits and direct costs but hides the value of the next-best foregone alternative, permits unconstrained allocation, or creates an obviously dominant choice with no meaningful sacrifice.
 
@@ -78,6 +81,7 @@ PangeaWorld/
 - **Macro/Micro Economy Engine**: GDP, CPI, inflation, unemployment, pricing, production, R&D, company financials, market share, and policy decisions process on the server.
 - **Resources and Logistics**: Production, depletion, scarcity pricing, supplier selection, map-distance routing previews, shipping modes, tariffs, insurance, stock transfers, COGS, and trade balances are connected to round processing.
 - **Connected Dashboards**: President and Company Executive dashboards load live API data, submit authoritative decisions, display results/history/news, and distinguish local drafts from server-confirmed submissions.
+- **Role-Aware Account Center**: Admin, Professor, and Student accounts receive distinct server-authorized landing experiences. Admins manage accounts and monitor all sessions; Professors create sessions and managed Student accounts and may participate as President or Executive; Students can join and play but cannot create accounts or sessions.
 - **Opportunity-Cost Decision Framework**: New `phase3-closure-v1` games enforce shared treasury/cash/capacity constraints, server-quoted alternatives, a selected next-best foregone choice, a written rationale, immutable review history, labeled post-round feedback, and an instructor evidence scorecard.
 - **Military and Conflict**: Unit procurement, readiness, deterministic multi-engagement attacks, retreat thresholds, abstract strategic control, naval blockades, private intelligence, conflict-driven prices/insurance/GDP/approval effects, and Drakmoor's instructor-controlled scripted behavior resolve authoritatively.
 - **Event and News Engine**: The seven-round schedule contains 3 major and 11 minor seeded incidents, supports reactive unrest and bounded instructor scenarios, and persists market reporting, opinion, and source-verification exercises. Gemini-written market summaries use public facts only and fall back safely when the provider is unavailable.
@@ -93,7 +97,7 @@ PangeaWorld/
 
 # PangeaWorld — Educational Simulation Game Development Plan
 
-> **Reference**: [PangeaWorld Architecture & Instructions](./PangeaWorld_architecture_and_instructions.md)
+> **Reference**: [PangeaWorld Architecture & Instructions](./app_architecture.md)
 
 ## Vision & Overview
 
@@ -119,8 +123,11 @@ PangeaWorld/
 - **Grading & Logging**: AI usage will be logged and graded as a core learning outcome. Instructors will have visibility into the quantity and quality of student prompts to assess how well they are learning to leverage AI for decision-making.
 
 ### Authentication & Access
-- Will students log in with university SSO (e.g., Google Workspace, Microsoft Entra), or is a simple email/password system acceptable?
-- Should teams be able to self-organize, or does the instructor assign roles?
+
+- **Current authentication:** Secure email/password authentication with HTTP-only cookie sessions is implemented. University SSO, email verification, password recovery, and forced first-login password changes remain future identity work.
+- **Account hierarchy:** Every user has exactly one installation-level `account_type`: `admin`, `professor`, or `student`. The hierarchy is authoritative on the server and is independent of the seat held inside an individual simulation.
+- **Bootstrap rule:** The first account in a new installation becomes the initial Admin. Public registrations after the first account are always Students. Only an Admin can create a Professor; Admins and Professors can create Students.
+- **Assignment rule:** Session managers assign President and Executive seats. A Professor may select facilitator-only, President, or Executive participation when creating a session. Students cannot grant themselves elevated account or session permissions.
 
 ### Confirmed Hosting and AI Services ✅
 
@@ -152,8 +159,8 @@ PANGEAWORLD_MIGRATION_DATABASE_URL=postgresql+psycopg://<neon-user>:<password>@<
 PANGEAWORLD_CORS_ORIGINS=https://<pangeaworld-frontend>.onrender.com
 PANGEAWORLD_COOKIE_SECURE=1
 GEMINI_API_KEY=<render-secret>
-GEMINI_ADVISOR_MODEL=<approved-gemini-model>
-GEMINI_NEWS_MODEL=<approved-gemini-model>
+GEMINI_ADVISOR_MODEL=gemini-3.8-flash
+GEMINI_NEWS_MODEL=gemini-3.8-flash
 ```
 
 Use Render and Neon secret/environment-variable controls for all credentials. The keep-alive URL contains no secret and must call a read-only health route. Live Gemini validation must verify quota behavior, latency, provider failure fallback, privacy guardrails, and usage-cost monitoring before the first student pilot.
@@ -161,6 +168,64 @@ Use Render and Neon secret/environment-variable controls for all credentials. Th
 ---
 
 ## Confirmed Design Decisions
+
+### Account and Session Authorization — Implemented September 16, 2026
+
+PangeaWorld uses two related but separate authorization layers:
+
+1. **Installation account type** answers what a person may administer across the application.
+2. **Session membership role** answers which seat or facilitator identity that person holds in one game.
+
+| Account type | Installation capabilities | Session participation |
+| --- | --- | --- |
+| `admin` | Create Professors and Students, change account types, view every session and its progress, explicitly enter any session, create sessions, and use all Professor capabilities. | May facilitate or take a President/Executive seat. An Admin who opens another owner's session receives an explicit facilitator membership. |
+| `professor` | Create managed Student accounts, create sessions, view owned-session progress, distribute join codes, assign seats, start games, advance phases, and use instructor analytics/tools for owned sessions. | Chooses facilitator-only, President, or Executive when starting a session. Ownership preserves management authority after taking a player seat. |
+| `student` | No account-management or session-creation authority. | Join by lobby code, accept an assigned President/Executive seat, submit decisions, participate in rounds, and use player-scoped advisor/debrief tools. |
+
+#### Persisted identity and ownership
+
+- `users.account_type` stores `admin`, `professor`, or `student` and is the canonical installation role. The legacy `is_instructor` field remains synchronized for compatibility with existing instructor-only Phase 3/4 routes while those routes are incrementally migrated.
+- `users.managed_by_user_id` associates a Professor-created Student with that Professor's account workspace. Admins can see the complete account directory; Professors see the Students they provisioned.
+- `game_sessions.owner_user_id` records the Admin or Professor who created or claimed the session. Ownership is stable even if that user changes their `game_memberships.role` to `president` or `executive`.
+- `game_memberships.role` remains session-local and may be `instructor`, `player`, `president`, or `executive`. It must not be used as a substitute for the installation account type.
+
+#### Authorization rules
+
+- FastAPI is the enforcement boundary. Frontend visibility is a usability feature only; every privileged endpoint independently verifies the authenticated account and, where applicable, session ownership or membership.
+- Admins may see installation-wide session summaries. Entering a session is an explicit `POST /api/accounts/sessions/{session_id}/access` action that creates a facilitator membership if one does not already exist.
+- Professors may manage only sessions they own or legacy sessions in which they retain the instructor membership. Taking a player seat does not remove their ability to generate the map, start the game, inspect readiness, or advance phases.
+- Students cannot create sessions, create accounts, change roles, access instructor analytics, or invoke facilitator commands. Decision routes continue to enforce session membership, assigned seat, entity ownership, phase, and deadline constraints.
+- The installation must retain at least one Admin. The API rejects demotion of the sole remaining Admin.
+
+#### Account and dashboard API
+
+| Endpoint | Access | Purpose |
+| --- | --- | --- |
+| `GET /api/accounts/dashboard` | Authenticated | Returns a role-filtered account directory, session list, live progress, and aggregate counts. |
+| `POST /api/accounts/users` | Admin or Professor | Admin creates Professors or Students; Professor creates Students only. |
+| `PATCH /api/accounts/users/{user_id}/role` | Admin | Changes an installation account type while preserving the last-Admin invariant. |
+| `POST /api/accounts/sessions/{session_id}/access` | Admin | Explicitly enters any session with facilitator authority. |
+| `POST /api/sessions` with `owner_role` | Admin or Professor | Creates a session as facilitator-only, President, or Executive and persists the creator as owner. |
+
+#### Frontend behavior
+
+- `frontend/src/components/AccountDashboard/index.jsx` is the canonical post-login landing experience.
+- Admins see installation-wide live-session counts, session/round progress, the account directory, role controls, account creation, join codes, and session-entry controls.
+- Professors see owned sessions, managed Students, Student provisioning, deadline configuration, and a participation selector for facilitator, President, or Executive.
+- Students see only their sessions and the join-code workflow. They do not receive account or session administration controls.
+- A Professor who plays a seat receives a compact facilitator control dock during gameplay so they can view readiness and advance phases without abandoning the assigned President/Executive identity.
+- The landing experience and login screen are responsive, keyboard accessible, and preserve the existing account-creation, login, lobby, reload, and sign-out recovery contracts.
+
+#### Migration and compatibility
+
+Alembic revision `20260916_0002` adds `users.account_type`, `users.managed_by_user_id`, and `game_sessions.owner_user_id`. During upgrade:
+
+1. Existing instructor accounts become Professors.
+2. The earliest existing account becomes the bootstrap Admin.
+3. Existing non-instructor accounts remain Students.
+4. Existing session ownership is derived from each session's instructor membership when available.
+
+SQLite development startup applies the same compatibility additions in `backend/database.py`. Production continues to rely exclusively on the Render pre-deploy Alembic command against the direct Neon connection.
 
 ### 0. Opportunity Cost Is a Core Learning Mechanic ✅
 
@@ -1617,7 +1682,7 @@ The sprint is complete only when every Progress Tracker item is checked, the ins
 
 ### Release Readiness — Render, Neon, Keep-Alive, and Gemini
 
-> **Status (Sep 14, 2026): implementation-ready; external provisioning pending.** Repository-owned deployment configuration is complete and regression-tested. Actual production activation requires the owner's Neon database, Render account/repository connection, public service URLs, and Gemini API credentials.
+> **Status (Sep 16, 2026): implementation-ready; external activation and public smoke validation pending.** Repository-owned deployment configuration, the three-level account hierarchy, the role-aware dashboard, and the Neon migration are complete and regression-tested. Production completion still requires successful deployment and validation against the owner's Render, Neon, and Gemini services.
 
 - [x] Add a Render Blueprint for the Vite Static Site, single-instance FastAPI Web Service, pre-deploy database migration, health check, and scheduled keep-alive job.
 - [x] Add Neon-compatible Psycopg support and keep SQLite isolated to local development and tests.
@@ -1631,7 +1696,7 @@ The sprint is complete only when every Progress Tracker item is checked, the ins
 - [ ] Run the public-URL smoke test: health, secure authentication cookie, lobby, WebSocket, reviewed President/Executive decisions, Gemini advisor/history, analytics, and keep-alive logs.
 - [ ] Confirm expected concurrent enrollment before increasing API instances; shared pub/sub is required before horizontal scaling.
 
-**Repository verification (Sep 14, 2026):** 93 backend tests and 3 deterministic frontend tests pass; frontend lint completes without errors; the production frontend build succeeds; Python deployment modules compile; and the Alembic baseline upgrades a fresh database to `20260914_0001 (head)`. The previously verified seven-round four-browser Phase 4 rehearsal remains the gameplay acceptance baseline.
+**Repository verification (Sep 16, 2026):** 96 backend tests and 3 deterministic frontend tests pass; frontend lint completes with pre-existing non-blocking React advisory warnings; the production frontend build succeeds; a fresh database upgrades through `20260916_0002 (head)`; and the isolated seven-round four-browser Phase 4 rehearsal passes in 2.4 minutes. The production bundle reports a non-blocking main-chunk warning at approximately 550 kB.
 
 ### Explicitly Deferred Beyond Phase 4 Sprint 1
 

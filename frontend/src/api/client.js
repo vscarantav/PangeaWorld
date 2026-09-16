@@ -22,8 +22,8 @@ async function request(path, options = {}) {
   }
 }
 
-export const createSession = (phaseDurationSeconds = 172800) => request('/api/sessions', {
-  method: 'POST', body: JSON.stringify({ phase_duration_seconds: phaseDurationSeconds }),
+export const createSession = (phaseDurationSeconds = 172800, ownerRole = null) => request('/api/sessions', {
+  method: 'POST', body: JSON.stringify({ phase_duration_seconds: phaseDurationSeconds, owner_role: ownerRole }),
 });
 export const getSession = (id, { includeMap = true } = {}) => request(`/api/sessions/${id}${includeMap ? '' : '?include_map=false'}`);
 export const getNations = (id) => request(`/api/sessions/${id}/nations`);
@@ -44,6 +44,10 @@ export const register = (payload) => request('/api/auth/register', { method: 'PO
 export const login = (payload) => request('/api/auth/login', { method: 'POST', body: JSON.stringify(payload) });
 export const logout = () => request('/api/auth/logout', { method: 'POST' });
 export const getMe = () => request('/api/auth/me');
+export const getAccountDashboard = () => request('/api/accounts/dashboard');
+export const createManagedUser = (payload) => request('/api/accounts/users', { method: 'POST', body: JSON.stringify(payload) });
+export const updateAccountRole = (userId, accountType) => request(`/api/accounts/users/${userId}/role`, { method: 'PATCH', body: JSON.stringify({ account_type: accountType }) });
+export const claimAdminSessionAccess = (sessionId) => request(`/api/accounts/sessions/${sessionId}/access`, { method: 'POST' });
 export const getLobby = (id) => request(`/api/sessions/${id}/lobby`);
 export const joinLobby = (join_code) => request('/api/sessions/lobby/join', { method: 'POST', body: JSON.stringify({ join_code }) });
 export const assignSeat = (id, payload) => request(`/api/sessions/${id}/lobby/assign`, { method: 'POST', body: JSON.stringify(payload) });

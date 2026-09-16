@@ -53,15 +53,17 @@ class LoginPayload(BaseModel):
 
 def _public_user(user: User) -> dict:
     return {"id": user.id, "email": user.email, "display_name": user.display_name,
-            "is_instructor": bool(user.is_instructor), "created_at": user.created_at}
+            "account_type": user.account_type, "is_instructor": user.account_type in {"admin", "professor"},
+            "created_at": user.created_at}
 
 
 @router.post("/register", status_code=status.HTTP_201_CREATED)
 def register(payload: RegisterPayload, response: Response, db: Session = Depends(get_db)):
-    # Local MVP bootstrap: the first account is the instructor; later accounts
-    # are players until an instructor assigns a game seat.
+    # The first account bootstraps the installation as Admin. Public sign-ups
+    # after that are always Students; only an Admin can create Professors.
+    first_account = db.query(User).count() == 0
     user = User(email=payload.email, password_hash=hash_password(payload.password), display_name=payload.display_name,
-                is_instructor=1 if db.query(User).count() == 0 else 0)
+                account_type="admin" if first_account else "student", is_instructor=1 if first_account else 0)
     db.add(user)
     try:
         db.commit()

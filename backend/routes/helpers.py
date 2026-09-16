@@ -2,9 +2,9 @@ from fastapi import HTTPException
 from sqlalchemy.orm import Session
 
 try:
-    from ..models.domain import Company, GameMembership, GameSession, Nation
+    from ..models.domain import Company, GameMembership, GameSession, Nation, User
 except ImportError:
-    from models.domain import Company, GameMembership, GameSession, Nation
+    from models.domain import Company, GameMembership, GameSession, Nation, User
 
 
 def get_session_or_404(db: Session, session_id: int) -> GameSession:
@@ -23,9 +23,28 @@ def require_membership(db: Session, session_id: int, user_id: int) -> GameMember
 
 def require_instructor(db: Session, session_id: int, user_id: int) -> GameMembership:
     membership = require_membership(db, session_id, user_id)
-    if membership.role != "instructor":
-        raise HTTPException(status_code=403, detail="instructor role required")
+    session = get_session_or_404(db, session_id)
+    user = db.query(User).filter_by(id=user_id).first()
+    account_type = getattr(user, "account_type", "student")
+    manages_session = (
+        membership.role == "instructor"
+        or account_type == "admin"
+        or (account_type == "professor" and session.owner_user_id == user_id)
+    )
+    if not manages_session:
+        raise HTTPException(status_code=403, detail="session manager role required")
     return membership
+
+
+def can_manage_session(db: Session, session: GameSession, user_id: int) -> bool:
+    membership = db.query(GameMembership).filter_by(session_id=session.id, user_id=user_id).first()
+    user = db.query(User).filter_by(id=user_id).first()
+    account_type = getattr(user, "account_type", "student") if user else "student"
+    return bool(
+        (membership and membership.role == "instructor")
+        or account_type == "admin"
+        or (account_type == "professor" and session.owner_user_id == user_id)
+    )
 
 
 def require_assigned_membership(db: Session, session_id: int, user_id: int) -> GameMembership:

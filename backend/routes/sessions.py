@@ -26,7 +26,7 @@ except ImportError:
     from moderation import is_classroom_safe_name
     from realtime import notify_session
     from seed_data import seed_game_session
-from .helpers import get_session_or_404, require_assigned_membership, require_instructor, require_membership
+from .helpers import can_manage_session, get_session_or_404, require_assigned_membership, require_instructor, require_membership
 try:
     from ..engines.phase3_resolver import public_disaster_article
     from ..engines.phase3_military import public_attack_article
@@ -48,6 +48,7 @@ class SessionCreate(BaseModel):
     ruleset_version: str = Field(default="phase3-closure-v1", pattern="^(legacy-v1|phase3-closure-v1)$")
     model_config = {"extra": "forbid"}
     phase_duration_seconds: int = Field(default=172800, ge=1, le=172800)
+    owner_role: str | None = Field(default=None, pattern="^(president|executive)$")
 
 
 class AdvanceRequest(BaseModel):
@@ -80,10 +81,7 @@ def _membership_or_403(db, session_id, user_id):
 
 
 def _instructor_or_403(db, session_id, user_id):
-    membership = _membership_or_403(db, session_id, user_id)
-    if membership.role != "instructor":
-        raise HTTPException(status_code=403, detail="instructor role required")
-    return membership
+    return require_instructor(db, session_id, user_id)
 
 
 def _new_join_code(db):
@@ -121,15 +119,23 @@ def _member_view(membership):
 
 @router.post("")
 def create_session(payload: SessionCreate, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
-    if not user.is_instructor:
-        raise HTTPException(status_code=403, detail="instructor account required to create a game")
+    if user.account_type not in {"admin", "professor"}:
+        raise HTTPException(status_code=403, detail="professor or admin account required to create a game")
     session_seed = secrets.token_urlsafe(18)
-    session = GameSession(seed=session_seed, phase=PhaseEnum.PLANNING, status="lobby",
+    session = GameSession(seed=session_seed, phase=PhaseEnum.PLANNING, status="lobby", owner_user_id=user.id,
                           lobby_join_code=_new_join_code(db), phase_duration_seconds=payload.phase_duration_seconds, ruleset_version=payload.ruleset_version)
     db.add(session)
     db.flush()
     seed_game_session(db, session.id, commit=False)
-    db.add(GameMembership(session_id=session.id, user_id=user.id, role="instructor"))
+    owner_entity_id = None
+    if payload.owner_role == "president":
+        owner_entity = db.query(Nation).filter(Nation.session_id == session.id, Nation.archetype != "Marginalized military state").order_by(Nation.id).first()
+        owner_entity_id = owner_entity.id if owner_entity else None
+    elif payload.owner_role == "executive":
+        owner_entity = db.query(Company).join(Nation).filter(Nation.session_id == session.id, Nation.archetype != "Marginalized military state").order_by(Company.id).first()
+        owner_entity_id = owner_entity.id if owner_entity else None
+    db.add(GameMembership(session_id=session.id, user_id=user.id,
+                          role=payload.owner_role or "instructor", entity_id=owner_entity_id))
     db.commit()
     return _session_view(session)
 
@@ -145,8 +151,8 @@ def public_lobby(join_code: str, db: Session = Depends(get_db)):
 
 @router.get("/legacy/recoverable")
 def recoverable_legacy_sessions(db: Session = Depends(get_db), user: User = Depends(get_current_user)):
-    if not user.is_instructor:
-        raise HTTPException(status_code=403, detail="instructor account required")
+    if user.account_type not in {"admin", "professor"}:
+        raise HTTPException(status_code=403, detail="professor or admin account required")
     sessions = db.query(GameSession).filter(GameSession.lobby_join_code.is_(None)).all()
     return [{"id": session.id, "seed": session.seed, "status": session.status,
              "phase": session.phase.value, "current_round": session.current_round,
@@ -173,9 +179,10 @@ def join_lobby(payload: LobbyJoin, db: Session = Depends(get_db), user: User = D
 def get_lobby(session_id: int, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
     session = get_session_or_404(db, session_id)
     _membership_or_403(db, session_id, user.id)
-    response = {"session_id": session.id, "status": session.status,
+    can_manage = can_manage_session(db, session, user.id)
+    response = {"session_id": session.id, "status": session.status, "can_manage": can_manage,
                 "my_membership": _member_view(_membership_or_403(db, session_id, user.id))}
-    if response["my_membership"]["role"] == "instructor":
+    if can_manage:
         occupied = {(item.role, item.entity_id) for item in session.memberships if item.entity_id is not None}
         response.update({"join_code": None if session.lobby_code_revoked else session.lobby_join_code,
                          "seed": session.seed, "has_map_snapshot": _has_renderable_map_snapshot(session),
@@ -193,7 +200,7 @@ def assign_seat(session_id: int, payload: SeatAssignment, db: Session = Depends(
     if session.status != "lobby":
         raise HTTPException(status_code=409, detail="seats can only be assigned while the lobby is open")
     membership = db.query(GameMembership).filter_by(session_id=session_id, user_id=payload.user_id).first()
-    if membership is None or membership.role == "instructor":
+    if membership is None or (membership.role == "instructor" and membership.user_id != user.id):
         raise HTTPException(status_code=404, detail="join the lobby before receiving a player seat")
     valid = (db.query(Nation).filter_by(id=payload.entity_id, session_id=session_id).first() if payload.role == "president"
              else db.query(Company).join(Nation).filter(Company.id == payload.entity_id, Nation.session_id == session_id).first())
@@ -222,7 +229,7 @@ def remove_member(session_id: int, user_id: int, db: Session = Depends(get_db), 
     _instructor_or_403(db, session_id, user.id)
     if session.status != "lobby": raise HTTPException(status_code=409, detail="lobby is closed")
     membership = db.query(GameMembership).filter_by(session_id=session_id, user_id=user_id).first()
-    if membership is None or membership.role == "instructor": raise HTTPException(status_code=404, detail="player membership not found")
+    if membership is None or membership.user_id == session.owner_user_id: raise HTTPException(status_code=404, detail="player membership not found")
     membership_id = membership.id
     db.delete(membership); db.commit()
     notify_session(session_id, "assignment_changed", membership_id=membership_id)
@@ -312,7 +319,7 @@ def _session_view(session, include_map=True):
             "server_time": utc_now().isoformat(),
             "presidential_deadline_at": as_utc(session.presidential_deadline_at),
             "company_deadline_at": as_utc(session.company_deadline_at),
-            "phase_duration_seconds": session.phase_duration_seconds,
+            "phase_duration_seconds": session.phase_duration_seconds, "owner_user_id": session.owner_user_id,
             "rounds": [{"id": r.id, "number": r.number, "status": r.status.value, "events": r.events or [], "results": r.results or {}} for r in session.rounds]}
 
 
@@ -451,7 +458,7 @@ def readiness(session_id: int, db: Session = Depends(get_db), user: User = Depen
                 "status": ("auto_submitted" if decisions[(("company" if membership.role == "executive" else membership.role), membership.entity_id)].submission_kind == "auto" else "submitted") if (("company" if membership.role == "executive" else membership.role), membership.entity_id) in decisions else
                           "draft" if (("company" if membership.role == "executive" else membership.role), membership.entity_id) in drafts else "not_started"}
                for membership in seats]
-    if requester.role != "instructor":
+    if not can_manage_session(db, session, user.id):
         own = next((item for item in entries if item["role"] == requester.role and item["entity_id"] == requester.entity_id), None)
         return {"round": session.current_round, "phase": session.phase.value, "my_status": own["status"] if own else "unassigned",
                 "server_time": utc_now().isoformat(), "deadline_at": active_deadline(session)}
@@ -464,11 +471,12 @@ def readiness(session_id: int, db: Session = Depends(get_db), user: User = Depen
 def claim_legacy_session(session_id: int, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
     """Give a local instructor a controlled recovery path for pre-membership games."""
     session = get_session_or_404(db, session_id)
-    if not user.is_instructor:
-        raise HTTPException(status_code=403, detail="instructor account required to claim a legacy game")
+    if user.account_type not in {"admin", "professor"}:
+        raise HTTPException(status_code=403, detail="professor or admin account required to claim a legacy game")
     if session.memberships or session.lobby_join_code is not None:
         raise HTTPException(status_code=409, detail="only unmigrated Phase 1 sessions can be claimed")
     db.add(GameMembership(session_id=session_id, user_id=user.id, role="instructor"))
+    session.owner_user_id = user.id
     requires_map_rebuild = not _has_renderable_map_snapshot(session)
     if requires_map_rebuild:
         session.status = "lobby"
