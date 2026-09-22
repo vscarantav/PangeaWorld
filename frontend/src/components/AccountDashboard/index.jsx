@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   Activity, ArrowRight, BookOpen, ChevronRight, Clock3, Copy, Gamepad2,
   Globe2, GraduationCap, LayoutDashboard, LogOut, Plus, ShieldCheck,
-  Sparkles, UserPlus, Users,
+  UserPlus, Users,
 } from 'lucide-react';
 import * as api from '../../api/client';
 
@@ -98,7 +98,7 @@ export default function AccountDashboard({
 
     <div className="portal-body">
       <section className="portal-welcome">
-        <div><span className="portal-eyebrow"><Sparkles aria-hidden="true" /> {roleLabels[accountType]} workspace</span><h1>Welcome, {welcomeName}</h1><p>{isAdmin ? 'Monitor the learning environment, manage access, and follow every live simulation.' : isProfessor ? 'Build your classroom, launch simulations, and guide students through each strategic round.' : 'Join your assigned simulation and focus on the decisions that shape your team’s outcome.'}</p></div>
+        <div><span className="portal-eyebrow">{roleLabels[accountType]} workspace</span><h1>Welcome, {welcomeName}</h1><p>{isAdmin ? 'Monitor the learning environment, manage access, and follow every live simulation.' : isProfessor ? 'Build your classroom, launch simulations, and guide students through each strategic round.' : 'Join your assigned simulation and focus on the decisions that shape your team’s outcome.'}</p></div>
         <div className="portal-date"><Clock3 aria-hidden="true" /><span>Simulation center<small>Ready for the next round</small></span></div>
       </section>
 

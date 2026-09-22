@@ -6,8 +6,14 @@ import DecisionFeedback from './components/DecisionFeedback';
 import AccountDashboard from './components/AccountDashboard';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
+  Activity,
+  ArrowLeft,
   ArrowRight,
+  BookOpenCheck,
   Building2,
+  CheckCircle2,
+  Clock3,
+  Copy,
   Eye,
   EyeOff,
   Globe2,
@@ -16,6 +22,7 @@ import {
   Mail,
   ShieldCheck,
   TrendingUp,
+  UsersRound,
 } from 'lucide-react';
 import PresidentDashboard from './components/PresidentDashboard';
 import ExecutiveDashboard from './components/ExecutiveDashboard';
@@ -355,7 +362,7 @@ function AuthAndLobby() {
     return () => window.clearInterval(timer);
   }, [lobby?.session_id, lobby?.status, applyLobby]);
 
-  const lobbyRealtimeConnected = useSessionEvents(lobby?.status === 'lobby' ? lobby.session_id : null, () => {
+  const lobbyRealtimeConnected = useSessionEvents(lobby && (lobby.status === 'lobby' || !lobby.my_membership?.entity_id) ? lobby.session_id : null, () => {
     if (lobby?.session_id) loadLobby(lobby.session_id).catch(() => {});
   });
 
@@ -429,6 +436,12 @@ function AuthAndLobby() {
     }
   };
 
+  const returnToDashboard = () => {
+    window.localStorage.removeItem('pangeaworld.sessionId');
+    setLobby(null);
+    setError('');
+  };
+
   if (loadingAuth) return <AuthLoadingScreen />;
   if (!user) return (
     <AuthenticationPage
@@ -447,7 +460,7 @@ function AuthAndLobby() {
 
   const mine = lobby.my_membership;
   if (lobby.status === 'lobby') return <main className="auth-page"><h1>Game lobby</h1><p data-testid="lobby-connection">{lobbyRealtimeConnected ? 'Live' : 'Reconnecting…'}</p>{lobby.can_manage ? <InstructorLobby lobby={lobby} refresh={() => loadLobby(lobby.session_id)} generateMap={() => generateAndPersistMap(lobby.session_id, lobby.seed).then(() => loadLobby(lobby.session_id))} /> : <PlayerLobby lobby={lobby} refresh={() => loadLobby(lobby.session_id)} />}<button onClick={signOut}>Sign out</button></main>;
-  if (mine.role === 'instructor') return <InstructorGame sessionId={lobby.session_id} onSignOut={signOut} />;
+  if (mine.role === 'instructor') return <InstructorGame joinCode={lobby.join_code} joinCodeActive={lobby.join_code_active !== false} sessionId={lobby.session_id} onActivateJoinCode={() => api.activateJoinCode(lobby.session_id).then(() => loadLobby(lobby.session_id))} onBack={returnToDashboard} onSignOut={signOut} />;
   if (!mine.entity_id) return <main className="auth-page"><p>This game has started, but you do not have an assigned seat.</p><button onClick={signOut}>Sign out</button></main>;
   return <GameProvider sessionId={lobby.session_id} membership={mine}><GameShell onSignOut={signOut} />{lobby.can_manage && <FacilitatorControls sessionId={lobby.session_id} />}</GameProvider>;
 }
@@ -483,9 +496,10 @@ function InstructorLobby({ lobby, refresh, generateMap }) {
   return <><p>Share join code: <strong>{lobby.join_code}</strong></p><p>{lobby.members.length} players in lobby</p><p>{lobby.seats.nations.filter((seat) => !seat.occupied).length} president seats and {lobby.seats.companies.filter((seat) => !seat.occupied).length} executive seats available; unfilled seats will be AI-vacant.</p>{!lobby.has_map_snapshot && <button onClick={() => generateMap().catch((mapError) => setError(mapError.message))}>Generate starting map</button>}{lobby.members.filter((member) => member.role !== 'instructor').map((member) => <div key={member.id} data-member-email={member.display_name}><span>{member.display_name} — {member.role}{member.entity_id ? ` #${member.entity_id}` : ''}</span><select defaultValue="" onChange={(event) => { const [role, id] = event.target.value.split(':'); if (id) assign(member.user_id, role, id); }}><option value="">Assign seat…</option><optgroup label="Presidents">{lobby.seats.nations.map((seat) => <option key={`p${seat.id}`} disabled={seat.occupied} value={`president:${seat.id}`}>{seat.name}{seat.occupied ? ' (occupied)' : ''}</option>)}</optgroup><optgroup label="Executives">{lobby.seats.companies.map((seat) => <option key={`e${seat.id}`} disabled={seat.occupied} value={`executive:${seat.id}`}>{seat.name}{seat.occupied ? ' (occupied)' : ''}</option>)}</optgroup></select></div>)}<button disabled={!lobby.has_map_snapshot} onClick={() => api.startLobby(lobby.session_id).then(refresh).catch((error) => setError(error.message))}>Start game</button>{error && <p>{error}</p>}</>;
 }
 
-function InstructorGame({ sessionId, onSignOut }) {
+function InstructorGame({ joinCode, joinCodeActive, sessionId, onActivateJoinCode, onBack, onSignOut }) {
   const [summary, setSummary] = useState(null);
   const [error, setError] = useState('');
+  const [codeCopied, setCodeCopied] = useState(false);
   const refreshing = useRef(false);
   const refresh = useCallback(async () => {
     if (refreshing.current) return;
@@ -513,7 +527,67 @@ function InstructorGame({ sessionId, onSignOut }) {
       setError(err.message);
     }
   };
-  return <main className="auth-page"><h1>Instructor readiness board</h1><InstructorPhase3 sessionId={sessionId} phase={summary?.phase} /><AnalyticsPanel sessionId={sessionId} phase={summary?.phase} /><BackfillPanel sessionId={sessionId} phase={summary?.phase} /><DecisionFeedback sessionId={sessionId} round={summary?.round} />{summary?.phase === 'complete' && <DebriefPanel sessionId={sessionId} />}<p>{realtimeConnected ? 'Live' : 'Reconnecting…'}</p>{summary && <><p>Round {summary.round} · {summary.phase}<DeadlineCountdown deadlineAt={summary.deadline_at} serverTime={summary.server_time} /></p><p>{summary.submitted}/{summary.total} assigned seats submitted.</p>{summary.seats.map((seat) => <p key={`${seat.role}-${seat.entity_id}`}>{seat.role} #{seat.entity_id}: {decisionStatusLabel(seat.status)}</p>)}</>}{error && <p>{error}</p>}<button onClick={refresh}>Refresh</button><button disabled={!summary || summary.phase === 'complete'} onClick={advance}>Advance phase</button><button onClick={onSignOut}>Sign out</button></main>;
+  const completion = summary?.total ? Math.round((summary.submitted / summary.total) * 100) : 0;
+  const phaseLabel = summary?.phase?.replaceAll('_', ' ') || 'Loading';
+  const copyJoinCode = async () => {
+    if (!joinCode || !navigator.clipboard) return;
+    await navigator.clipboard.writeText(joinCode);
+    setCodeCopied(true);
+    window.setTimeout(() => setCodeCopied(false), 1600);
+  };
+  const useJoinCode = async () => {
+    try {
+      if (!joinCodeActive) {
+        await onActivateJoinCode();
+        return;
+      }
+      await copyJoinCode();
+    } catch (err) {
+      setError(err.message);
+    }
+  };
+
+  return <main className="instructor-board">
+    <header className="instructor-topbar">
+      <div className="instructor-brand-area">
+        <button className="instructor-back" type="button" onClick={onBack} aria-label="Back to sessions" title="Back to sessions"><ArrowLeft aria-hidden="true" /></button>
+        <div className="instructor-brand"><span><Globe2 aria-hidden="true" /></span><div><strong>PangeaWorld</strong><small>Instructor console</small></div></div>
+      </div>
+      <div className="instructor-session-status">
+        {joinCode ? <button className={`instructor-session-code ${joinCodeActive ? '' : 'is-closed'}`} type="button" onClick={useJoinCode} aria-label={joinCodeActive ? `Copy session code ${joinCode}` : `Enable session code ${joinCode}`} title={joinCodeActive ? 'Copy student join code' : 'Enable this student join code'}><span>{!joinCodeActive ? 'Enable code' : codeCopied ? 'Copied' : 'Session code'}</span><strong>{joinCode}</strong><Copy aria-hidden="true" /></button> : <span className="instructor-session-id">Session <strong>#{sessionId}</strong></span>}
+        <div className={`instructor-connection ${realtimeConnected ? 'is-live' : ''}`}><i /> {realtimeConnected ? 'Live session' : 'Reconnecting…'}</div>
+      </div>
+      <button className="instructor-signout" onClick={onSignOut}>Sign out</button>
+    </header>
+    <div className="instructor-shell">
+      <section className="instructor-welcome">
+        <div><span className="instructor-eyebrow">Classroom command center</span><h1>Instructor readiness board</h1><p>Monitor participation, review decision evidence, and guide the simulation from one place.</p></div>
+        <div className="instructor-primary-actions"><button className="instructor-button instructor-button-secondary" onClick={refresh}>Refresh data</button><button className="instructor-button instructor-button-primary" disabled={!summary || summary.phase === 'complete'} onClick={advance}>Advance phase <ArrowRight aria-hidden="true" /></button></div>
+      </section>
+      {error && <div className="instructor-alert" role="alert">{error}</div>}
+      <section className="instructor-metrics" aria-label="Session overview">
+        <article><span className="metric-icon metric-icon-blue"><BookOpenCheck aria-hidden="true" /></span><div><small>Current round</small><strong>{summary ? `Round ${summary.round}` : '—'}</strong></div></article>
+        <article><span className="metric-icon metric-icon-violet"><Activity aria-hidden="true" /></span><div><small>Active phase</small><strong className="instructor-capitalize">{phaseLabel}</strong></div></article>
+        <article><span className="metric-icon metric-icon-green"><UsersRound aria-hidden="true" /></span><div><small>Seat readiness</small><strong>{summary ? `${summary.submitted} of ${summary.total}` : '—'}</strong></div><em>{completion}%</em></article>
+        <article><span className="metric-icon metric-icon-amber"><Clock3 aria-hidden="true" /></span><div><small>Time remaining</small><strong className="metric-deadline"><DeadlineCountdown deadlineAt={summary?.deadline_at} serverTime={summary?.server_time} /></strong></div></article>
+      </section>
+      <section className="instructor-progress-card">
+        <div className="instructor-progress-copy"><span><CheckCircle2 aria-hidden="true" /></span><div><strong>Submission progress</strong><small>{summary ? `${summary.submitted} of ${summary.total} assigned seats are ready` : 'Gathering session status…'}</small></div></div>
+        <div className="instructor-progress-track" aria-label={`${completion}% of assigned seats submitted`}><span style={{ width: `${completion}%` }} /></div><strong>{completion}%</strong>
+      </section>
+      <section className="instructor-workspace">
+        <div className="instructor-main-column"><AnalyticsPanel sessionId={sessionId} phase={summary?.phase} /><DecisionFeedback sessionId={sessionId} round={summary?.round} />{summary?.phase === 'complete' && <DebriefPanel sessionId={sessionId} />}</div>
+        <aside className="instructor-side-column">
+          <section className="instructor-seat-card"><div className="instructor-section-heading"><div><small>Live roster</small><h2>Seat status</h2></div><span>{summary?.seats.length || 0}</span></div><div className="instructor-seat-list">
+            {!summary && <p className="instructor-empty">Loading assigned seats…</p>}
+            {summary?.seats.map((seat) => <div className="instructor-seat" key={`${seat.role}-${seat.entity_id}`}><span>{seat.role?.charAt(0).toUpperCase()}</span><div><strong>{seat.role} #{seat.entity_id}</strong><small>{decisionStatusLabel(seat.status) || 'Waiting'}</small></div><i className={seat.status ? 'is-ready' : ''} /></div>)}
+            {summary && !summary.seats.length && <p className="instructor-empty">No assigned seats yet.</p>}
+          </div></section>
+          <InstructorPhase3 sessionId={sessionId} phase={summary?.phase} /><BackfillPanel sessionId={sessionId} phase={summary?.phase} />
+        </aside>
+      </section>
+    </div>
+  </main>;
 }
 
 export default function App() {

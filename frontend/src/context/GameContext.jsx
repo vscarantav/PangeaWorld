@@ -178,7 +178,7 @@ export function GameProvider({ children, sessionId, membership }) {
   const advance = useCallback(async () => { const result = await api.advanceRound(session.id, session.phase); await refresh(session.id); return result; }, [refresh, session]);
   const saveMapSnapshot = useCallback(async (snapshot) => {
     const result = await api.updateMap(session.id, snapshot);
-    setSession((current) => ({ ...current, map_snapshot: result.map_snapshot }));
+    setSession((current) => ({ ...current, map_snapshot: snapshot }));
     return result;
   }, [session]);
   const loadMapSnapshot = useCallback(async () => {

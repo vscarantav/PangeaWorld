@@ -96,13 +96,18 @@ def _new_join_code(db):
 
 def _has_renderable_map_snapshot(session):
     snapshot = session.map_snapshot
+    compact_geometry = snapshot.get("version", 0) >= 3 if isinstance(snapshot, dict) else False
     return bool(
         isinstance(snapshot, dict)
         and snapshot.get("triangles")
         and snapshot.get("edges")
         and snapshot.get("countries")
         and "cities" in snapshot
-        and all(len(triangle.get("points", [])) == 3 for triangle in snapshot["triangles"])
+        and all(
+            len(triangle.get("points", [])) == 3
+            or (compact_geometry and re.fullmatch(r"\d+-\d+", str(triangle.get("id", ""))))
+            for triangle in snapshot["triangles"]
+        )
         and all(
             (edge.get("p1") and edge.get("p2"))
             or re.fullmatch(r"-?\d+(?:\.\d+)?,-?\d+(?:\.\d+)?--?\d+(?:\.\d+)?,-?\d+(?:\.\d+)?", str(edge.get("id", "")))
@@ -143,7 +148,7 @@ def create_session(payload: SessionCreate, db: Session = Depends(get_db), user: 
 @router.get("/lobby/{join_code}")
 def public_lobby(join_code: str, db: Session = Depends(get_db)):
     session = db.query(GameSession).filter_by(lobby_join_code=join_code.upper()).first()
-    if session is None or session.lobby_code_revoked or session.status != "lobby":
+    if session is None or session.lobby_code_revoked or session.status not in {"lobby", "active"}:
         raise HTTPException(status_code=404, detail="lobby not found or closed")
     return {"id": session.id, "join_code": session.lobby_join_code, "status": session.status,
             "member_count": len(session.memberships)}
@@ -163,7 +168,7 @@ def recoverable_legacy_sessions(db: Session = Depends(get_db), user: User = Depe
 @router.post("/lobby/join")
 def join_lobby(payload: LobbyJoin, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
     session = db.query(GameSession).filter_by(lobby_join_code=payload.join_code.strip().upper()).first()
-    if session is None or session.lobby_code_revoked or session.status != "lobby":
+    if session is None or session.lobby_code_revoked or session.status not in {"lobby", "active"}:
         raise HTTPException(status_code=404, detail="lobby not found or closed")
     membership = db.query(GameMembership).filter_by(session_id=session.id, user_id=user.id).first()
     if membership is None:
@@ -184,7 +189,8 @@ def get_lobby(session_id: int, db: Session = Depends(get_db), user: User = Depen
                 "my_membership": _member_view(_membership_or_403(db, session_id, user.id))}
     if can_manage:
         occupied = {(item.role, item.entity_id) for item in session.memberships if item.entity_id is not None}
-        response.update({"join_code": None if session.lobby_code_revoked else session.lobby_join_code,
+        response.update({"join_code": session.lobby_join_code if session.status == "active" or not session.lobby_code_revoked else None,
+                         "join_code_active": not bool(session.lobby_code_revoked),
                          "seed": session.seed, "has_map_snapshot": _has_renderable_map_snapshot(session),
                          "members": [_member_view(item) for item in session.memberships],
                          "seats": {"nations": [{"id": n.id, "name": n.name, "occupied": ("president", n.id) in occupied or (session.ruleset_version == "phase3-closure-v1" and n.archetype == "Marginalized military state")} for n in session.nations],
@@ -244,13 +250,25 @@ def revoke_join_code(session_id: int, db: Session = Depends(get_db), user: User 
     return {"revoked": True}
 
 
+@router.post("/{session_id}/lobby/activate-code")
+def activate_join_code(session_id: int, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    session = get_session_or_404(db, session_id); _instructor_or_403(db, session_id, user.id)
+    if session.status not in {"lobby", "active"}:
+        raise HTTPException(status_code=409, detail="join codes are unavailable for completed games")
+    session.lobby_code_revoked = 0; db.commit()
+    notify_session(session_id, "lobby_changed")
+    return {"join_code": session.lobby_join_code, "active": True}
+
+
 @router.post("/{session_id}/lobby/start")
 def start_game(session_id: int, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
     session = get_session_or_404(db, session_id); _instructor_or_403(db, session_id, user.id)
     if session.status != "lobby": raise HTTPException(status_code=409, detail="game has already started")
     if not _has_renderable_map_snapshot(session) or not db.query(MapSnapshot).filter_by(session_id=session_id).first():
         raise HTTPException(status_code=409, detail="persist a validated starting map before starting the game")
-    session.status = "active"; session.lobby_code_revoked = 1; db.commit()
+    # Keep the code open during the live game so late-arriving students can
+    # join as unassigned members and take over an AI-backed seat.
+    session.status = "active"; db.commit()
     notify_session(session_id, "phase_changed", round=session.current_round, phase=session.phase.value)
     return _session_view(session)
 
@@ -351,7 +369,9 @@ def update_map(session_id: int, payload: MapUpdate, db: Session = Depends(get_db
         stored.validated_map_json = snapshot
     db.commit()
     notify_session(session_id, "map_changed")
-    return {"session_id": session.id, "map_snapshot": snapshot}
+    # The caller already owns the canonical snapshot. Returning it used to
+    # serialize and download several redundant megabytes during provisioning.
+    return {"session_id": session.id, "saved": True}
 
 def _record_deadline_autos(db, session):
     role = "president" if session.phase == PhaseEnum.PRESIDENTIAL else "executive"

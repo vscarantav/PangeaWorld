@@ -1,5 +1,7 @@
 """Validation and persistence helpers for session-locked map snapshots."""
 
+import re
+
 
 def normalize_map_snapshot(snapshot: dict) -> dict:
     """Validate the client-provided canonical map summary and return a copy."""
@@ -25,6 +27,22 @@ def normalize_map_snapshot(snapshot: dict) -> dict:
     triangle_ids = {triangle["id"] for triangle in snapshot["triangles"]}
     if len(triangle_ids) != len(snapshot["triangles"]):
         raise ValueError("map triangle ids must be unique")
+    compact_geometry = snapshot.get("version", 0) >= 3
+    for triangle in snapshot["triangles"]:
+        points = triangle.get("points", [])
+        has_stored_geometry = (
+            isinstance(points, list)
+            and len(points) == 3
+            and all(
+                isinstance(point, dict)
+                and isinstance(point.get("x"), (int, float))
+                and isinstance(point.get("y"), (int, float))
+                for point in points
+            )
+        )
+        has_compact_geometry = compact_geometry and re.fullmatch(r"\d+-\d+", str(triangle["id"]))
+        if not has_stored_geometry and not has_compact_geometry:
+            raise ValueError("every map triangle must contain valid geometry")
     if not all(isinstance(item.get("id"), (str, int)) and isinstance(item.get("name"), str) for item in snapshot["countries"]):
         raise ValueError("every map country must have a string name and id")
     country_ids = {country["id"] for country in snapshot["countries"]}
@@ -59,7 +77,8 @@ def normalize_map_snapshot(snapshot: dict) -> dict:
     edge_ids = {edge["id"] for edge in snapshot["edges"]}
     if len(edge_ids) != len(snapshot["edges"]):
         raise ValueError("map edge ids must be unique and present")
-    mountain_ids = {triangle["id"] for triangle in snapshot["triangles"] if triangle.get("terrain") in {"Impassable Peaks", "Mountain"}}
+    terrain_by_triangle_id = {triangle["id"]: triangle.get("terrain") for triangle in snapshot["triangles"]}
+    mountain_ids = {triangle_id for triangle_id, terrain in terrain_by_triangle_id.items() if terrain in {"Impassable Peaks", "Mountain"}}
     passable_mountain_edges = {triangle_id: 0 for triangle_id in mountain_ids}
     for edge in snapshot["edges"]:
         triangle_ids_for_edge = edge.get("triangle_ids", [])
@@ -67,8 +86,7 @@ def normalize_map_snapshot(snapshot: dict) -> dict:
             raise ValueError("every map edge must reference at least one triangle")
         if any(triangle_id not in triangle_ids for triangle_id in triangle_ids_for_edge):
             raise ValueError("map edge references an unknown triangle")
-        if any(triangle.get("id") in triangle_ids_for_edge and triangle.get("terrain") == "Ocean"
-               for triangle in snapshot["triangles"]):
+        if any(terrain_by_triangle_id[triangle_id] == "Ocean" for triangle_id in triangle_ids_for_edge):
             if not edge.get("is_impassable"):
                 raise ValueError("passable map edges cannot touch ocean")
         if not edge.get("is_impassable"):

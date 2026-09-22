@@ -23,7 +23,7 @@ async function request(path, options = {}) {
 }
 
 export const createSession = (phaseDurationSeconds = 172800, ownerRole = null) => request('/api/sessions', {
-  method: 'POST', body: JSON.stringify({ phase_duration_seconds: phaseDurationSeconds, owner_role: ownerRole }),
+  method: 'POST', body: JSON.stringify({ phase_duration_seconds: phaseDurationSeconds, owner_role: ownerRole }), timeoutMs: 30000,
 });
 export const getSession = (id, { includeMap = true } = {}) => request(`/api/sessions/${id}${includeMap ? '' : '?include_map=false'}`);
 export const getNations = (id) => request(`/api/sessions/${id}/nations`);
@@ -34,7 +34,7 @@ export const getMarket = (id) => request(`/api/sessions/${id}/market`);
 export const getResourceMarket = (id, resourceType, buyerNationId = null) => request(`/api/sessions/${id}/market/resources/${encodeURIComponent(resourceType)}${buyerNationId ? `?buyer_nation_id=${buyerNationId}` : ''}`);
 export const getNews = (id) => request(`/api/sessions/${id}/news`);
 export const getPhase3Results = (id) => request(`/api/sessions/${id}/phase3/results`);
-export const updateMap = (id, mapSnapshot) => request(`/api/sessions/${id}/map`, { method: 'PUT', body: JSON.stringify({ map_snapshot: mapSnapshot }) });
+export const updateMap = (id, mapSnapshot) => request(`/api/sessions/${id}/map`, { method: 'PUT', body: JSON.stringify({ map_snapshot: mapSnapshot }), timeoutMs: 60000 });
 export const submitNationDecision = (sessionId, nationId, decisionData) => request(`/api/sessions/${sessionId}/nations/${nationId}/decisions`, { method: 'POST', body: JSON.stringify({ decision_data: decisionData }) });
 export const savePresidentialReadiness = (sessionId, nationId, decisionData) => request(`/api/sessions/${sessionId}/nations/${nationId}/readiness`, { method: 'PUT', body: JSON.stringify({ decision_data: decisionData }) });
 export const submitCompanyDecision = (sessionId, companyId, decisionData) => request(`/api/sessions/${sessionId}/companies/${companyId}/decisions`, { method: 'POST', body: JSON.stringify({ decision_data: decisionData }) });
@@ -52,6 +52,7 @@ export const getLobby = (id) => request(`/api/sessions/${id}/lobby`);
 export const joinLobby = (join_code) => request('/api/sessions/lobby/join', { method: 'POST', body: JSON.stringify({ join_code }) });
 export const assignSeat = (id, payload) => request(`/api/sessions/${id}/lobby/assign`, { method: 'POST', body: JSON.stringify(payload) });
 export const startLobby = (id) => request(`/api/sessions/${id}/lobby/start`, { method: 'POST' });
+export const activateJoinCode = (id) => request(`/api/sessions/${id}/lobby/activate-code`, { method: 'POST' });
 export const getReadiness = (id) => request(`/api/sessions/${id}/readiness`);
 export const getRecoverableSessions = () => request('/api/sessions/legacy/recoverable');
 export const claimLegacySession = (id) => request(`/api/sessions/${id}/claim-legacy`, { method: 'POST' });

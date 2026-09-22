@@ -84,7 +84,10 @@ test('a persisted map snapshot hydrates without regenerating or losing state', (
     assert.deepEqual(serializeMapSnapshot(hydrated, snapshot.seed), snapshot);
     assert.equal(hydrated.edges[0].p1.x, generated.edges[0].p1.x);
     assert.equal(hydrated.triangles[0].neighbors.length, generated.triangles[0].neighbors.length);
-    assert.equal(snapshot.version, 2);
+    assert.equal(snapshot.version, 3);
+    assert.equal('points' in snapshot.triangles[0], false);
+    assert.equal('p1' in snapshot.edges[0], false);
+    assert.ok(Buffer.byteLength(JSON.stringify(snapshot)) < 1_500_000);
 });
 
 test('map invariants hold across representative seeds', () => {

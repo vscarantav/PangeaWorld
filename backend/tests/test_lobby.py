@@ -19,7 +19,9 @@ def persist_test_map(client, game):
         "countries": [{"id": str(index), "name": name, "x": index * 7, "y": 0} for index, name in enumerate(["Terranova", "Solhaven", "Korvath", "Valdoria", "Nordvik", "Zephyria", "Drakmoor", "Lunara"])],
         "cities": [{"id": index, "triangle_id": 2, "country_id": str(index // 8), "is_port": index in {32, 33, 48, 56, 57}} for index in range(64)],
     }
-    assert client.put(f"/api/sessions/{game['id']}/map", json={"map_snapshot": snapshot}).status_code == 200
+    response = client.put(f"/api/sessions/{game['id']}/map", json={"map_snapshot": snapshot})
+    assert response.status_code == 200
+    assert response.json() == {"session_id": game["id"], "saved": True}
 
 
 def make_client():
@@ -71,14 +73,34 @@ def test_instructor_assigns_lobby_members_to_session_local_seats():
     app.dependency_overrides.clear()
 
 
-def test_join_code_is_revoked_when_game_starts():
+def test_join_code_remains_available_when_game_starts():
     instructor = make_client(); register(instructor, "teacher2@example.com")
     game = instructor.post("/api/sessions", json={}).json()
     persist_test_map(instructor, game)
     code = instructor.get(f"/api/sessions/{game['id']}/lobby").json()["join_code"]
     assert instructor.post(f"/api/sessions/{game['id']}/lobby/start").status_code == 200
     newcomer = TestClient(app); register(newcomer, "new@example.com")
-    assert newcomer.post("/api/sessions/lobby/join", json={"join_code": code}).status_code == 404
+    joined = newcomer.post("/api/sessions/lobby/join", json={"join_code": code})
+    assert joined.status_code == 200
+    assert joined.json()["session_id"] == game["id"]
+    assert joined.json()["membership"]["role"] == "player"
+    assert instructor.get(f"/api/sessions/{game['id']}/lobby").json()["join_code"] == code
+    app.dependency_overrides.clear()
+
+
+def test_instructor_can_reactivate_a_closed_code_during_a_live_game():
+    instructor = make_client(); register(instructor, "teacher-reactivate@example.com")
+    game = instructor.post("/api/sessions", json={}).json()
+    persist_test_map(instructor, game)
+    code = instructor.get(f"/api/sessions/{game['id']}/lobby").json()["join_code"]
+    assert instructor.post(f"/api/sessions/{game['id']}/lobby/start").status_code == 200
+    assert instructor.post(f"/api/sessions/{game['id']}/lobby/revoke-code").status_code == 200
+    closed_lobby = instructor.get(f"/api/sessions/{game['id']}/lobby").json()
+    assert closed_lobby["join_code"] == code
+    assert closed_lobby["join_code_active"] is False
+    assert instructor.post(f"/api/sessions/{game['id']}/lobby/activate-code").status_code == 200
+    newcomer = TestClient(app); register(newcomer, "reactivated-player@example.com")
+    assert newcomer.post("/api/sessions/lobby/join", json={"join_code": code}).status_code == 200
     app.dependency_overrides.clear()
 
 

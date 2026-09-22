@@ -1,6 +1,20 @@
 import { countriesDef, TERRAIN } from './MapGenerator.js';
 
 const terrainByName = new Map(Object.values(TERRAIN).map((terrain) => [terrain.name, terrain]));
+const GRID_SIDE_LENGTH = 7;
+
+function trianglePointsFromId(id) {
+    const match = String(id).match(/^(\d+)-(\d+)$/);
+    if (!match) throw new Error(`Map snapshot triangle ${id} has no stored geometry`);
+    const row = Number(match[1]);
+    const col = Number(match[2]);
+    const height = GRID_SIDE_LENGTH * Math.sqrt(3) / 2;
+    const x = col * GRID_SIDE_LENGTH / 2;
+    const y = row * height;
+    return (row + col) % 2 === 0
+        ? [{ x, y: y + height }, { x: x + GRID_SIDE_LENGTH, y: y + height }, { x: x + GRID_SIDE_LENGTH / 2, y }]
+        : [{ x, y }, { x: x + GRID_SIDE_LENGTH, y }, { x: x + GRID_SIDE_LENGTH / 2, y: y + height }];
+}
 
 function centerOf(points) {
     return {
@@ -32,27 +46,27 @@ function snapshotCountryId(triangle, countries) {
 
 export function serializeMapSnapshot(map, seed) {
     return {
-        version: 2,
+        // Version 3 derives the fixed triangular grid geometry from each
+        // triangle/edge id. This avoids sending the same coordinates several
+        // times in what was previously a multi-megabyte provisioning request.
+        version: 3,
         seed,
         triangles: map.triangles.map((triangle) => ({
             id: triangle.id,
             terrain: triangle.terrain.name,
-            points: triangle.points.map((point) => ({ x: point.x, y: point.y })),
             country_id: snapshotCountryId(triangle, map.countries),
-            is_small_city: Boolean(triangle.isSmallCity),
-            is_big_city: Boolean(triangle.isBigCity),
-            is_big_city_part: Boolean(triangle.isBigCityPart),
-            is_port: Boolean(triangle.isPort),
-            has_airport: Boolean(triangle.hasAirport),
+            ...(triangle.isSmallCity && { is_small_city: true }),
+            ...(triangle.isBigCity && { is_big_city: true }),
+            ...(triangle.isBigCityPart && { is_big_city_part: true }),
+            ...(triangle.isPort && { is_port: true }),
+            ...(triangle.hasAirport && { has_airport: true }),
         })),
         edges: map.edges.map((edge) => ({
             id: edge.id,
-            p1: { x: edge.p1.x, y: edge.p1.y },
-            p2: { x: edge.p2.x, y: edge.p2.y },
             triangle_ids: edge.triangles.map((triangle) => triangle.id),
-            has_railroad: Boolean(edge.hasRailroad),
-            is_river: Boolean(edge.isRiver),
-            is_impassable: Boolean(edge.isImpassable),
+            ...(edge.hasRailroad && { has_railroad: true }),
+            ...(edge.isRiver && { is_river: true }),
+            ...(edge.isImpassable && { is_impassable: true }),
         })),
         countries: map.countries.map((country) => ({
             id: country.id,
@@ -68,8 +82,8 @@ export function serializeMapSnapshot(map, seed) {
                 id: triangle.id,
                 triangle_id: triangle.id,
                 country_id: snapshotCountryId(triangle, map.countries),
-                is_port: Boolean(triangle.isPort),
-                is_big_city: Boolean(triangle.isBigCity),
+                ...(triangle.isPort && { is_port: true }),
+                ...(triangle.isBigCity && { is_big_city: true }),
             })),
     };
 }
@@ -95,7 +109,8 @@ export function hydrateMapSnapshot(snapshot) {
     const citiesByTriangle = new Map((snapshot.cities || []).map((city) => [String(city.triangle_id), city]));
 
     const triangles = snapshot.triangles.map((saved) => {
-        const points = (saved.points || []).map((point) => ({ x: Number(point.x), y: Number(point.y) }));
+        const savedPoints = saved.points?.length ? saved.points : (snapshot.version >= 3 ? trianglePointsFromId(saved.id) : []);
+        const points = savedPoints.map((point) => ({ x: Number(point.x), y: Number(point.y) }));
         if (points.length !== 3 || points.some((point) => !Number.isFinite(point.x) || !Number.isFinite(point.y))) {
             throw new Error(`Map snapshot triangle ${saved.id} has invalid geometry`);
         }
